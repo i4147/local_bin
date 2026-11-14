@@ -21,6 +21,7 @@ from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final, cast
 
+from atomicio import atomic_write
 from dh import MAX_WORKERS, SKIP_DIRS
 import libcst as cst
 from loguru import logger
@@ -371,22 +372,6 @@ def _decode(payload: bytes) -> tuple[str, str] | None:
     return None
 
 
-def _atomic_write(path: Path, data: bytes, mode: int) -> None:
-    target = path.resolve()
-    descriptor, name = tempfile.mkstemp(dir=target.parent, prefix=f".{target.name}.", suffix=".tmp")
-    temporary = Path(name)
-    try:
-        with os.fdopen(descriptor, "wb") as handle:
-            handle.write(data)
-            handle.flush()
-            os.fsync(handle.fileno())
-        temporary.chmod(stat.S_IMODE(mode))
-        os.replace(temporary, target)
-    except BaseException:
-        temporary.unlink(missing_ok=True)
-        raise
-
-
 def _backup_target(path: Path, backup_dir: Path | None) -> Path:
     if backup_dir is None:
         return path.with_name(f"{path.name}.bak")
@@ -702,7 +687,7 @@ def exit_code(summary: Summary, options: Options, missing: bool) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="pystrip",
+        prog="rmc",
         description=(
             "Strip comments, docstrings and type annotations from Python files. "
             "Shebangs, coding cookies, module docstrings, type/fmt directives, "
