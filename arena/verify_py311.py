@@ -24,6 +24,7 @@ EXPECTED_VERMINT_HITS = ("pydup.py",)
 
 
 def check_parse() -> list[str]:
+    """Parse every root Python file and return syntax failures."""
     files = sorted(ROOT.glob("*.py"))
     failures = []
     for path in files:
@@ -39,6 +40,7 @@ def check_parse() -> list[str]:
 
 
 def check_vermin() -> list[str]:
+    """Run vermin for the Python 3.11 target and return unexpected violations."""
     try:
         result = subprocess.run(
             ["vermin", "-t=3.11-", "--violations", "--all",
@@ -62,6 +64,7 @@ def check_vermin() -> list[str]:
 
 
 def main() -> int:
+    """Run syntax and minimum-version checks and return a process status."""
     if sys.version_info[:2] != (3, 11):
         print(f"warning: running on Python {sys.version.split()[0]}, "
               "expected 3.11 for a meaningful check", file=sys.stderr)
