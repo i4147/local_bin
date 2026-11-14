@@ -11,6 +11,7 @@ Examples:
     sr --json "TODO" | jq              # machine-readable
     sr -C 2 "error" -t py -t js        # grep-style context
 """
+
 from __future__ import annotations
 
 import fnmatch
@@ -35,62 +36,86 @@ __version__ = "2.0.0"
 # ---------------------------------------------------------------- constants
 
 IGNORE_DIRS = frozenset({
-    "autom4te.cache", "blib", "_build", ".bzr", ".cdv", "cover_db",
-    "CVS", "_darcs", "~.dep", "~.dot", ".git", ".hg", "~.nib",
-    ".pc", "~.plst", "RCS", "SCCS", "_sgbak", ".svn",
+    "autom4te.cache",
+    "blib",
+    "_build",
+    ".bzr",
+    ".cdv",
+    "cover_db",
+    "CVS",
+    "_darcs",
+    "~.dep",
+    "~.dot",
+    ".git",
+    ".hg",
+    "~.nib",
+    ".pc",
+    "~.plst",
+    "RCS",
+    "SCCS",
+    "_sgbak",
+    ".svn",
 })
 
-IGNORE_FILE_PATTERNS = tuple(re.compile(p) for p in (
-    r"~$", r"#.+#$", r"[._].*\.swp$", r"core\.\d+$", r"\.pyc$",
-))
+IGNORE_FILE_PATTERNS = tuple(
+    re.compile(p)
+    for p in (
+        r"~$",
+        r"#.+#$",
+        r"[._].*\.swp$",
+        r"core\.\d+$",
+        r"\.pyc$",
+    )
+)
 
 BACKUP_RE = re.compile(r"\.\d{3}~$")
 DEFAULT_OUTPUT_LIMIT = 320
 
 FILE_TYPES: dict[str, list[str]] = {
     "actionscript": [".as", ".mxml"],
-    "asm":         [".asm", ".s"],
-    "batch":       [".bat", ".cmd"],
-    "cc":          [".c", ".h", ".xs"],
-    "cfmx":        [".cfc", ".cfm", ".cfml"],
-    "cpp":         [".cpp", ".cc", ".cxx", ".m", ".hpp", ".hh", ".h", ".hxx"],
-    "csharp":      [".cs"],
-    "css":         [".css"],
-    "elisp":       [".el"],
-    "erlang":      [".erl"],
-    "fortran":     [".f", ".f77", ".f90", ".f95", ".f03", ".for", ".ftn", ".fpp"],
-    "haskell":     [".hs", ".lhs"],
-    "hh":          [".h"],
-    "html":        [".htm", ".html", ".shtml", ".xhtml"],
-    "java":        [".java", ".properties"],
-    "js":          [".js"],
-    "jsp":         [".jsp", ".jspx", ".jhtm", ".jhtml"],
-    "lisp":        [".lisp", ".lsp"],
-    "lua":         [".lua"],
-    "mason":       [".mas", ".mhtml", ".mpl", ".mtxt"],
-    "objc":        [".m", ".h"],
-    "objcpp":      [".mm", ".h"],
-    "ocaml":       [".ml", ".mli"],
-    "parrot":      [".pir", ".pasm", ".pmc", ".ops", ".pod", ".pg", ".tg"],
-    "perl":        [".pl", ".pm", ".pod", ".t"],
-    "php":         [".php", ".phpt", ".php3", ".php4", ".php5"],
-    "plone":       [".pt", ".cpt", ".metadata", ".cpy"],
-    "python":      [".py"],
-    "ruby":        [".rb", ".rhtml", ".rjs", ".rxml", ".erb"],
-    "scheme":      [".scm"],
-    "shell":       [".sh", ".bash", ".csh", ".tcsh", ".ksh", ".zsh"],
-    "smalltalk":   [".st"],
-    "sql":         [".sql", ".ctl"],
-    "tcl":         [".tcl", ".itcl", ".itk"],
-    "tex":         [".tex", ".cls", ".sty"],
-    "tt":          [".tt", ".tt2", ".ttml"],
-    "vb":          [".bas", ".cls", ".frm", ".ctl", ".vb", ".resx"],
-    "vim":         [".vim"],
-    "xml":         [".xml", ".dtd", ".xslt", ".ent"],
-    "yaml":        [".yaml", ".yml"],
+    "asm": [".asm", ".s"],
+    "batch": [".bat", ".cmd"],
+    "cc": [".c", ".h", ".xs"],
+    "cfmx": [".cfc", ".cfm", ".cfml"],
+    "cpp": [".cpp", ".cc", ".cxx", ".m", ".hpp", ".hh", ".h", ".hxx"],
+    "csharp": [".cs"],
+    "css": [".css"],
+    "elisp": [".el"],
+    "erlang": [".erl"],
+    "fortran": [".f", ".f77", ".f90", ".f95", ".f03", ".for", ".ftn", ".fpp"],
+    "haskell": [".hs", ".lhs"],
+    "hh": [".h"],
+    "html": [".htm", ".html", ".shtml", ".xhtml"],
+    "java": [".java", ".properties"],
+    "js": [".js"],
+    "jsp": [".jsp", ".jspx", ".jhtm", ".jhtml"],
+    "lisp": [".lisp", ".lsp"],
+    "lua": [".lua"],
+    "mason": [".mas", ".mhtml", ".mpl", ".mtxt"],
+    "objc": [".m", ".h"],
+    "objcpp": [".mm", ".h"],
+    "ocaml": [".ml", ".mli"],
+    "parrot": [".pir", ".pasm", ".pmc", ".ops", ".pod", ".pg", ".tg"],
+    "perl": [".pl", ".pm", ".pod", ".t"],
+    "php": [".php", ".phpt", ".php3", ".php4", ".php5"],
+    "plone": [".pt", ".cpt", ".metadata", ".cpy"],
+    "python": [".py"],
+    "ruby": [".rb", ".rhtml", ".rjs", ".rxml", ".erb"],
+    "scheme": [".scm"],
+    "shell": [".sh", ".bash", ".csh", ".tcsh", ".ksh", ".zsh"],
+    "smalltalk": [".st"],
+    "sql": [".sql", ".ctl"],
+    "tcl": [".tcl", ".itcl", ".itk"],
+    "tex": [".tex", ".cls", ".sty"],
+    "tt": [".tt", ".tt2", ".ttml"],
+    "vb": [".bas", ".cls", ".frm", ".ctl", ".vb", ".resx"],
+    "vim": [".vim"],
+    "xml": [".xml", ".dtd", ".xslt", ".ent"],
+    "yaml": [".yaml", ".yml"],
 }
 
 # ------------------------------------------------------------------ config
+
 
 @dataclass
 class Config:
@@ -123,7 +148,9 @@ class Config:
     json_output: bool = False
     stats: bool = False
 
+
 # ------------------------------------------------------------------ helpers
+
 
 def relpath(path: Path) -> str:
     try:
@@ -160,7 +187,7 @@ def highlight_matches(line: str, pattern: re.Pattern) -> Text:
     last = 0
     for m in pattern.finditer(line):
         if m.start() > last:
-            text.append(line[last:m.start()])
+            text.append(line[last : m.start()])
         text.append(m.group(0), style="bold black on yellow")
         last = m.end()
     if last < len(line):
@@ -197,7 +224,9 @@ def print_only_matching(lineno: int, line: str, cfg: Config, console: Console) -
         out.append(m.group(0), style="bold black on yellow")
         console.print(out)
 
+
 # ------------------------------------------------------------- walk / filter
+
 
 def should_process_file(fname: str, cfg: Config) -> bool:
     if isbackup(fname):
@@ -267,7 +296,9 @@ def walk_dir(root: Path, cfg: Config):
             if fpath.is_file() and (cfg.follow or not fpath.is_symlink()):
                 yield fpath
 
+
 # ------------------------------------------------------------------- search
+
 
 def search_file(path: Path, cfg: Config, console: Console) -> tuple[int, bool]:
     if cfg.json_output:
@@ -363,12 +394,13 @@ def _search_file_json(path: Path, cfg: Config) -> tuple[int, bool]:
         print(json.dumps({"path": str(path), "count": match_count}))
     return match_count, match_count > 0
 
+
 # ------------------------------------------------------------------ replace
+
 
 def replace_file(path: Path, cfg: Config, console: Console) -> int:
     try:
-        with open(path, "r", encoding="utf-8",
-                  errors="surrogateescape", newline="") as f:
+        with open(path, "r", encoding="utf-8", errors="surrogateescape", newline="") as f:
             data = f.read()
     except (OSError, UnicodeDecodeError) as e:
         print(f"Error reading {path}: {e}", file=sys.stderr)
@@ -382,9 +414,7 @@ def replace_file(path: Path, cfg: Config, console: Console) -> int:
         return 0
 
     if cfg.json_output:
-        print(json.dumps({"path": str(path),
-                          "replacements": count,
-                          "dry_run": cfg.explain}))
+        print(json.dumps({"path": str(path), "replacements": count, "dry_run": cfg.explain}))
     else:
         noun = "replacement" if count == 1 else "replacements"
         console.print(f"[green]{relpath(path)}[/green] ({count} {noun})")
@@ -399,12 +429,10 @@ def replace_file(path: Path, cfg: Config, console: Console) -> int:
     new_data = cfg.search.sub(cfg.replace, data, count=cfg.max_count or 0)
 
     try:
-        fd, tmp_name = tempfile.mkstemp(
-            dir=str(path.parent), prefix=f".{path.name}.", suffix=".sr~")
+        fd, tmp_name = tempfile.mkstemp(dir=str(path.parent), prefix=f".{path.name}.", suffix=".sr~")
         tmp_path = Path(tmp_name)
         try:
-            with os.fdopen(fd, "w", encoding="utf-8",
-                           errors="surrogateescape", newline="") as tf:
+            with os.fdopen(fd, "w", encoding="utf-8", errors="surrogateescape", newline="") as tf:
                 tf.write(new_data)
 
             if cfg.backup:
@@ -431,7 +459,9 @@ def _next_backup_path(path: Path) -> Optional[Path]:
             return candidate
     return None
 
+
 # ---------------------------------------------------------------------- CLI
+
 
 def _version_callback(value: bool) -> None:
     if value:
@@ -462,88 +492,58 @@ app = typer.Typer(
 
 @app.command(context_settings={"help_option_names": ["-h", "--help"]})
 def main(
-    args: Optional[list[str]] = typer.Argument(
-        None, help="Pattern [and target paths] (pattern optional if -s given)"),
+    args: Optional[list[str]] = typer.Argument(None, help="Pattern [and target paths] (pattern optional if -s given)"),
     search: Optional[str] = typer.Option(
-        None, "-s", "--search",
-        help="Pattern to search for (if omitted, first positional is used)"),
-    replace: Optional[str] = typer.Option(
-        None, "-r", "--replace", help="Replacement string (enables replace mode)"),
-    eliminate: Optional[str] = typer.Option(
-        None, "-e", "--eliminate", help="Skip lines matching this pattern"),
-    ignore_case: bool = typer.Option(False, "-i", "--ignore-case",
-        help="Case-insensitive matching"),
-    literal: bool = typer.Option(False, "-E", "--literal",
-        help="Treat pattern as a literal string (no regex)"),
-    word_regexp: bool = typer.Option(False, "-w", "--word-regexp",
-        help=r"Match whole words only (wraps pattern in \b)"),
-    invert: bool = typer.Option(False, "--invert-match",
-        help="Select non-matching lines (like grep -v)"),
+        None, "-s", "--search", help="Pattern to search for (if omitted, first positional is used)"
+    ),
+    replace: Optional[str] = typer.Option(None, "-r", "--replace", help="Replacement string (enables replace mode)"),
+    eliminate: Optional[str] = typer.Option(None, "-e", "--eliminate", help="Skip lines matching this pattern"),
+    ignore_case: bool = typer.Option(False, "-i", "--ignore-case", help="Case-insensitive matching"),
+    literal: bool = typer.Option(False, "-E", "--literal", help="Treat pattern as a literal string (no regex)"),
+    word_regexp: bool = typer.Option(
+        False, "-w", "--word-regexp", help=r"Match whole words only (wraps pattern in \b)"
+    ),
+    invert: bool = typer.Option(False, "--invert-match", help="Select non-matching lines (like grep -v)"),
     output_limit: Optional[int] = typer.Option(
-        None, "-l", "--output-limit",
-        help=f"Max line length before truncating (default: {DEFAULT_OUTPUT_LIMIT})"),
+        None, "-l", "--output-limit", help=f"Max line length before truncating (default: {DEFAULT_OUTPUT_LIMIT})"
+    ),
     filenames: bool = typer.Option(
-        False, "-n", "--filenames", "--files-with-matches",
-        help="Print only names of files containing matches"),
-    count: bool = typer.Option(False, "-c", "--count",
-        help="Print match count per file"),
-    quiet: bool = typer.Option(False, "-q", "--quiet",
-        help="No output; exit code indicates whether matches were found"),
-    only_matching: bool = typer.Option(False, "-o", "--only-matching",
-        help="Print only the matching part of each line"),
-    context: Optional[int] = typer.Option(
-        None, "-C", "--context", help="Show N lines of context around matches"),
-    before_context: Optional[int] = typer.Option(
-        None, "-B", "--before-context", help="Show N lines before matches"),
-    after_context: Optional[int] = typer.Option(
-        None, "-A", "--after-context", help="Show N lines after matches"),
-    max_count: Optional[int] = typer.Option(
-        None, "-m", "--max-count", help="Stop after N matches per file"),
-    exclude: list[str] = typer.Option(
-        [], "-x", "--exclude",
-        help="Skip files/dirs matching this regex (repeatable)"),
-    exclude_dir: list[str] = typer.Option(
-        [], "--exclude-dir",
-        help="Skip directories with this name (repeatable)"),
+        False, "-n", "--filenames", "--files-with-matches", help="Print only names of files containing matches"
+    ),
+    count: bool = typer.Option(False, "-c", "--count", help="Print match count per file"),
+    quiet: bool = typer.Option(
+        False, "-q", "--quiet", help="No output; exit code indicates whether matches were found"
+    ),
+    only_matching: bool = typer.Option(
+        False, "-o", "--only-matching", help="Print only the matching part of each line"
+    ),
+    context: Optional[int] = typer.Option(None, "-C", "--context", help="Show N lines of context around matches"),
+    before_context: Optional[int] = typer.Option(None, "-B", "--before-context", help="Show N lines before matches"),
+    after_context: Optional[int] = typer.Option(None, "-A", "--after-context", help="Show N lines after matches"),
+    max_count: Optional[int] = typer.Option(None, "-m", "--max-count", help="Stop after N matches per file"),
+    exclude: list[str] = typer.Option([], "-x", "--exclude", help="Skip files/dirs matching this regex (repeatable)"),
+    exclude_dir: list[str] = typer.Option([], "--exclude-dir", help="Skip directories with this name (repeatable)"),
     include_type: list[str] = typer.Option(
-        [], "-t", "--include-type", "--type",
-        help="Only process files of this type (repeatable)"),
-    exclude_type: list[str] = typer.Option(
-        [], "-T", "--exclude-type",
-        help="Skip files of this type (repeatable)"),
-    flags: Optional[str] = typer.Option(
-        None, "-f", "--flags",
-        help="Extra regex flags as letters, e.g. 'ims'"),
-    backup: bool = typer.Option(False, "-b", "--backup",
-        help="Save .NNN~ backup before replacing"),
-    dry_run: bool = typer.Option(False, "--dry-run", "--explain",
-        help="Show what would change, don't modify files"),
-    interactive: bool = typer.Option(False, "--interactive",
-        help="Prompt before modifying each file"),
-    ignore_file: Optional[Path] = typer.Option(
-        None, "--ignore-file",
-        help="Load glob patterns from this file"),
-    no_ignore: bool = typer.Option(False, "--no-ignore",
-        help="Don't use built-in ignore lists"),
-    hidden: bool = typer.Option(False, "--hidden",
-        help="Include hidden files and directories"),
-    follow: bool = typer.Option(False, "--follow",
-        help="Follow symbolic links"),
-    max_depth: Optional[int] = typer.Option(
-        None, "--max-depth", help="Maximum recursion depth"),
-    json_output: bool = typer.Option(False, "--json",
-        help="Emit results as JSON Lines"),
-    stats: bool = typer.Option(False, "--stats",
-        help="Print summary table at end"),
-    color: str = typer.Option("auto", "--color",
-        help="Color mode: auto|always|never"),
-    verbose: bool = typer.Option(False, "-v", "--verbose",
-        help="Verbose diagnostics"),
+        [], "-t", "--include-type", "--type", help="Only process files of this type (repeatable)"
+    ),
+    exclude_type: list[str] = typer.Option([], "-T", "--exclude-type", help="Skip files of this type (repeatable)"),
+    flags: Optional[str] = typer.Option(None, "-f", "--flags", help="Extra regex flags as letters, e.g. 'ims'"),
+    backup: bool = typer.Option(False, "-b", "--backup", help="Save .NNN~ backup before replacing"),
+    dry_run: bool = typer.Option(False, "--dry-run", "--explain", help="Show what would change, don't modify files"),
+    interactive: bool = typer.Option(False, "--interactive", help="Prompt before modifying each file"),
+    ignore_file: Optional[Path] = typer.Option(None, "--ignore-file", help="Load glob patterns from this file"),
+    no_ignore: bool = typer.Option(False, "--no-ignore", help="Don't use built-in ignore lists"),
+    hidden: bool = typer.Option(False, "--hidden", help="Include hidden files and directories"),
+    follow: bool = typer.Option(False, "--follow", help="Follow symbolic links"),
+    max_depth: Optional[int] = typer.Option(None, "--max-depth", help="Maximum recursion depth"),
+    json_output: bool = typer.Option(False, "--json", help="Emit results as JSON Lines"),
+    stats: bool = typer.Option(False, "--stats", help="Print summary table at end"),
+    color: str = typer.Option("auto", "--color", help="Color mode: auto|always|never"),
+    verbose: bool = typer.Option(False, "-v", "--verbose", help="Verbose diagnostics"),
     version: Optional[bool] = typer.Option(
-        None, "--version", "-V", callback=_version_callback,
-        is_eager=True, help="Show version and exit"),
-    help_types: bool = typer.Option(False, "--help-types", "--list-types",
-        help="List available file types and exit"),
+        None, "--version", "-V", callback=_version_callback, is_eager=True, help="Show version and exit"
+    ),
+    help_types: bool = typer.Option(False, "--help-types", "--list-types", help="List available file types and exit"),
 ) -> None:
     if help_types:
         _display_file_types()
@@ -679,11 +679,16 @@ def main(
 
     if cfg.stats:
         if cfg.json_output:
-            print(json.dumps({"summary": {
-                "files_scanned": total_files,
-                "files_matched": matched_files,
-                "total_matches": total_matches,
-            }}), file=sys.stderr)
+            print(
+                json.dumps({
+                    "summary": {
+                        "files_scanned": total_files,
+                        "files_matched": matched_files,
+                        "total_matches": total_matches,
+                    }
+                }),
+                file=sys.stderr,
+            )
         else:
             table = Table(title="Summary", show_header=False)
             table.add_column("Metric", style="cyan")
@@ -721,8 +726,7 @@ def _load_ignore_file(path: Path) -> list[str]:
 
 
 def _display_file_types() -> None:
-    typer.echo("Available file types "
-               "(-t TYPE to include, -T TYPE to exclude):")
+    typer.echo("Available file types (-t TYPE to include, -T TYPE to exclude):")
     for ftype in sorted(FILE_TYPES):
         typer.echo(f"  {ftype:12s}: {', '.join(FILE_TYPES[ftype])}")
 
