@@ -19,7 +19,7 @@ import tempfile
 import textwrap
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Final, cast
+from typing import TYPE_CHECKING, Any, Final, TypeVar, cast
 
 from atomicio import atomic_write
 from dh import MAX_WORKERS, SKIP_DIRS
@@ -29,6 +29,10 @@ from loguru import logger
 if TYPE_CHECKING:
     from collections.abc import Iterator, Sequence
 
+
+# PEP 695 generic syntax (``def on_leave[N: cst.CSTNode]``) needs Python 3.12+;
+# a TypeVar bound is equivalent and works on 3.11 too.
+N = TypeVar("N", bound=cst.CSTNode)
 
 VERSION: Final = "2.0.0"
 FEATURE_VERSION: Final = (3, 12)
@@ -150,7 +154,7 @@ class Stripper(cst.CSTTransformer):
 
     # ---- comment filtering (own-line comments) -------------------------
 
-    def on_leave[N: cst.CSTNode](
+    def on_leave(
         self, original_node: N, updated_node: N
     ) -> N | cst.RemovalSentinel | cst.FlattenSentinel[N]:
         result = super().on_leave(original_node, updated_node)

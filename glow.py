@@ -1,5 +1,7 @@
 #!/data/data/com.termux/files/usr/bin/env python
 
+from __future__ import annotations
+
 import argparse
 import contextlib
 import glob
@@ -42,14 +44,27 @@ else:
     tty = None
 
 
-type ColorMode = Literal["auto", "always", "never"]
-type ThemeName = Literal["dark", "light", "mono"]
-type BackendName = Literal["auto", "rich", "builtin"]
-type ConvertMode = Literal["render", "to-html", "to-markdown"]
-type InputFormat = Literal["auto", "markdown", "html"]
-type DocFormat = Literal["markdown", "html"]
-type Align = Literal["left", "center", "right", "none"]
-type SgrCodes = tuple[str, ...]
+if sys.version_info >= (3, 12):
+    # PEP 695 ``type`` aliases; exec'd so this file still parses on Python < 3.12.
+    exec(
+        "type ColorMode = Literal['auto', 'always', 'never']\n"
+        "type ThemeName = Literal['dark', 'light', 'mono']\n"
+        "type BackendName = Literal['auto', 'rich', 'builtin']\n"
+        "type ConvertMode = Literal['render', 'to-html', 'to-markdown']\n"
+        "type InputFormat = Literal['auto', 'markdown', 'html']\n"
+        "type DocFormat = Literal['markdown', 'html']\n"
+        "type Align = Literal['left', 'center', 'right', 'none']\n"
+        "type SgrCodes = tuple[str, ...]"
+    )
+else:
+    ColorMode = Literal["auto", "always", "never"]
+    ThemeName = Literal["dark", "light", "mono"]
+    BackendName = Literal["auto", "rich", "builtin"]
+    ConvertMode = Literal["render", "to-html", "to-markdown"]
+    InputFormat = Literal["auto", "markdown", "html"]
+    DocFormat = Literal["markdown", "html"]
+    Align = Literal["left", "center", "right", "none"]
+    SgrCodes = tuple[str, ...]
 
 
 class ExitCode(IntEnum):
@@ -472,7 +487,10 @@ class RawHtml:
     html: str
 
 
-type InlineNode = Text | CodeSpan | Strong | Emph | Strike | Link | Image | SoftBreak | HardBreak | RawHtml
+if sys.version_info >= (3, 12):
+    exec("type InlineNode = Text | CodeSpan | Strong | Emph | Strike | Link | Image | SoftBreak | HardBreak | RawHtml")
+else:
+    InlineNode = Text | CodeSpan | Strong | Emph | Strike | Link | Image | SoftBreak | HardBreak | RawHtml
 
 
 @dataclass(slots=True, frozen=True)
@@ -528,9 +546,14 @@ class HtmlBlock:
     raw: str
 
 
-type Block = Heading | Paragraph | CodeBlock | QuoteBlock | ListBlock | TableBlock | RuleBlock | HtmlBlock
-
-type LinkRef = tuple[str, str | None]
+if sys.version_info >= (3, 12):
+    exec(
+        "type Block = Heading | Paragraph | CodeBlock | QuoteBlock | ListBlock | TableBlock | RuleBlock | HtmlBlock\n"
+        "type LinkRef = tuple[str, str | None]"
+    )
+else:
+    Block = Heading | Paragraph | CodeBlock | QuoteBlock | ListBlock | TableBlock | RuleBlock | HtmlBlock
+    LinkRef = tuple[str, str | None]
 
 _REF_RE: Final = re.compile(
     r"^ {0,3}\[(?P<label>[^\]]+)\]:\s*<?(?P<url>[^>\s]+)>?"
@@ -936,7 +959,10 @@ class Segment:
     codes: SgrCodes = ()
 
 
-type StyledLine = list[Segment]
+if sys.version_info >= (3, 12):
+    exec("type StyledLine = list[Segment]")
+else:
+    StyledLine = list[Segment]
 
 
 def _merge_lines(target: list[StyledLine], extra: list[StyledLine]) -> None:

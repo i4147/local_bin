@@ -2,7 +2,7 @@
 """tokei.py -- count code, quickly. A single-file, stdlib-only reimplementation of tokei.
 
 tokei (https://github.com/XAMPPRocky/tokei) counts files, lines, code, comments
-and blank lines, grouped by language. This Python 3.12+ port reproduces its
+and blank lines, grouped by language. This Python 3.11+ port reproduces its
 counting model and terminal table:
 
   * multi-line and nested block comments (Rust, Haskell, Scala, Kotlin, ...)
@@ -42,13 +42,17 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Literal
 
-if sys.version_info < (3, 12):
-    sys.exit("tokei.py requires Python 3.12 or newer")
-
 __version__ = "1.0.0"
 
-type LanguageName = str
-type SortColumn = Literal["files", "lines", "blanks", "code", "comments"]
+if sys.version_info >= (3, 12):
+    # PEP 695 ``type`` aliases; exec'd so this file still parses on Python < 3.12.
+    exec(
+        "type LanguageName = str\n"
+        "type SortColumn = Literal['files', 'lines', 'blanks', 'code', 'comments']"
+    )
+else:
+    LanguageName = str
+    SortColumn = Literal["files", "lines", "blanks", "code", "comments"]
 
 
 # --------------------------------------------------------------------------- #
@@ -969,11 +973,13 @@ class Options:
 
 
 def _walk_dir(root: Path, opts: Options, exclude: ExcludePatterns | None) -> Iterator[Path]:
-    """Yield countable files under root, honouring ignore rules (Path.walk, 3.12)."""
+    """Yield countable files under root, honouring ignore rules."""
     base_active = _ancestor_ignores(root, opts.no_ignore)
     active_by_dir: dict[Path, list[IgnoreFile]] = {}
 
-    for dirpath, dirnames, filenames in root.walk(top_down=True):
+    # os.walk (not Path.walk, which needs 3.12); wrap dirpath back into Path.
+    for dirpath, dirnames, filenames in os.walk(root, topdown=True):
+        dirpath = Path(dirpath)
         parent_active = active_by_dir.get(dirpath.parent)
         active = list(parent_active if parent_active is not None else base_active)
         if not opts.no_ignore:
