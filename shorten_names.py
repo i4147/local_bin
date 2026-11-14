@@ -1,3 +1,4 @@
+#!/data/data/com.termux/files/usr/bin/env python
 """Shorten identifier names in a Python file, or across a whole package.
 
 This module extends the classic single-file name shortener to packages:

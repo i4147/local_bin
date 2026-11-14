@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/data/data/com.termux/files/usr/bin/env python
 """env-stamp: reproducible environment fingerprints -- capture, diff, bisect.
 
 "It works on my machine" usually starts with "here is my ``pip freeze``" --
@@ -165,15 +165,39 @@ if sys.version_info < (3, 12):  # pragma: no cover - exercised only on old pytho
 __version__ = "1.0.0"
 
 __all__ = [
-    "SCHEMA_VERSION", "SAFE_VALUE_KEYS", "SENSITIVE_NAME_RE", "URL_CREDENTIALS_RE",
-    "TOKEN_PREFIX_RE", "BINARY_PACKAGES", "TOOL_PROBES",
-    "ENTROPY_LIMIT", "ENTROPY_MIN_LENGTH", "DEFAULT_MAX_DIFF_LINES", "DEFAULT_MAX_RUNS",
-    "Change", "PythonInfo", "OSInfo", "PackageInfo", "Stamp",
-    "Pin", "EnvProfile", "Candidate", "BisectReport", "Bisector",
-    "canonicalize_name", "shannon_entropy", "mask_url_credentials", "redact_env",
-    "capture", "stamp_digest", "diff_stamps",
-    "render_terminal", "render_markdown", "render_json",
-    "build_parser", "main",
+    "SCHEMA_VERSION",
+    "SAFE_VALUE_KEYS",
+    "SENSITIVE_NAME_RE",
+    "URL_CREDENTIALS_RE",
+    "TOKEN_PREFIX_RE",
+    "BINARY_PACKAGES",
+    "TOOL_PROBES",
+    "ENTROPY_LIMIT",
+    "ENTROPY_MIN_LENGTH",
+    "DEFAULT_MAX_DIFF_LINES",
+    "DEFAULT_MAX_RUNS",
+    "Change",
+    "PythonInfo",
+    "OSInfo",
+    "PackageInfo",
+    "Stamp",
+    "Pin",
+    "EnvProfile",
+    "Candidate",
+    "BisectReport",
+    "Bisector",
+    "canonicalize_name",
+    "shannon_entropy",
+    "mask_url_credentials",
+    "redact_env",
+    "capture",
+    "stamp_digest",
+    "diff_stamps",
+    "render_terminal",
+    "render_markdown",
+    "render_json",
+    "build_parser",
+    "main",
 ]
 
 # --------------------------------------------------------------------------
@@ -191,22 +215,32 @@ SAFE_VALUE_KEYS: frozenset[str] = frozenset({"TZ", "LANG", "PYTHONHASHSEED"})
 SENSITIVE_NAME_RE = re.compile(r"(?i)key|token|secret|pass|cred|auth|dsn|url")
 
 #: Credential-bearing URL pattern: ``scheme://user:password@host``.
-URL_CREDENTIALS_RE = re.compile(
-    r"(?i)([a-z][a-z0-9+.\-]*://)([^/\s:@'\"]+):([^/\s@'\"]+)@"
-)
+URL_CREDENTIALS_RE = re.compile(r"(?i)([a-z][a-z0-9+.\-]*://)([^/\s:@'\"]+):([^/\s@'\"]+)@")
 
 #: Well-known secret/token prefixes; values starting with these are dropped.
-TOKEN_PREFIX_RE = re.compile(
-    r"(?i)^(?:ghp_|gho_|ghu_|ghs_|ghr_|github_pat_|sk-|sk_|xox[bpas]-|AKIA|ASIA|AIza)"
-)
+TOKEN_PREFIX_RE = re.compile(r"(?i)^(?:ghp_|gho_|ghu_|ghs_|ghr_|github_pat_|sk-|sk_|xox[bpas]-|AKIA|ASIA|AIza)")
 
 #: Packages that ship binary/C-extension wheels; presence/absence changes are
 #: ranked above pure-python ones because they interact with the interpreter
 #: and system libraries.  Extend as needed for your domain.
 BINARY_PACKAGES: frozenset[str] = frozenset({
-    "numpy", "scipy", "pandas", "cryptography", "pydantic-core", "lxml",
-    "pillow", "brotli", "zstandard", "cffi", "regex", "psycopg2",
-    "pyyaml-lib", "orjson", "ujson", "markupsafe", "argon2-cffi",
+    "numpy",
+    "scipy",
+    "pandas",
+    "cryptography",
+    "pydantic-core",
+    "lxml",
+    "pillow",
+    "brotli",
+    "zstandard",
+    "cffi",
+    "regex",
+    "psycopg2",
+    "pyyaml-lib",
+    "orjson",
+    "ujson",
+    "markupsafe",
+    "argon2-cffi",
 })
 
 #: Entropy threshold (bits per character) above which a value is presumed to
@@ -231,8 +265,19 @@ DEFAULT_TEST_TIMEOUT: float = 900.0
 #: Env vars always kept when reconstructing the baseline env surface -- the
 #: minimum needed to actually *run* a child process.
 INFRA_ENV_KEYS: frozenset[str] = frozenset({
-    "PATH", "HOME", "USER", "LOGNAME", "TERM", "SHELL", "TEMP", "TMP",
-    "SYSTEMROOT", "COMSPEC", "PATHEXT", "SYSTEMDRIVE", "WINDIR",
+    "PATH",
+    "HOME",
+    "USER",
+    "LOGNAME",
+    "TERM",
+    "SHELL",
+    "TEMP",
+    "TMP",
+    "SYSTEMROOT",
+    "COMSPEC",
+    "PATHEXT",
+    "SYSTEMDRIVE",
+    "WINDIR",
     "NUMBER_OF_PROCESSORS",
 })
 
@@ -242,6 +287,7 @@ _T = TypeVar("_T")
 # --------------------------------------------------------------------------
 # Small utilities
 # --------------------------------------------------------------------------
+
 
 def canonicalize_name(name: str) -> str:
     """Normalise a distribution name per PEP 503 (``Foo_Bar.baz`` -> ``foo-bar-baz``)."""
@@ -277,9 +323,7 @@ def _version_change_scope(a: str, b: str) -> str:
 def _run_quiet(cmd: Sequence[str], timeout: float = 10.0) -> str | None:
     """Run ``cmd`` capturing combined output; return it, or ``None`` on failure."""
     try:
-        proc = subprocess.run(
-            list(cmd), capture_output=True, text=True, timeout=timeout, check=False
-        )
+        proc = subprocess.run(list(cmd), capture_output=True, text=True, timeout=timeout, check=False)
     except (OSError, subprocess.SubprocessError):
         return None
     return (proc.stdout or "") + (proc.stderr or "")
@@ -301,6 +345,7 @@ def _partition(items: list[_T], n: int) -> list[list[_T]]:
 # --------------------------------------------------------------------------
 # Redaction
 # --------------------------------------------------------------------------
+
 
 def shannon_entropy(value: str) -> float:
     """Shannon entropy of ``value`` in bits per character (0.0 for empty)."""
@@ -374,6 +419,7 @@ def redact_env(
 # --------------------------------------------------------------------------
 # Data model
 # --------------------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class PythonInfo:
@@ -468,8 +514,9 @@ class Stamp:
         Packages are sorted by name and env names sorted, so equal
         environments always produce equal hashes.
         """
-        core = cls._core_dict(python=python, os=os, packages=packages,
-                              env_keys=env_keys, env_redacted=env_redacted, tools=tools)
+        core = cls._core_dict(
+            python=python, os=os, packages=packages, env_keys=env_keys, env_redacted=env_redacted, tools=tools
+        )
         return cls(
             schema=SCHEMA_VERSION,
             captured_at=captured_at or _now_iso(),
@@ -545,9 +592,7 @@ class Stamp:
         except (KeyError, TypeError) as exc:
             raise ValueError(f"stamp is missing required key: {exc}") from None
         if schema != SCHEMA_VERSION:
-            raise ValueError(
-                f"unsupported stamp schema {schema} (expected {SCHEMA_VERSION})"
-            )
+            raise ValueError(f"unsupported stamp schema {schema} (expected {SCHEMA_VERSION})")
         try:
             python = PythonInfo(
                 version=str(py_raw["version"]),
@@ -591,9 +636,7 @@ class Stamp:
         except (KeyError, TypeError) as exc:
             raise ValueError(f"malformed stamp section: {exc}") from None
         if verify and stamp_digest(data) != stamp.hash:
-            raise ValueError(
-                "stamp hash mismatch -- the file is corrupted or was tampered with"
-            )
+            raise ValueError("stamp hash mismatch -- the file is corrupted or was tampered with")
         return stamp
 
 
@@ -841,11 +884,7 @@ def _wheel_tag(dist: Distribution) -> str:
     wheel_meta = dist.read_text("WHEEL")
     if not wheel_meta:
         return ""
-    tags = [
-        line.split(":", 1)[1].strip()
-        for line in wheel_meta.splitlines()
-        if line.lower().startswith("tag:")
-    ]
+    tags = [line.split(":", 1)[1].strip() for line in wheel_meta.splitlines() if line.lower().startswith("tag:")]
     return ",".join(tags)
 
 
@@ -986,6 +1025,7 @@ def capture(
 # Diff
 # --------------------------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class Change:
     """One ranked difference between two stamps.
@@ -1014,10 +1054,7 @@ class Change:
 def _name_list(names: Sequence[str], what: str) -> str:
     shown = ", ".join(names[:8])
     more = f" (+{len(names) - 8} more)" if len(names) > 8 else ""
-    return (
-        f"{len(names)} env-var name(s) {what}: {shown}{more}"
-        "  [names only, values never recorded]"
-    )
+    return f"{len(names)} env-var name(s) {what}: {shown}{more}  [names only, values never recorded]"
 
 
 def diff_stamps(a: Stamp, b: Stamp) -> list[Change]:
@@ -1045,30 +1082,60 @@ def diff_stamps(a: Stamp, b: Stamp) -> list[Change]:
     if pa.version != pb.version:
         scope = _version_change_scope(pa.version, pb.version)
         severity = {"major": 30, "minor": 20}.get(scope, 10)
-        changes.append(Change(
-            "interpreter", 1, scope if scope in ("major", "minor", "patch") else "changed",
-            "python", f"python {pa.version} -> {pb.version} ({scope})", severity,
-        ))
+        changes.append(
+            Change(
+                "interpreter",
+                1,
+                scope if scope in ("major", "minor", "patch") else "changed",
+                "python",
+                f"python {pa.version} -> {pb.version} ({scope})",
+                severity,
+            )
+        )
     if pa.implementation != pb.implementation:
-        changes.append(Change(
-            "interpreter", 1, "changed", "implementation",
-            f"implementation {pa.implementation} -> {pb.implementation}", 25,
-        ))
+        changes.append(
+            Change(
+                "interpreter",
+                1,
+                "changed",
+                "implementation",
+                f"implementation {pa.implementation} -> {pb.implementation}",
+                25,
+            )
+        )
     if pa.abiflags != pb.abiflags:
-        changes.append(Change(
-            "interpreter", 1, "changed", "abiflags",
-            f"abiflags {pa.abiflags!r} -> {pb.abiflags!r}", 5,
-        ))
+        changes.append(
+            Change(
+                "interpreter",
+                1,
+                "changed",
+                "abiflags",
+                f"abiflags {pa.abiflags!r} -> {pb.abiflags!r}",
+                5,
+            )
+        )
     if pa.platform_tag != pb.platform_tag:
-        changes.append(Change(
-            "interpreter", 1, "changed", "platform_tag",
-            f"platform tag {pa.platform_tag} -> {pb.platform_tag}", 8,
-        ))
+        changes.append(
+            Change(
+                "interpreter",
+                1,
+                "changed",
+                "platform_tag",
+                f"platform tag {pa.platform_tag} -> {pb.platform_tag}",
+                8,
+            )
+        )
     if a.os.libc != b.os.libc and "unknown" not in (a.os.libc, b.os.libc):
-        changes.append(Change(
-            "os", 1, "changed", "libc",
-            f"libc {a.os.libc} -> {b.os.libc}", 15,
-        ))
+        changes.append(
+            Change(
+                "os",
+                1,
+                "changed",
+                "libc",
+                f"libc {a.os.libc} -> {b.os.libc}",
+                15,
+            )
+        )
 
     # -- rank 2: packages present/absent (binary first), wheel tags --------
     ma = {p.name: p for p in a.packages}
@@ -1076,81 +1143,143 @@ def diff_stamps(a: Stamp, b: Stamp) -> list[Change]:
     for name in sorted(ma.keys() - mb.keys()):
         pkg = ma[name]
         binary = name in BINARY_PACKAGES
-        changes.append(Change(
-            "packages", 2, "removed", name,
-            f"{name} {pkg.version} present only in baseline"
-            f"{' (binary/C-extension)' if binary else ''}",
-            10 if binary else 0,
-        ))
+        changes.append(
+            Change(
+                "packages",
+                2,
+                "removed",
+                name,
+                f"{name} {pkg.version} present only in baseline{' (binary/C-extension)' if binary else ''}",
+                10 if binary else 0,
+            )
+        )
     for name in sorted(mb.keys() - ma.keys()):
         pkg = mb[name]
         binary = name in BINARY_PACKAGES
-        changes.append(Change(
-            "packages", 2, "added", name,
-            f"{name} {pkg.version} present only in suspect"
-            f"{' (binary/C-extension)' if binary else ''}",
-            10 if binary else 0,
-        ))
+        changes.append(
+            Change(
+                "packages",
+                2,
+                "added",
+                name,
+                f"{name} {pkg.version} present only in suspect{' (binary/C-extension)' if binary else ''}",
+                10 if binary else 0,
+            )
+        )
     for name in sorted(ma.keys() & mb.keys()):
         x, y = ma[name], mb[name]
         if x.version != y.version:
             scope = _version_change_scope(x.version, y.version)
             severity = {"major": 3, "minor": 2}.get(scope, 1)
-            changes.append(Change(
-                "packages", 3, scope if scope in ("major", "minor") else "changed",
-                name, f"{name} {x.version} -> {y.version} ({scope})", severity,
-            ))
+            changes.append(
+                Change(
+                    "packages",
+                    3,
+                    scope if scope in ("major", "minor") else "changed",
+                    name,
+                    f"{name} {x.version} -> {y.version} ({scope})",
+                    severity,
+                )
+            )
         elif x.wheel_tag != y.wheel_tag and (x.wheel_tag or y.wheel_tag):
-            changes.append(Change(
-                "packages", 2, "wheel-tag", name,
-                f"{name} {y.version}: same version, different wheel "
-                f"({x.wheel_tag or 'n/a'} vs {y.wheel_tag or 'n/a'})", 5,
-            ))
+            changes.append(
+                Change(
+                    "packages",
+                    2,
+                    "wheel-tag",
+                    name,
+                    f"{name} {y.version}: same version, different wheel "
+                    f"({x.wheel_tag or 'n/a'} vs {y.wheel_tag or 'n/a'})",
+                    5,
+                )
+            )
 
     # -- rank 3: distro / kernel -------------------------------------------
     if a.os.distro != b.os.distro and "unknown" not in (a.os.distro, b.os.distro):
-        changes.append(Change(
-            "os", 3, "changed", "distro",
-            f"distro {a.os.distro} -> {b.os.distro}", 2,
-        ))
+        changes.append(
+            Change(
+                "os",
+                3,
+                "changed",
+                "distro",
+                f"distro {a.os.distro} -> {b.os.distro}",
+                2,
+            )
+        )
     if a.os.kernel != b.os.kernel:
-        changes.append(Change(
-            "os", 3, "changed", "kernel",
-            f"kernel {a.os.kernel} -> {b.os.kernel}", 1,
-        ))
+        changes.append(
+            Change(
+                "os",
+                3,
+                "changed",
+                "kernel",
+                f"kernel {a.os.kernel} -> {b.os.kernel}",
+                1,
+            )
+        )
 
     # -- rank 4: locale / fs / umask / safe env values / tools --------------
     if a.os.locale != b.os.locale:
-        changes.append(Change(
-            "os", 4, "changed", "locale",
-            f"locale {a.os.locale or 'n/a'} -> {b.os.locale or 'n/a'}", 3,
-        ))
+        changes.append(
+            Change(
+                "os",
+                4,
+                "changed",
+                "locale",
+                f"locale {a.os.locale or 'n/a'} -> {b.os.locale or 'n/a'}",
+                3,
+            )
+        )
     if a.os.fs_case_sensitive != b.os.fs_case_sensitive:
-        changes.append(Change(
-            "os", 4, "changed", "fs_case_sensitive",
-            "filesystem case-sensitivity: "
-            f"{'sensitive' if a.os.fs_case_sensitive else 'insensitive'} -> "
-            f"{'sensitive' if b.os.fs_case_sensitive else 'insensitive'}", 4,
-        ))
+        changes.append(
+            Change(
+                "os",
+                4,
+                "changed",
+                "fs_case_sensitive",
+                "filesystem case-sensitivity: "
+                f"{'sensitive' if a.os.fs_case_sensitive else 'insensitive'} -> "
+                f"{'sensitive' if b.os.fs_case_sensitive else 'insensitive'}",
+                4,
+            )
+        )
     if a.os.umask != b.os.umask:
-        changes.append(Change(
-            "os", 4, "changed", "umask",
-            f"umask {a.os.umask} -> {b.os.umask}", 3,
-        ))
+        changes.append(
+            Change(
+                "os",
+                4,
+                "changed",
+                "umask",
+                f"umask {a.os.umask} -> {b.os.umask}",
+                3,
+            )
+        )
     for key in sorted(a.env_redacted.keys() & b.env_redacted.keys()):
         if a.env_redacted[key] != b.env_redacted[key]:
-            changes.append(Change(
-                "env", 4, "value", key,
-                f"{key}: {a.env_redacted[key]} -> {b.env_redacted[key]}", 2,
-            ))
+            changes.append(
+                Change(
+                    "env",
+                    4,
+                    "value",
+                    key,
+                    f"{key}: {a.env_redacted[key]} -> {b.env_redacted[key]}",
+                    2,
+                )
+            )
     for tool in sorted(a.tools.keys() | b.tools.keys()):
         va, vb = a.tools.get(tool), b.tools.get(tool)
         if va != vb:
             kind = "changed" if (va and vb) else ("removed" if va else "added")
-            changes.append(Change(
-                "tools", 4, kind, tool,
-                f"tool {tool}: {va or 'absent'} -> {vb or 'absent'}", 1,
-            ))
+            changes.append(
+                Change(
+                    "tools",
+                    4,
+                    kind,
+                    tool,
+                    f"tool {tool}: {va or 'absent'} -> {vb or 'absent'}",
+                    1,
+                )
+            )
 
     # -- rank 5: env-var names only -----------------------------------------
     env_added = sorted(set(b.env_keys) - set(a.env_keys))
@@ -1167,6 +1296,7 @@ def diff_stamps(a: Stamp, b: Stamp) -> list[Change]:
 # --------------------------------------------------------------------------
 # Render
 # --------------------------------------------------------------------------
+
 
 def render_terminal(
     changes: Sequence[Change],
@@ -1217,6 +1347,7 @@ def render_json(changes: Sequence[Change]) -> str:
 # Bisect
 # --------------------------------------------------------------------------
 
+
 @dataclass(frozen=True, order=True)
 class Pin:
     """A reproducible package pin: canonical name + exact version."""
@@ -1259,8 +1390,8 @@ class Candidate:
 class _Atomic:
     """One atomic baseline->suspect transition for delta-debugging."""
 
-    axis: str   # "packages" | "env"
-    kind: str   # add-pkg | remove-pkg | change-pkg | set-env | unset-env
+    axis: str  # "packages" | "env"
+    kind: str  # add-pkg | remove-pkg | change-pkg | set-env | unset-env
     name: str
     payload: str = ""
 
@@ -1375,8 +1506,7 @@ def _refusal_reasons(baseline: Stamp, suspect: Stamp) -> list[str]:
     reasons: list[str] = []
     if baseline.python.implementation != suspect.python.implementation:
         reasons.append(
-            f"interpreter implementation differs "
-            f"({baseline.python.implementation} vs {suspect.python.implementation})"
+            f"interpreter implementation differs ({baseline.python.implementation} vs {suspect.python.implementation})"
         )
     if _version_tuple(baseline.python.version)[:2] != _version_tuple(suspect.python.version)[:2]:
         reasons.append(
@@ -1384,18 +1514,12 @@ def _refusal_reasons(baseline: Stamp, suspect: Stamp) -> list[str]:
             f"({baseline.python.version} vs {suspect.python.version}); "
             "only patch-level differences can be bisected"
         )
-    if (
-        baseline.os.libc != suspect.os.libc
-        and "unknown" not in (baseline.os.libc, suspect.os.libc)
-    ):
+    if baseline.os.libc != suspect.os.libc and "unknown" not in (baseline.os.libc, suspect.os.libc):
         reasons.append(
-            f"C library differs ({baseline.os.libc} vs {suspect.os.libc}) -- "
-            "system-level, outside env-stamp's control"
+            f"C library differs ({baseline.os.libc} vs {suspect.os.libc}) -- system-level, outside env-stamp's control"
         )
     if baseline.os.name != suspect.os.name:
-        reasons.append(
-            f"operating system differs ({baseline.os.name} vs {suspect.os.name})"
-        )
+        reasons.append(f"operating system differs ({baseline.os.name} vs {suspect.os.name})")
     return reasons
 
 
@@ -1437,8 +1561,13 @@ class BisectReport:
     failing_output: str = ""
 
     _EXIT_CODES: ClassVar[dict[str, int]] = {
-        "found": 0, "interaction": 0, "not-found": 1, "refused": 2,
-        "baseline-fails": 3, "budget-exhausted": 4, "error": 5,
+        "found": 0,
+        "interaction": 0,
+        "not-found": 1,
+        "refused": 2,
+        "baseline-fails": 3,
+        "budget-exhausted": 4,
+        "error": 5,
     }
 
     @property
@@ -1470,9 +1599,7 @@ class BisectReport:
                 lines.append(f"  culprit [{c.rank}] {c.axis}: {c.detail}")
             if not self.culprits and self.outcome in {"not-found", "budget-exhausted"}:
                 lines.append("  no minimal change set could be isolated")
-        lines.append(
-            f"  test runs: {self.runs_used}/{self.max_runs}   cache hits: {self.cache_hits}"
-        )
+        lines.append(f"  test runs: {self.runs_used}/{self.max_runs}   cache hits: {self.cache_hits}")
         for note in self.notes:
             lines.append(f"  note: {note}")
         if verbose and self.failing_output:
@@ -1490,8 +1617,7 @@ class Bisector:
     env vars -- and delta-debugs the guilty axis to the minimal change set.
 
     Example:
-        >>> bisector = Bisector(test_cmd="pytest -x tests/test_x.py",
-        ...                     baseline=good, suspect=bad)
+        >>> bisector = Bisector(test_cmd="pytest -x tests/test_x.py", baseline=good, suspect=bad)
         >>> report = bisector.run()
         >>> report.outcome, report.exit_code
         ('found', 0)
@@ -1647,10 +1773,7 @@ class Bisector:
         probes: dict[str, Candidate] = {}
         if pkg_items:
             probes["packages"] = Candidate(susp_pins, self.python_bin, base_profile, channel("packages"))
-        if (
-            self.suspect.env_keys != self.baseline.env_keys
-            or self.suspect.env_redacted != self.baseline.env_redacted
-        ):
+        if self.suspect.env_keys != self.baseline.env_keys or self.suspect.env_redacted != self.baseline.env_redacted:
             probes["env"] = Candidate(base_pins, self.python_bin, EnvProfile("current"), channel("env"))
         if self.suspect.python.version != self.baseline.python.version:
             located = _locate_interpreter(self.suspect.python.version)
@@ -1677,12 +1800,18 @@ class Bisector:
             if failing_axes:
                 for ax in failing_axes:
                     if ax == "interpreter":
-                        culprits.append(Change(
-                            "interpreter", 1, "changed", "python",
-                            f"switching the interpreter alone "
-                            f"({self.baseline.python.version} -> {self.suspect.python.version}) "
-                            "flips the test to FAIL", 10,
-                        ))
+                        culprits.append(
+                            Change(
+                                "interpreter",
+                                1,
+                                "changed",
+                                "python",
+                                f"switching the interpreter alone "
+                                f"({self.baseline.python.version} -> {self.suspect.python.version}) "
+                                "flips the test to FAIL",
+                                10,
+                            )
+                        )
                         continue
                     items = pkg_items if ax == "packages" else env_items
                     minimal = self._ddmin(items, base_pins, base_profile)
@@ -1696,10 +1825,7 @@ class Bisector:
                     else:
                         culprits.extend(_changes_from_items(minimal))
                 if len(failing_axes) > 1:
-                    self._notes.append(
-                        "multiple axes independently flip the test: "
-                        + ", ".join(sorted(failing_axes))
-                    )
+                    self._notes.append("multiple axes independently flip the test: " + ", ".join(sorted(failing_axes)))
                 return report("found", culprits)
 
             # 4. No single axis flips: try the full suspect environment.
@@ -1709,13 +1835,11 @@ class Bisector:
                 if minimal:
                     culprits = _changes_from_items(minimal)
                     self._notes.append(
-                        "no single axis reproduces the failure; the minimal set "
-                        "below combines axes (interaction)"
+                        "no single axis reproduces the failure; the minimal set below combines axes (interaction)"
                     )
                     return report("interaction", culprits)
                 self._notes.append(
-                    "the failure depends on env values that were never captured; "
-                    "it cannot be minimised, only observed"
+                    "the failure depends on env values that were never captured; it cannot be minimised, only observed"
                 )
                 return report("interaction")
 
@@ -1752,17 +1876,20 @@ class Bisector:
                 self._log(f"[cache hit #{self._cache_hits}] pins={len(cand.packages)} env={cand.env.mode}")
                 return cached
         if self._runs >= self.max_runs:
-            raise _BudgetExhausted(
-                f"run budget of {self.max_runs} test executions exhausted before a verdict"
-            )
+            raise _BudgetExhausted(f"run budget of {self.max_runs} test executions exhausted before a verdict")
         venv_dir = self._venv_for(cand.interpreter, cand.channel)
         self._sync(venv_dir, cand.packages)
         env = self._child_env(cand.env, venv_dir)
         started = time.monotonic()
         try:
             proc = subprocess.run(
-                self.test_cmd, shell=True, env=env,
-                capture_output=True, text=True, timeout=self.timeout, check=False,
+                self.test_cmd,
+                shell=True,
+                env=env,
+                capture_output=True,
+                text=True,
+                timeout=self.timeout,
+                check=False,
             )
             passed = proc.returncode == 0
             output = (proc.stdout or "") + (proc.stderr or "")
@@ -1794,7 +1921,8 @@ class Bisector:
                 "env_unset": sorted(cand.env.unset),
                 "env_set": [list(kv) for kv in cand.env.overrides],
             },
-            sort_keys=True, separators=(",", ":"),
+            sort_keys=True,
+            separators=(",", ":"),
         )
         return hashlib.blake2b(payload.encode("utf-8"), digest_size=16).hexdigest()
 
@@ -1859,9 +1987,7 @@ class Bisector:
             raise RuntimeError(f"package manager failed to launch: {exc}") from None
         if proc.returncode != 0:
             tail = (proc.stderr or proc.stdout or "")[-1500:]
-            raise RuntimeError(
-                f"package operation failed ({' '.join(args[:2])} ...):\n{tail}"
-            )
+            raise RuntimeError(f"package operation failed ({' '.join(args[:2])} ...):\n{tail}")
 
     def _child_env(self, profile: EnvProfile, venv_dir: Path) -> dict[str, str]:
         """Build the environment for a candidate test run.
@@ -1939,9 +2065,7 @@ class Bisector:
                     break
                 granularity = min(len(work), granularity * 2)
             except _BudgetExhausted:
-                raise _BudgetExhausted(
-                    "run budget exhausted during minimisation", partial=work
-                ) from None
+                raise _BudgetExhausted("run budget exhausted during minimisation", partial=work) from None
         return work
 
     def _run_subset(
@@ -1963,6 +2087,7 @@ class Bisector:
 # --------------------------------------------------------------------------
 # CLI
 # --------------------------------------------------------------------------
+
 
 def _parse_allow_values(spec: str) -> set[str]:
     """Parse a comma-separated ``--allow-values`` argument."""
@@ -2077,7 +2202,7 @@ def build_parser() -> argparse.ArgumentParser:
             "  env-stamp diff good.json broken.json\n"
             "  cat broken.json | env-stamp diff good.json --stdin\n"
             "  env-stamp bisect --baseline good.json "
-            "--test \"pytest -x tests/test_x.py\" --venv .venv\n"
+            '--test "pytest -x tests/test_x.py" --venv .venv\n'
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -2085,56 +2210,74 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", metavar="COMMAND", required=True)
 
     cap = sub.add_parser("capture", help="fingerprint the current (or --venv) environment")
-    cap.add_argument("--out", "-o", type=Path, default=None,
-                     help="write the stamp JSON to this file (default: stdout)")
-    cap.add_argument("--venv", type=Path, default=None,
-                     help="fingerprint the packages of this venv without activating it")
-    cap.add_argument("--allow-values", default=",".join(sorted(SAFE_VALUE_KEYS)),
-                     help="comma-separated env names whose values may be recorded "
-                          "(default: TZ,LANG,PYTHONHASHSEED); replaces the default")
-    cap.add_argument("--no-redact", action="store_true",
-                     help="record ALL env values (prints a warning; do not share the file)")
-    cap.add_argument("--no-paths", action="store_true",
-                     help="strip editable/file:// package origins (leak safety)")
-    cap.add_argument("--no-tools", action="store_true",
-                     help="skip probing external tool versions (pip/uv/gcc/...)")
+    cap.add_argument("--out", "-o", type=Path, default=None, help="write the stamp JSON to this file (default: stdout)")
+    cap.add_argument(
+        "--venv", type=Path, default=None, help="fingerprint the packages of this venv without activating it"
+    )
+    cap.add_argument(
+        "--allow-values",
+        default=",".join(sorted(SAFE_VALUE_KEYS)),
+        help="comma-separated env names whose values may be recorded "
+        "(default: TZ,LANG,PYTHONHASHSEED); replaces the default",
+    )
+    cap.add_argument(
+        "--no-redact", action="store_true", help="record ALL env values (prints a warning; do not share the file)"
+    )
+    cap.add_argument("--no-paths", action="store_true", help="strip editable/file:// package origins (leak safety)")
+    cap.add_argument("--no-tools", action="store_true", help="skip probing external tool versions (pip/uv/gcc/...)")
     cap.add_argument("--quiet", "-q", action="store_true", help="suppress summary output")
     cap.set_defaults(handler=_cmd_capture)
 
     dif = sub.add_parser("diff", help="rank the differences between two stamps")
     dif.add_argument("baseline", help="path to the baseline (good) stamp JSON")
-    dif.add_argument("suspect", nargs="?", default=None,
-                     help="path to the suspect (broken) stamp JSON, or '-' for stdin")
-    dif.add_argument("--stdin", action="store_true",
-                     help="read the suspect stamp from stdin")
-    dif.add_argument("--format", choices=("terminal", "markdown", "json"), default="terminal",
-                     help="output renderer (default: terminal)")
+    dif.add_argument(
+        "suspect", nargs="?", default=None, help="path to the suspect (broken) stamp JSON, or '-' for stdin"
+    )
+    dif.add_argument("--stdin", action="store_true", help="read the suspect stamp from stdin")
+    dif.add_argument(
+        "--format",
+        choices=("terminal", "markdown", "json"),
+        default="terminal",
+        help="output renderer (default: terminal)",
+    )
     dif.add_argument("--all", action="store_true", help="show every change, not just the top 10")
-    dif.add_argument("--max-lines", type=int, default=DEFAULT_MAX_DIFF_LINES,
-                     help=f"truncate to N lines (default: {DEFAULT_MAX_DIFF_LINES})")
+    dif.add_argument(
+        "--max-lines",
+        type=int,
+        default=DEFAULT_MAX_DIFF_LINES,
+        help=f"truncate to N lines (default: {DEFAULT_MAX_DIFF_LINES})",
+    )
     dif.set_defaults(handler=_cmd_diff)
 
     bis = sub.add_parser("bisect", help="find the smallest change set that flips a test to FAIL")
-    bis.add_argument("--baseline", required=True,
-                     help="stamp of the environment where the test passes")
-    bis.add_argument("--test", required=True,
-                     help="shell command; exit code 0 = PASS, anything else = FAIL")
-    bis.add_argument("--venv", type=Path, default=None,
-                     help="suspect venv to compare against (default: current environment)")
-    bis.add_argument("--python", default=None,
-                     help="interpreter used to build candidate venvs (default: running python)")
-    bis.add_argument("--find-links", action="append", default=[], metavar="DIR",
-                     help="local wheel directory; repeatable; implies --no-index (offline mode)")
-    bis.add_argument("--max-runs", type=int, default=DEFAULT_MAX_RUNS,
-                     help=f"cap on test executions (default: {DEFAULT_MAX_RUNS})")
-    bis.add_argument("--timeout", type=float, default=DEFAULT_TEST_TIMEOUT,
-                     help="per-test timeout in seconds (default: 900)")
-    bis.add_argument("--workdir", type=Path, default=None,
-                     help="where throwaway venvs live (default: a fresh temp dir)")
-    bis.add_argument("--parallel", action="store_true",
-                     help="run axis-level probes concurrently (each in its own venv)")
-    bis.add_argument("--force-pip", action="store_true",
-                     help="use pip even when uv is available")
+    bis.add_argument("--baseline", required=True, help="stamp of the environment where the test passes")
+    bis.add_argument("--test", required=True, help="shell command; exit code 0 = PASS, anything else = FAIL")
+    bis.add_argument(
+        "--venv", type=Path, default=None, help="suspect venv to compare against (default: current environment)"
+    )
+    bis.add_argument(
+        "--python", default=None, help="interpreter used to build candidate venvs (default: running python)"
+    )
+    bis.add_argument(
+        "--find-links",
+        action="append",
+        default=[],
+        metavar="DIR",
+        help="local wheel directory; repeatable; implies --no-index (offline mode)",
+    )
+    bis.add_argument(
+        "--max-runs", type=int, default=DEFAULT_MAX_RUNS, help=f"cap on test executions (default: {DEFAULT_MAX_RUNS})"
+    )
+    bis.add_argument(
+        "--timeout", type=float, default=DEFAULT_TEST_TIMEOUT, help="per-test timeout in seconds (default: 900)"
+    )
+    bis.add_argument(
+        "--workdir", type=Path, default=None, help="where throwaway venvs live (default: a fresh temp dir)"
+    )
+    bis.add_argument(
+        "--parallel", action="store_true", help="run axis-level probes concurrently (each in its own venv)"
+    )
+    bis.add_argument("--force-pip", action="store_true", help="use pip even when uv is available")
     bis.add_argument("--keep", action="store_true", help="keep throwaway venvs for inspection")
     bis.add_argument("--verbose", action="store_true", help="show tail of the failing test output")
     bis.add_argument("--quiet", "-q", action="store_true", help="suppress progress logging")
