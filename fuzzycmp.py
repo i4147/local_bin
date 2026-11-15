@@ -13,6 +13,49 @@ from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Iterable, Sequence
+from types import SimpleNamespace
+from typing import Annotated
+
+import click
+import typer
+
+
+def _version_callback(value: bool) -> None:
+    if value:
+        typer.echo("fuzzycmp 1.0.0")
+        raise typer.Exit()
+
+
+_STATE: dict[str, object] = {}
+
+
+class _Args(SimpleNamespace):
+    """argparse.Namespace look-alike: unknown attributes read as None."""
+
+    def __getattr__(self, name):
+        if name.startswith("__"):
+            raise AttributeError(name)
+        return None
+
+
+class _ParserShim:
+    """Stand-in for the removed argparse parser; hands back what Typer parsed."""
+
+    def parse_args(self, args=None, namespace=None):
+        'Parse args.'
+        return _Args(**_STATE)
+
+    def error(self, message):
+        raise typer.BadParameter(message)
+
+    def print_help(self, file=None):
+        'Print help.'
+        typer.echo(click.get_current_context().get_help(), file=file)
+
+    def print_usage(self, file=None):
+        'Print usage.'
+        typer.echo(click.get_current_context().get_usage(), file=file)
+
 
 __all__ = [
     "DEFAULT_METRICS",
@@ -1093,45 +1136,7 @@ class FileComparator:
 
 def build_parser() -> argparse.ArgumentParser:
     "Build parser."
-    parser = argparse.ArgumentParser(prog="fuzzycmp", description="Fuzzy text comparison CLI")
-    parser.add_argument("--version", action="version", version="fuzzycmp 1.0.0")
-    sub = parser.add_subparsers(dest="command", required=True)
-    p_sim = sub.add_parser("similarity", help="Compare two strings with one metric")
-    p_sim.add_argument("--metric", required=True, choices=sorted(DEFAULT_METRICS))
-    p_sim.add_argument("--a", required=True)
-    p_sim.add_argument("--b", required=True)
-    p_sim.add_argument("--normalize", action="store_true")
-    p_all = sub.add_parser("compare-all", help="Score two strings with every metric")
-    p_all.add_argument("--a", required=True)
-    p_all.add_argument("--b", required=True)
-    p_all.add_argument("--normalize", action="store_true")
-    p_best = sub.add_parser("best-match", help="Find the best candidate for a query")
-    p_best.add_argument("--metric", required=True, choices=sorted(DEFAULT_METRICS))
-    p_best.add_argument("--query", required=True)
-    p_best.add_argument("--candidate", action="append", required=True, dest="candidates")
-    p_best.add_argument("--threshold", type=float, default=0.0)
-    p_best.add_argument("--normalize", action="store_true")
-    p_best.add_argument("--rank", action="store_true")
-    p_files = sub.add_parser("files", help="Compare two files")
-    p_files.add_argument("--metric", required=True, choices=sorted(DEFAULT_METRICS))
-    p_files.add_argument("--a", required=True)
-    p_files.add_argument("--b", required=True)
-    p_files.add_argument("--threshold", type=float, default=0.6)
-    p_files.add_argument("--window", type=int, default=200)
-    p_files.add_argument("--encoding", default="utf-8")
-    p_files.add_argument("--diff", action="store_true")
-    p_files.add_argument("--normalize", action="store_true")
-    p_files.add_argument("--normalize-lines", action="store_true")
-    p_files.add_argument("--json", action="store_true")
-    p_grep = sub.add_parser("grep", help="Fuzzy-grep a file for a query")
-    p_grep.add_argument("--metric", required=True, choices=sorted(DEFAULT_METRICS))
-    p_grep.add_argument("--file", required=True)
-    p_grep.add_argument("--query", required=True)
-    p_grep.add_argument("--threshold", type=float, default=0.7)
-    p_grep.add_argument("--encoding", default="utf-8")
-    p_grep.add_argument("--normalize", action="store_true")
-    p_phon = sub.add_parser("phonetic", help="Show phonetic codes for a word")
-    p_phon.add_argument("--word", required=True)
+    parser = _ParserShim()
     return parser
 
 
@@ -1242,5 +1247,104 @@ def main(argv: Sequence[str] | None = None) -> int:
     return handler(args)
 
 
-if __name__ == "__main__":
+def _run() -> None:
     raise SystemExit(main())
+
+
+app = typer.Typer(
+    help="Fuzzy text comparison CLI",
+    add_completion=False,
+    context_settings={"help_option_names": ["-h", "--help"]},
+    pretty_exceptions_show_locals=False,
+)
+
+
+@app.callback()
+def _root(
+    version: Annotated[bool, typer.Option("--version", callback=_version_callback, is_eager=True, help="show program's version number and exit")] = False,
+) -> None:
+    pass
+
+
+@app.command("similarity", help="Compare two strings with one metric")
+def cmd_similarity(
+    metric: Annotated[str, typer.Option("--metric")],
+    a: Annotated[str, typer.Option("--a")],
+    b: Annotated[str, typer.Option("--b")],
+    normalize: Annotated[bool, typer.Option("--normalize")] = False,
+) -> None:
+    if metric is not None and metric not in sorted(DEFAULT_METRICS):
+        raise typer.BadParameter(f"invalid choice: {metric!r} (choose from {sorted(DEFAULT_METRICS)})")
+    _STATE.update(metric=metric, a=a, b=b, normalize=normalize, command="similarity")
+    _run()
+
+
+@app.command("compare-all", help="Score two strings with every metric")
+def cmd_compare_all(
+    a: Annotated[str, typer.Option("--a")],
+    b: Annotated[str, typer.Option("--b")],
+    normalize: Annotated[bool, typer.Option("--normalize")] = False,
+) -> None:
+    _STATE.update(a=a, b=b, normalize=normalize, command="compare-all")
+    _run()
+
+
+@app.command("best-match", help="Find the best candidate for a query")
+def cmd_best_match(
+    metric: Annotated[str, typer.Option("--metric")],
+    query: Annotated[str, typer.Option("--query")],
+    candidates: Annotated[list[str] | None, typer.Option("--candidate")] = None,
+    threshold: Annotated[float, typer.Option("--threshold")] = 0.0,
+    normalize: Annotated[bool, typer.Option("--normalize")] = False,
+    rank: Annotated[bool, typer.Option("--rank")] = False,
+) -> None:
+    if metric is not None and metric not in sorted(DEFAULT_METRICS):
+        raise typer.BadParameter(f"invalid choice: {metric!r} (choose from {sorted(DEFAULT_METRICS)})")
+    _STATE.update(metric=metric, query=query, candidates=candidates, threshold=threshold, normalize=normalize, rank=rank, command="best-match")
+    _run()
+
+
+@app.command("files", help="Compare two files")
+def cmd_files(
+    metric: Annotated[str, typer.Option("--metric")],
+    a: Annotated[str, typer.Option("--a")],
+    b: Annotated[str, typer.Option("--b")],
+    threshold: Annotated[float, typer.Option("--threshold")] = 0.6,
+    window: Annotated[int, typer.Option("--window")] = 200,
+    encoding: Annotated[str, typer.Option("--encoding")] = "utf-8",
+    diff: Annotated[bool, typer.Option("--diff")] = False,
+    normalize: Annotated[bool, typer.Option("--normalize")] = False,
+    normalize_lines: Annotated[bool, typer.Option("--normalize-lines")] = False,
+    json: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    if metric is not None and metric not in sorted(DEFAULT_METRICS):
+        raise typer.BadParameter(f"invalid choice: {metric!r} (choose from {sorted(DEFAULT_METRICS)})")
+    _STATE.update(metric=metric, a=a, b=b, threshold=threshold, window=window, encoding=encoding, diff=diff, normalize=normalize, normalize_lines=normalize_lines, json=json, command="files")
+    _run()
+
+
+@app.command("grep", help="Fuzzy-grep a file for a query")
+def cmd_grep(
+    metric: Annotated[str, typer.Option("--metric")],
+    file: Annotated[str, typer.Option("--file")],
+    query: Annotated[str, typer.Option("--query")],
+    threshold: Annotated[float, typer.Option("--threshold")] = 0.7,
+    encoding: Annotated[str, typer.Option("--encoding")] = "utf-8",
+    normalize: Annotated[bool, typer.Option("--normalize")] = False,
+) -> None:
+    if metric is not None and metric not in sorted(DEFAULT_METRICS):
+        raise typer.BadParameter(f"invalid choice: {metric!r} (choose from {sorted(DEFAULT_METRICS)})")
+    _STATE.update(metric=metric, file=file, query=query, threshold=threshold, encoding=encoding, normalize=normalize, command="grep")
+    _run()
+
+
+@app.command("phonetic", help="Show phonetic codes for a word")
+def cmd_phonetic(
+    word: Annotated[str, typer.Option("--word")],
+) -> None:
+    _STATE.update(word=word, command="phonetic")
+    _run()
+
+
+if __name__ == "__main__":
+    app()

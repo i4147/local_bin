@@ -20,6 +20,63 @@ from collections import Counter
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Iterable, Iterator, TextIO
+from enum import StrEnum
+from types import SimpleNamespace
+from typing import Annotated
+
+import click
+import typer
+
+
+class Keep(StrEnum):
+    'Enumerate the supported Keep values.'
+    first = "first"
+    last = "last"
+
+
+class Output_format(StrEnum):
+    'Enumerate the supported Output format values.'
+    text = "text"
+    json = "json"
+    csv = "csv"
+
+
+def _version_callback(value: bool) -> None:
+    if value:
+        typer.echo(f"%(prog)s {VERSION}")
+        raise typer.Exit()
+
+
+_STATE: dict[str, object] = {}
+
+
+class _Args(SimpleNamespace):
+    """argparse.Namespace look-alike: unknown attributes read as None."""
+
+    def __getattr__(self, name):
+        if name.startswith("__"):
+            raise AttributeError(name)
+        return None
+
+
+class _ParserShim:
+    """Stand-in for the removed argparse parser; hands back what Typer parsed."""
+
+    def parse_args(self, args=None, namespace=None):
+        'Parse args.'
+        return _Args(**_STATE)
+
+    def error(self, message):
+        raise typer.BadParameter(message)
+
+    def print_help(self, file=None):
+        'Print help.'
+        typer.echo(click.get_current_context().get_help(), file=file)
+
+    def print_usage(self, file=None):
+        'Print usage.'
+        typer.echo(click.get_current_context().get_usage(), file=file)
+
 
 IN_MEMORY_THRESHOLD_BYTES = 8 * 1024 * 1024
 MMAP_THRESHOLD_BYTES = 1024 * 1024
@@ -1315,195 +1372,7 @@ class FileAnalyzer(LineProcessor):
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        description=(
-            "Sort and deduplicate lines in a file with sort(1)/uniq(1) semantics; "
-            "uses mmap and external merge sort for large files."
-        ),
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        add_help=False,
-        epilog=(
-            "\nExamples:\n"
-            "  # Basic in-place sort + unique with backup\n"
-            "  python sort_unique_lines.py input.txt --backup\n"
-            "\n"
-            "  # Numeric sort, ignore case, write to stdout\n"
-            "  python sort_unique_lines.py data.txt -n -f -o -\n"
-            "\n"
-            "  # Version sort (v2.9 < v2.10), dedupe case-insensitively\n"
-            "  python sort_unique_lines.py releases.txt -V --dedupe-ignore-case\n"
-            "\n"
-            "  # Sort only lines 100-200 of the file by field 3 (\\t separated)\n"
-            "  python sort_unique_lines.py big.tsv --from-line 100 --to-line 200 \\\n"
-            "      -K 3 -t $'\\t' -c\n"
-            "\n"
-            "  # Filter, strip, shuffle\n"
-            "  python sort_unique_lines.py log.txt -m 'ERROR' --strip -R\n"
-            "\n"
-            "  # Count duplicates only (like `sort | uniq -c | sort -rn`)\n"
-            "  python sort_unique_lines.py data.txt -c | sort -k1,1nr\n"
-            "\n"
-            "  # Show only repeated lines, keeping first occurrence\n"
-            "  python sort_unique_lines.py data.txt --repeated-once --keep first\n"
-            "\n"
-            "  # Read stdin, produce CSV\n"
-            "  cat data.txt | python sort_unique_lines.py - -u --output-format csv\n"
-            "\n"
-            "  # Verify that a file is already sorted and unique\n"
-            "  python sort_unique_lines.py data.txt --check -u\n"
-            "\n"
-            "  # Natural/version sort, human numeric sort of disk sizes\n"
-            "  python sort_unique_lines.py sizes.txt --human-numeric\n"
-            "  python sort_unique_lines.py tags.txt -V\n"
-            "\n"
-            "  # Sort by length, shortest first, prefix line numbers\n"
-            "  python sort_unique_lines.py words.txt --sort-by-length -N\n"
-        ),
-    )
-    parser.add_argument(
-        "filenames",
-        nargs="+",
-        metavar="FILE",
-        help="Input file(s); use '-' for stdin",
-    )
-    parser.add_argument(
-        "-o", "--output", metavar="FILE", help="Output filename (default: overwrite each input; '-' for stdout)"
-    )
-    parser.add_argument("--output-dir", metavar="DIR", help="Write one output file per input inside DIR")
-    parser.add_argument("--encoding", "-e", default="utf-8", help="File encoding (default: utf-8)")
-    parser.add_argument("--from-line", type=int, metavar="X", help="Start processing at line X (1-based)")
-    parser.add_argument("--to-line", type=int, metavar="Y", help="Stop processing at line Y (1-based, inclusive)")
-    parser.add_argument("-s", "--sort", action="store_true", default=True, help="Sort lines (default: enabled)")
-    parser.add_argument(
-        "-u", "--unique", action="store_true", default=True, help="Coalesce duplicate lines (default: enabled)"
-    )
-    parser.add_argument("-r", "--reverse", action="store_true", help="Reverse the sort order")
-    parser.add_argument(
-        "-i", "--case-insensitive", action="store_true", help="Case-insensitive sort (legacy alias for -f)"
-    )
-    sort_group = parser.add_argument_group("sort semantics")
-    sort_group.add_argument("-n", "--numeric", action="store_true", help="Compare lines as numbers")
-    sort_group.add_argument(
-        "-V", "--version-sort", action="store_true", help="Natural/version-aware sort (v2.9 < v2.10)"
-    )
-    sort_group.add_argument("-R", "--random", action="store_true", help="Shuffle lines instead of sorting")
-    sort_group.add_argument(
-        "-f", "--ignore-case-sort", action="store_true", help="Ignore case for sorting (does not affect dedupe)"
-    )
-    sort_group.add_argument(
-        "-b", "--ignore-leading-blanks", action="store_true", help="Trim leading whitespace before comparing"
-    )
-    sort_group.add_argument("-d", "--dictionary-order", action="store_true", help="Compare only [A-Za-z0-9 ]")
-    sort_group.add_argument("--human-numeric", action="store_true", help="Sort 1K < 2M < 1G < 2.5G etc.")
-    sort_group.add_argument("-M", "--month-sort", action="store_true", help="Sort by month abbreviation Jan..Dec")
-    sort_group.add_argument("-K", "--key", type=int, metavar="N", help="Sort by the Nth field (see -t)")
-    sort_group.add_argument(
-        "-t", "--field-separator", metavar="SEP", default=None, help="Field separator for -K (default: whitespace)"
-    )
-    sort_group.add_argument("--locale", metavar="NAME", help="Locale-aware collation (locale.strxfrm)")
-    sort_group.add_argument("--sort-by-length", action="store_true", help="Sort by line length (shortest first)")
-    dedupe_group = parser.add_argument_group("dedupe semantics")
-    dedupe_group.add_argument("-c", "--count", action="store_true", help="Prefix each line with its occurrence count")
-    dedupe_group.add_argument("-D", "--repeated", action="store_true", help="Show only duplicated lines (all copies)")
-    dedupe_group.add_argument("--repeated-once", action="store_true", help="Show only duplicated lines (one copy each)")
-    dedupe_group.add_argument(
-        "-U", "--unique-only", action="store_true", help="Show only lines that appear exactly once"
-    )
-    dedupe_group.add_argument("--dedupe-ignore-case", action="store_true", help="Case-insensitive dedupe (ABC == abc)")
-    dedupe_group.add_argument(
-        "--keep", choices=("first", "last"), default="first", help="Keep first or last occurrence of each line"
-    )
-    dedupe_group.add_argument("--dedupe-by-key", type=int, metavar="N", help="Dedupe by the Nth field (needs -t)")
-    filter_group = parser.add_argument_group("filtering")
-    filter_group.add_argument("-m", "--match", metavar="REGEX", help="Keep only lines matching REGEX")
-    filter_group.add_argument("-v", "--invert-match", action="store_true", help="Invert --match (drop matching lines)")
-    filter_group.add_argument("--min-length", type=int, metavar="N", help="Discard lines shorter than N")
-    filter_group.add_argument("--max-length", type=int, metavar="N", help="Discard lines longer than N")
-    filter_group.add_argument("--strip", action="store_true", help="str.strip() each line")
-    filter_group.add_argument("--ignore-comments", action="store_true", help="Drop comment lines")
-    filter_group.add_argument(
-        "--comment-prefix", default="#", metavar="S", help="Comment prefix used by --ignore-comments (default '#')"
-    )
-    filter_group.add_argument(
-        "--normalize-whitespace", action="store_true", help="Collapse runs of whitespace to one space"
-    )
-    filter_group.add_argument("--skip-empty", action="store_true", help="Skip blank lines")
-    filter_group.add_argument("--lower", action="store_true", help="Lowercase output")
-    filter_group.add_argument("--upper", action="store_true", help="Uppercase output")
-    filter_group.add_argument("--prefix", metavar="S", default="", help="Prepend S to every output line")
-    filter_group.add_argument("--suffix", metavar="S", default="", help="Append S to every output line")
-    filter_group.add_argument("--reverse-lines", action="store_true", help="Reverse line order without sorting")
-    filter_group.add_argument("--limit", type=int, metavar="N", help="Emit at most N output lines")
-    filter_group.add_argument("--head", type=int, metavar="N", help="Alias for --limit")
-    filter_group.add_argument("--sample", type=int, metavar="N", help="Reservoir-sample N lines")
-    filter_group.add_argument("--sample-rate", type=float, metavar="P", help="Keep each line with probability P (0..1)")
-    output_group = parser.add_argument_group("output")
-    output_group.add_argument("-N", "--number", action="store_true", help="Prefix each line with its 1-based index")
-    output_group.add_argument(
-        "-z", "--null-terminated", action="store_true", help="Separate lines with NUL instead of newline"
-    )
-    output_group.add_argument("--no-trailing-newline", action="store_true", help="Omit the final newline")
-    output_group.add_argument("--crlf", action="store_true", help="Emit CRLF line endings")
-    output_group.add_argument(
-        "--output-format",
-        choices=("text", "json", "csv"),
-        default="text",
-        help="Structured output format (default: text)",
-    )
-    output_group.add_argument("-q", "--quiet", action="store_true", help="Suppress the trailing summary")
-    output_group.add_argument("--no-stats", action="store_true", help="Skip the trailing summary")
-    output_group.add_argument("--stats-file", metavar="FILE", help="Write stats as JSON to FILE")
-    safety_group = parser.add_argument_group("safety / verification")
-    safety_group.add_argument("--check", action="store_true", help="Exit non-zero if input is not sorted/unique")
-    safety_group.add_argument(
-        "--check-only-duplicates", action="store_true", help="Report duplicates without writing output"
-    )
-    safety_group.add_argument(
-        "--backup", action="store_true", help="Write a backup copy before modifying a file in place"
-    )
-    safety_group.add_argument(
-        "--backup-suffix", default=".bak", metavar="SUFFIX", help="Suffix used for backup files (default: .bak)"
-    )
-    safety_group.add_argument("--dry-run", action="store_true", help="Process everything but do not write any output")
-    safety_group.add_argument("--fsync", action="store_true", help="fsync() the output file before the atomic rename")
-    safety_group.add_argument(
-        "--preserve-permissions", action="store_true", help="Copy the input file mode onto the output"
-    )
-    safety_group.add_argument("--preserve-mtime", action="store_true", help="Copy the input file mtime onto the output")
-    safety_group.add_argument("--analyze", action="store_true", help="Print a per-file analysis report and exit")
-    safety_group.add_argument("--report-file", metavar="FILE", help="Write a JSON summary report to FILE")
-    perf_group = parser.add_argument_group("performance")
-    perf_group.add_argument("--no-mmap", action="store_true", help="Disable mmap; always use buffered reads")
-    perf_group.add_argument(
-        "--mmap-threshold",
-        type=int,
-        default=MMAP_THRESHOLD_BYTES,
-        metavar="BYTES",
-        help=(f"Files larger than BYTES use mmap (default: {MMAP_THRESHOLD_BYTES})"),
-    )
-    perf_group.add_argument(
-        "--buffer-size",
-        type=int,
-        default=DEFAULT_BUFFER_SIZE,
-        metavar="BYTES",
-        help=f"Read buffer size (default: {DEFAULT_BUFFER_SIZE})",
-    )
-    perf_group.add_argument(
-        "--in-memory-threshold",
-        type=int,
-        default=IN_MEMORY_THRESHOLD_BYTES,
-        metavar="BYTES",
-        help=(f"Inputs larger than BYTES use external sort (default: {IN_MEMORY_THRESHOLD_BYTES})"),
-    )
-    perf_group.add_argument(
-        "--chunk-lines",
-        type=int,
-        default=DEFAULT_CHUNK_LINES,
-        metavar="N",
-        help=(f"Lines per external-sort chunk (default: {DEFAULT_CHUNK_LINES})"),
-    )
-    parser.add_argument("--verbose", action="store_true", help="Emit progress diagnostics to stderr")
-    parser.add_argument("--version", action="version", version=f"%(prog)s {VERSION}")
+    parser = _ParserShim()
     return parser
 
 
@@ -1592,5 +1461,95 @@ def main(argv: list[str] | None = None) -> int:
     return exit_code
 
 
-if __name__ == "__main__":
+def _run() -> None:
     raise SystemExit(main())
+
+
+app = typer.Typer(
+    add_completion=False,
+    context_settings={"help_option_names": ["-h", "--help"]},
+    pretty_exceptions_show_locals=False,
+)
+
+
+@app.command(help="Sort and deduplicate lines in a file with sort(1)/uniq(1) semantics; uses mmap and external merge sort for large files.", epilog="\nExamples:\n  # Basic in-place sort + unique with backup\n  python sort_unique_lines.py input.txt --backup\n\n  # Numeric sort, ignore case, write to stdout\n  python sort_unique_lines.py data.txt -n -f -o -\n\n  # Version sort (v2.9 < v2.10), dedupe case-insensitively\n  python sort_unique_lines.py releases.txt -V --dedupe-ignore-case\n\n  # Sort only lines 100-200 of the file by field 3 (\\t separated)\n  python sort_unique_lines.py big.tsv --from-line 100 --to-line 200 \\\n      -K 3 -t $'\\t' -c\n\n  # Filter, strip, shuffle\n  python sort_unique_lines.py log.txt -m 'ERROR' --strip -R\n\n  # Count duplicates only (like `sort | uniq -c | sort -rn`)\n  python sort_unique_lines.py data.txt -c | sort -k1,1nr\n\n  # Show only repeated lines, keeping first occurrence\n  python sort_unique_lines.py data.txt --repeated-once --keep first\n\n  # Read stdin, produce CSV\n  cat data.txt | python sort_unique_lines.py - -u --output-format csv\n\n  # Verify that a file is already sorted and unique\n  python sort_unique_lines.py data.txt --check -u\n\n  # Natural/version sort, human numeric sort of disk sizes\n  python sort_unique_lines.py sizes.txt --human-numeric\n  python sort_unique_lines.py tags.txt -V\n\n  # Sort by length, shortest first, prefix line numbers\n  python sort_unique_lines.py words.txt --sort-by-length -N\n")
+def cli(
+    filenames: Annotated[list[str], typer.Argument(help="Input file(s); use '-' for stdin", metavar="FILE")],
+    output: Annotated[str | None, typer.Option("-o", "--output", help="Output filename (default: overwrite each input; '-' for stdout)", metavar="FILE")] = None,
+    output_dir: Annotated[str | None, typer.Option("--output-dir", help="Write one output file per input inside DIR", metavar="DIR")] = None,
+    encoding: Annotated[str, typer.Option("--encoding", "-e", help="File encoding (default: utf-8)")] = "utf-8",
+    from_line: Annotated[int | None, typer.Option("--from-line", help="Start processing at line X (1-based)", metavar="X")] = None,
+    to_line: Annotated[int | None, typer.Option("--to-line", help="Stop processing at line Y (1-based, inclusive)", metavar="Y")] = None,
+    sort: Annotated[bool, typer.Option("-s", "--sort", help="Sort lines (default: enabled)")] = True,
+    unique: Annotated[bool, typer.Option("-u", "--unique", help="Coalesce duplicate lines (default: enabled)")] = True,
+    reverse: Annotated[bool, typer.Option("-r", "--reverse", help="Reverse the sort order")] = False,
+    case_insensitive: Annotated[bool, typer.Option("-i", "--case-insensitive", help="Case-insensitive sort (legacy alias for -f)")] = False,
+    numeric: Annotated[bool, typer.Option("-n", "--numeric", help="Compare lines as numbers", rich_help_panel="sort semantics")] = False,
+    version_sort: Annotated[bool, typer.Option("-V", "--version-sort", help="Natural/version-aware sort (v2.9 < v2.10)", rich_help_panel="sort semantics")] = False,
+    random: Annotated[bool, typer.Option("-R", "--random", help="Shuffle lines instead of sorting", rich_help_panel="sort semantics")] = False,
+    ignore_case_sort: Annotated[bool, typer.Option("-f", "--ignore-case-sort", help="Ignore case for sorting (does not affect dedupe)", rich_help_panel="sort semantics")] = False,
+    ignore_leading_blanks: Annotated[bool, typer.Option("-b", "--ignore-leading-blanks", help="Trim leading whitespace before comparing", rich_help_panel="sort semantics")] = False,
+    dictionary_order: Annotated[bool, typer.Option("-d", "--dictionary-order", help="Compare only [A-Za-z0-9 ]", rich_help_panel="sort semantics")] = False,
+    human_numeric: Annotated[bool, typer.Option("--human-numeric", help="Sort 1K < 2M < 1G < 2.5G etc.", rich_help_panel="sort semantics")] = False,
+    month_sort: Annotated[bool, typer.Option("-M", "--month-sort", help="Sort by month abbreviation Jan..Dec", rich_help_panel="sort semantics")] = False,
+    key: Annotated[int | None, typer.Option("-K", "--key", help="Sort by the Nth field (see -t)", metavar="N", rich_help_panel="sort semantics")] = None,
+    field_separator: Annotated[str | None, typer.Option("-t", "--field-separator", help="Field separator for -K (default: whitespace)", metavar="SEP", rich_help_panel="sort semantics")] = None,
+    locale: Annotated[str | None, typer.Option("--locale", help="Locale-aware collation (locale.strxfrm)", metavar="NAME", rich_help_panel="sort semantics")] = None,
+    sort_by_length: Annotated[bool, typer.Option("--sort-by-length", help="Sort by line length (shortest first)", rich_help_panel="sort semantics")] = False,
+    count: Annotated[bool, typer.Option("-c", "--count", help="Prefix each line with its occurrence count", rich_help_panel="dedupe semantics")] = False,
+    repeated: Annotated[bool, typer.Option("-D", "--repeated", help="Show only duplicated lines (all copies)", rich_help_panel="dedupe semantics")] = False,
+    repeated_once: Annotated[bool, typer.Option("--repeated-once", help="Show only duplicated lines (one copy each)", rich_help_panel="dedupe semantics")] = False,
+    unique_only: Annotated[bool, typer.Option("-U", "--unique-only", help="Show only lines that appear exactly once", rich_help_panel="dedupe semantics")] = False,
+    dedupe_ignore_case: Annotated[bool, typer.Option("--dedupe-ignore-case", help="Case-insensitive dedupe (ABC == abc)", rich_help_panel="dedupe semantics")] = False,
+    keep: Annotated[Keep, typer.Option("--keep", help="Keep first or last occurrence of each line", rich_help_panel="dedupe semantics")] = Keep.first,
+    dedupe_by_key: Annotated[int | None, typer.Option("--dedupe-by-key", help="Dedupe by the Nth field (needs -t)", metavar="N", rich_help_panel="dedupe semantics")] = None,
+    match: Annotated[str | None, typer.Option("-m", "--match", help="Keep only lines matching REGEX", metavar="REGEX", rich_help_panel="filtering")] = None,
+    invert_match: Annotated[bool, typer.Option("-v", "--invert-match", help="Invert --match (drop matching lines)", rich_help_panel="filtering")] = False,
+    min_length: Annotated[int | None, typer.Option("--min-length", help="Discard lines shorter than N", metavar="N", rich_help_panel="filtering")] = None,
+    max_length: Annotated[int | None, typer.Option("--max-length", help="Discard lines longer than N", metavar="N", rich_help_panel="filtering")] = None,
+    strip: Annotated[bool, typer.Option("--strip", help="str.strip() each line", rich_help_panel="filtering")] = False,
+    ignore_comments: Annotated[bool, typer.Option("--ignore-comments", help="Drop comment lines", rich_help_panel="filtering")] = False,
+    comment_prefix: Annotated[str, typer.Option("--comment-prefix", help="Comment prefix used by --ignore-comments (default '#')", metavar="S", rich_help_panel="filtering")] = "#",
+    normalize_whitespace: Annotated[bool, typer.Option("--normalize-whitespace", help="Collapse runs of whitespace to one space", rich_help_panel="filtering")] = False,
+    skip_empty: Annotated[bool, typer.Option("--skip-empty", help="Skip blank lines", rich_help_panel="filtering")] = False,
+    lower: Annotated[bool, typer.Option("--lower", help="Lowercase output", rich_help_panel="filtering")] = False,
+    upper: Annotated[bool, typer.Option("--upper", help="Uppercase output", rich_help_panel="filtering")] = False,
+    prefix: Annotated[str, typer.Option("--prefix", help="Prepend S to every output line", metavar="S", rich_help_panel="filtering")] = "",
+    suffix: Annotated[str, typer.Option("--suffix", help="Append S to every output line", metavar="S", rich_help_panel="filtering")] = "",
+    reverse_lines: Annotated[bool, typer.Option("--reverse-lines", help="Reverse line order without sorting", rich_help_panel="filtering")] = False,
+    limit: Annotated[int | None, typer.Option("--limit", help="Emit at most N output lines", metavar="N", rich_help_panel="filtering")] = None,
+    head: Annotated[int | None, typer.Option("--head", help="Alias for --limit", metavar="N", rich_help_panel="filtering")] = None,
+    sample: Annotated[int | None, typer.Option("--sample", help="Reservoir-sample N lines", metavar="N", rich_help_panel="filtering")] = None,
+    sample_rate: Annotated[float | None, typer.Option("--sample-rate", help="Keep each line with probability P (0..1)", metavar="P", rich_help_panel="filtering")] = None,
+    number: Annotated[bool, typer.Option("-N", "--number", help="Prefix each line with its 1-based index", rich_help_panel="output")] = False,
+    null_terminated: Annotated[bool, typer.Option("-z", "--null-terminated", help="Separate lines with NUL instead of newline", rich_help_panel="output")] = False,
+    no_trailing_newline: Annotated[bool, typer.Option("--no-trailing-newline", help="Omit the final newline", rich_help_panel="output")] = False,
+    crlf: Annotated[bool, typer.Option("--crlf", help="Emit CRLF line endings", rich_help_panel="output")] = False,
+    output_format: Annotated[Output_format, typer.Option("--output-format", help="Structured output format (default: text)", rich_help_panel="output")] = Output_format.text,
+    quiet: Annotated[bool, typer.Option("-q", "--quiet", help="Suppress the trailing summary", rich_help_panel="output")] = False,
+    no_stats: Annotated[bool, typer.Option("--no-stats", help="Skip the trailing summary", rich_help_panel="output")] = False,
+    stats_file: Annotated[str | None, typer.Option("--stats-file", help="Write stats as JSON to FILE", metavar="FILE", rich_help_panel="output")] = None,
+    check: Annotated[bool, typer.Option("--check", help="Exit non-zero if input is not sorted/unique", rich_help_panel="safety / verification")] = False,
+    check_only_duplicates: Annotated[bool, typer.Option("--check-only-duplicates", help="Report duplicates without writing output", rich_help_panel="safety / verification")] = False,
+    backup: Annotated[bool, typer.Option("--backup", help="Write a backup copy before modifying a file in place", rich_help_panel="safety / verification")] = False,
+    backup_suffix: Annotated[str, typer.Option("--backup-suffix", help="Suffix used for backup files (default: .bak)", metavar="SUFFIX", rich_help_panel="safety / verification")] = ".bak",
+    dry_run: Annotated[bool, typer.Option("--dry-run", help="Process everything but do not write any output", rich_help_panel="safety / verification")] = False,
+    fsync: Annotated[bool, typer.Option("--fsync", help="fsync() the output file before the atomic rename", rich_help_panel="safety / verification")] = False,
+    preserve_permissions: Annotated[bool, typer.Option("--preserve-permissions", help="Copy the input file mode onto the output", rich_help_panel="safety / verification")] = False,
+    preserve_mtime: Annotated[bool, typer.Option("--preserve-mtime", help="Copy the input file mtime onto the output", rich_help_panel="safety / verification")] = False,
+    analyze: Annotated[bool, typer.Option("--analyze", help="Print a per-file analysis report and exit", rich_help_panel="safety / verification")] = False,
+    report_file: Annotated[str | None, typer.Option("--report-file", help="Write a JSON summary report to FILE", metavar="FILE", rich_help_panel="safety / verification")] = None,
+    no_mmap: Annotated[bool, typer.Option("--no-mmap", help="Disable mmap; always use buffered reads", rich_help_panel="performance")] = False,
+    mmap_threshold: Annotated[int, typer.Option("--mmap-threshold", help=f"Files larger than BYTES use mmap (default: {MMAP_THRESHOLD_BYTES})", metavar="BYTES", rich_help_panel="performance")] = MMAP_THRESHOLD_BYTES,
+    buffer_size: Annotated[int, typer.Option("--buffer-size", help=f"Read buffer size (default: {DEFAULT_BUFFER_SIZE})", metavar="BYTES", rich_help_panel="performance")] = DEFAULT_BUFFER_SIZE,
+    in_memory_threshold: Annotated[int, typer.Option("--in-memory-threshold", help=f"Inputs larger than BYTES use external sort (default: {IN_MEMORY_THRESHOLD_BYTES})", metavar="BYTES", rich_help_panel="performance")] = IN_MEMORY_THRESHOLD_BYTES,
+    chunk_lines: Annotated[int, typer.Option("--chunk-lines", help=f"Lines per external-sort chunk (default: {DEFAULT_CHUNK_LINES})", metavar="N", rich_help_panel="performance")] = DEFAULT_CHUNK_LINES,
+    verbose: Annotated[bool, typer.Option("--verbose", help="Emit progress diagnostics to stderr")] = False,
+    version: Annotated[bool, typer.Option("--version", callback=_version_callback, is_eager=True, help="show program's version number and exit")] = False,
+) -> None:
+    _STATE.update(filenames=filenames, output=output, output_dir=output_dir, encoding=encoding, from_line=from_line, to_line=to_line, sort=sort, unique=unique, reverse=reverse, case_insensitive=case_insensitive, numeric=numeric, version_sort=version_sort, random=random, ignore_case_sort=ignore_case_sort, ignore_leading_blanks=ignore_leading_blanks, dictionary_order=dictionary_order, human_numeric=human_numeric, month_sort=month_sort, key=key, field_separator=field_separator, locale=locale, sort_by_length=sort_by_length, count=count, repeated=repeated, repeated_once=repeated_once, unique_only=unique_only, dedupe_ignore_case=dedupe_ignore_case, keep=keep, dedupe_by_key=dedupe_by_key, match=match, invert_match=invert_match, min_length=min_length, max_length=max_length, strip=strip, ignore_comments=ignore_comments, comment_prefix=comment_prefix, normalize_whitespace=normalize_whitespace, skip_empty=skip_empty, lower=lower, upper=upper, prefix=prefix, suffix=suffix, reverse_lines=reverse_lines, limit=limit, head=head, sample=sample, sample_rate=sample_rate, number=number, null_terminated=null_terminated, no_trailing_newline=no_trailing_newline, crlf=crlf, output_format=output_format, quiet=quiet, no_stats=no_stats, stats_file=stats_file, check=check, check_only_duplicates=check_only_duplicates, backup=backup, backup_suffix=backup_suffix, dry_run=dry_run, fsync=fsync, preserve_permissions=preserve_permissions, preserve_mtime=preserve_mtime, analyze=analyze, report_file=report_file, no_mmap=no_mmap, mmap_threshold=mmap_threshold, buffer_size=buffer_size, in_memory_threshold=in_memory_threshold, chunk_lines=chunk_lines, verbose=verbose)
+    _run()
+
+
+if __name__ == "__main__":
+    app()

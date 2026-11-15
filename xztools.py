@@ -19,6 +19,52 @@ from typing import Any, Optional, Sequence
 
 from dh import MAX_WORKERS, SKIP_DIRS
 from loguru import logger
+from enum import StrEnum
+from types import SimpleNamespace
+from typing import Annotated
+
+import click
+import typer
+
+
+class Backend(StrEnum):
+    'Enumerate the supported Backend values.'
+    auto = "auto"
+    lzma_mt = "lzma_mt"
+    lzmamt = "lzmamt"
+    lzma = "lzma"
+
+
+_STATE: dict[str, object] = {}
+
+
+class _Args(SimpleNamespace):
+    """argparse.Namespace look-alike: unknown attributes read as None."""
+
+    def __getattr__(self, name):
+        if name.startswith("__"):
+            raise AttributeError(name)
+        return None
+
+
+class _ParserShim:
+    """Stand-in for the removed argparse parser; hands back what Typer parsed."""
+
+    def parse_args(self, args=None, namespace=None):
+        'Parse args.'
+        return _Args(**_STATE)
+
+    def error(self, message):
+        raise typer.BadParameter(message)
+
+    def print_help(self, file=None):
+        'Print help.'
+        typer.echo(click.get_current_context().get_help(), file=file)
+
+    def print_usage(self, file=None):
+        'Print usage.'
+        typer.echo(click.get_current_context().get_usage(), file=file)
+
 
 try:
     import lzma_mt
@@ -1019,135 +1065,9 @@ def _add_common_xz_opts(p: argparse.ArgumentParser) -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     "Build parser."
-    parser = argparse.ArgumentParser(
-        prog="xz_tool.py",
-        description="Unified compression / decompression CLI.",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=(
-            "Examples:\n"
-            "  xz_tool.py compress                              "
-            "# recursive .xz of cwd\n"
-            "  xz_tool.py compress /data --preset 6 --threads 8\n"
-            "  xz_tool.py compress --tar-subdirs --verbose\n"
-            "  xz_tool.py compress --auto-tar-dirs --chunk-size 1048576\n"
-            "  xz_tool.py decompress --handle-tar-xz /data/archives\n"
-            "  xz_tool.py tar-dirs /data --workers 4\n"
-            "  xz_tool.py archive-cwd\n"
-            "  xz_tool.py 7z -k path1 path2 -k\n"
-            "  xz_tool.py 7z --output-dir ./compressed\n"
-            "  xz_tool.py lzma-chunk -c\n"
-        ),
-    )
-    sub = parser.add_subparsers(dest="command", required=True)
-    p_c = sub.add_parser("compress", help="Recursively compress files to .xz")
+    parser = _ParserShim()
     _add_common_xz_opts(p_c)
-    p_c.add_argument(
-        "--preset",
-        type=int,
-        default=DEFAULT_PRESET,
-        choices=range(10),
-        help=f"xz preset 0-9 (default: {DEFAULT_PRESET})",
-    )
-    p_c.add_argument(
-        "--threads",
-        type=int,
-        default=DEFAULT_THREADS,
-        help=f"Threads per compression job (default: {DEFAULT_THREADS})",
-    )
-    p_c.add_argument(
-        "--backend",
-        choices=["auto", "lzma_mt", "lzmamt", "lzma"],
-        default="auto",
-        help="Compression backend (default: auto)",
-    )
-    p_c.add_argument(
-        "-e",
-        "--extensions",
-        nargs="+",
-        help="Only compress files with these extensions",
-    )
-    p_c.add_argument(
-        "--no-skip-compressed",
-        action="store_true",
-        help="Do not skip already-compressed extensions",
-    )
-    p_c.add_argument(
-        "--tar-subdirs",
-        action="store_true",
-        help="Tar top-level subdirs first, then compress",
-    )
-    p_c.add_argument(
-        "--auto-tar-dirs",
-        action="store_true",
-        help="(xzer.py) Same as --tar-subdirs but only top-level files are subsequently compressed",
-    )
-    p_c.add_argument("--dry-run", action="store_true", help="Show what would be done; modify nothing")
-    p_c.add_argument("--verbose", action="store_true", help="Print per-file results")
-    p_c.add_argument("--no-size-stats", action="store_true", help="Skip the size summary at the end")
-    p_c.add_argument(
-        "--chunk-size",
-        type=int,
-        default=DEFAULT_CHUNK_SIZE,
-        help=f"Chunk size for large files (default: {DEFAULT_CHUNK_SIZE})",
-    )
-    p_c.set_defaults(func=cmd_compress)
-    p_d = sub.add_parser("decompress", help="Recursively decompress .xz files")
     _add_common_xz_opts(p_d)
-    p_d.add_argument(
-        "--handle-tar-xz",
-        action="store_true",
-        help="Extract `*.tar.xz` files into directories",
-    )
-    p_d.set_defaults(func=cmd_decompress)
-    p_t = sub.add_parser("tar-dirs", help="Pack each top-level subdirectory into .tar.xz")
-    p_t.add_argument(
-        "directory",
-        nargs="?",
-        default=".",
-        help="Directory containing the subdirectories (default: cwd)",
-    )
-    p_t.add_argument(
-        "--preset",
-        type=int,
-        default=DEFAULT_PRESET,
-        choices=range(10),
-        help=f"xz preset 0-9 (default: {DEFAULT_PRESET})",
-    )
-    p_t.add_argument("--keep-orig", action="store_true", help="Keep the source subdirectory")
-    p_t.add_argument(
-        "--no-verify",
-        action="store_true",
-        help="Skip archive verification (faster, riskier)",
-    )
-    p_t.set_defaults(func=cmd_tar_dirs)
-    p_a = sub.add_parser("archive-cwd", help="Archive cwd to ../<cwd>.tar.xz and delete it")
-    p_a.set_defaults(func=cmd_archive_cwd)
-    p_7 = sub.add_parser("7z", help="pylzma-based .7z / .tar.7z codec")
-    p_7.add_argument("paths", nargs="*", help="Files / directories (default: cwd recursively)")
-    p_7.add_argument("-d", "--decompress", action="store_true", help="Decompress mode")
-    p_7.add_argument("-k", "--keep", action="store_true", help="Keep originals after processing")
-    p_7.add_argument(
-        "--output-dir",
-        default=None,
-        help="Write outputs into this directory (compress_pylzma.py behaviour)",
-    )
-    p_7.add_argument(
-        "--tar-subdirs",
-        action="store_true",
-        help="(Accepted for parity; directories are always tarred)",
-    )
-    p_7.set_defaults(func=cmd_7z)
-    p_l = sub.add_parser("lzma-chunk", help="pylzma chunked .lzma codec (max compression)")
-    p_l.add_argument("-c", "--compress", action="store_true", default=True, help="Compress (default)")
-    p_l.add_argument("-d", "--decompress", action="store_true", help="Decompress .lzma files")
-    p_l.add_argument(
-        "--chunk-size",
-        type=int,
-        default=DEFAULT_PYLZMA_CHUNK,
-        help=f"Chunk size in bytes (default: {DEFAULT_PYLZMA_CHUNK})",
-    )
-    p_l.add_argument("--keep-orig", action="store_true", help="Keep original files after processing")
-    p_l.set_defaults(func=cmd_lzma_chunk)
     return parser
 
 
@@ -1165,5 +1085,89 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 1
 
 
-if __name__ == "__main__":
+def _run() -> None:
     raise SystemExit(main())
+
+
+app = typer.Typer(
+    help="Unified compression / decompression CLI.",
+    epilog="Examples:\n  xz_tool.py compress                              # recursive .xz of cwd\n  xz_tool.py compress /data --preset 6 --threads 8\n  xz_tool.py compress --tar-subdirs --verbose\n  xz_tool.py compress --auto-tar-dirs --chunk-size 1048576\n  xz_tool.py decompress --handle-tar-xz /data/archives\n  xz_tool.py tar-dirs /data --workers 4\n  xz_tool.py archive-cwd\n  xz_tool.py 7z -k path1 path2 -k\n  xz_tool.py 7z --output-dir ./compressed\n  xz_tool.py lzma-chunk -c\n",
+    add_completion=False,
+    context_settings={"help_option_names": ["-h", "--help"]},
+    pretty_exceptions_show_locals=False,
+)
+
+
+@app.command("compress", help="Recursively compress files to .xz")
+def cmd_compress2(
+    preset: Annotated[int, typer.Option("--preset", help=f"xz preset 0-9 (default: {DEFAULT_PRESET})")] = DEFAULT_PRESET,
+    threads: Annotated[int, typer.Option("--threads", help=f"Threads per compression job (default: {DEFAULT_THREADS})")] = DEFAULT_THREADS,
+    backend: Annotated[Backend, typer.Option("--backend", help="Compression backend (default: auto)")] = Backend.auto,
+    extensions: Annotated[list[str] | None, typer.Option("-e", "--extensions", help="Only compress files with these extensions")] = None,
+    no_skip_compressed: Annotated[bool, typer.Option("--no-skip-compressed", help="Do not skip already-compressed extensions")] = False,
+    tar_subdirs: Annotated[bool, typer.Option("--tar-subdirs", help="Tar top-level subdirs first, then compress")] = False,
+    auto_tar_dirs: Annotated[bool, typer.Option("--auto-tar-dirs", help="(xzer.py) Same as --tar-subdirs but only top-level files are subsequently compressed")] = False,
+    dry_run: Annotated[bool, typer.Option("--dry-run", help="Show what would be done; modify nothing")] = False,
+    verbose: Annotated[bool, typer.Option("--verbose", help="Print per-file results")] = False,
+    no_size_stats: Annotated[bool, typer.Option("--no-size-stats", help="Skip the size summary at the end")] = False,
+    chunk_size: Annotated[int, typer.Option("--chunk-size", help=f"Chunk size for large files (default: {DEFAULT_CHUNK_SIZE})")] = DEFAULT_CHUNK_SIZE,
+) -> None:
+    if preset is not None and preset not in range(10):
+        raise typer.BadParameter(f"invalid choice: {preset!r} (choose from {range(10)})")
+    _STATE.update(preset=preset, threads=threads, backend=backend, extensions=extensions, no_skip_compressed=no_skip_compressed, tar_subdirs=tar_subdirs, auto_tar_dirs=auto_tar_dirs, dry_run=dry_run, verbose=verbose, no_size_stats=no_size_stats, chunk_size=chunk_size, command="compress", func=cmd_compress)
+    _run()
+
+
+@app.command("decompress", help="Recursively decompress .xz files")
+def cmd_decompress2(
+    handle_tar_xz: Annotated[bool, typer.Option("--handle-tar-xz", help="Extract `*.tar.xz` files into directories")] = False,
+) -> None:
+    _STATE.update(handle_tar_xz=handle_tar_xz, command="decompress", func=cmd_decompress)
+    _run()
+
+
+@app.command("tar-dirs", help="Pack each top-level subdirectory into .tar.xz")
+def cmd_tar_dirs2(
+    directory: Annotated[str, typer.Argument(help="Directory containing the subdirectories (default: cwd)")] = ".",
+    preset: Annotated[int, typer.Option("--preset", help=f"xz preset 0-9 (default: {DEFAULT_PRESET})")] = DEFAULT_PRESET,
+    keep_orig: Annotated[bool, typer.Option("--keep-orig", help="Keep the source subdirectory")] = False,
+    no_verify: Annotated[bool, typer.Option("--no-verify", help="Skip archive verification (faster, riskier)")] = False,
+) -> None:
+    if preset is not None and preset not in range(10):
+        raise typer.BadParameter(f"invalid choice: {preset!r} (choose from {range(10)})")
+    _STATE.update(directory=directory, preset=preset, keep_orig=keep_orig, no_verify=no_verify, command="tar-dirs", func=cmd_tar_dirs)
+    _run()
+
+
+@app.command("archive-cwd", help="Archive cwd to ../<cwd>.tar.xz and delete it")
+def cmd_archive_cwd2() -> None:
+    _STATE.update(command="archive-cwd", func=cmd_archive_cwd)
+    _run()
+
+
+@app.command("7z", help="pylzma-based .7z / .tar.7z codec")
+def cmd__7z(
+    paths: Annotated[list[str] | None, typer.Argument(help="Files / directories (default: cwd recursively)")] = None,
+    decompress: Annotated[bool, typer.Option("-d", "--decompress", help="Decompress mode")] = False,
+    keep: Annotated[bool, typer.Option("-k", "--keep", help="Keep originals after processing")] = False,
+    output_dir: Annotated[str | None, typer.Option("--output-dir", help="Write outputs into this directory (compress_pylzma.py behaviour)")] = None,
+    tar_subdirs: Annotated[bool, typer.Option("--tar-subdirs", help="(Accepted for parity; directories are always tarred)")] = False,
+) -> None:
+    paths = paths or []
+    _STATE.update(paths=paths, decompress=decompress, keep=keep, output_dir=output_dir, tar_subdirs=tar_subdirs, command="7z", func=cmd_7z)
+    _run()
+
+
+@app.command("lzma-chunk", help="pylzma chunked .lzma codec (max compression)")
+def cmd_lzma_chunk2(
+    compress: Annotated[bool, typer.Option("-c", "--compress", help="Compress (default)")] = True,
+    decompress: Annotated[bool, typer.Option("-d", "--decompress", help="Decompress .lzma files")] = False,
+    chunk_size: Annotated[int, typer.Option("--chunk-size", help=f"Chunk size in bytes (default: {DEFAULT_PYLZMA_CHUNK})")] = DEFAULT_PYLZMA_CHUNK,
+    keep_orig: Annotated[bool, typer.Option("--keep-orig", help="Keep original files after processing")] = False,
+) -> None:
+    _STATE.update(compress=compress, decompress=decompress, chunk_size=chunk_size, keep_orig=keep_orig, command="lzma-chunk", func=cmd_lzma_chunk)
+    _run()
+
+
+if __name__ == "__main__":
+    app()

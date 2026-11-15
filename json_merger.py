@@ -11,6 +11,52 @@ import string
 import sys
 from pathlib import Path
 from typing import Any, NoReturn, Sequence
+from enum import StrEnum
+from types import SimpleNamespace
+from typing import Annotated
+
+import click
+import typer
+
+
+class Conflict(StrEnum):
+    'Enumerate the supported Conflict values.'
+    last = "last"
+    first = "first"
+    list = "list"
+    error = "error"
+
+
+_STATE: dict[str, object] = {}
+
+
+class _Args(SimpleNamespace):
+    """argparse.Namespace look-alike: unknown attributes read as None."""
+
+    def __getattr__(self, name):
+        if name.startswith("__"):
+            raise AttributeError(name)
+        return None
+
+
+class _ParserShim:
+    """Stand-in for the removed argparse parser; hands back what Typer parsed."""
+
+    def parse_args(self, args=None, namespace=None):
+        'Parse args.'
+        return _Args(**_STATE)
+
+    def error(self, message):
+        raise typer.BadParameter(message)
+
+    def print_help(self, file=None):
+        'Print help.'
+        typer.echo(click.get_current_context().get_help(), file=file)
+
+    def print_usage(self, file=None):
+        'Print usage.'
+        typer.echo(click.get_current_context().get_usage(), file=file)
+
 
 MMAP_THRESHOLD = 5 * 1024 * 1024
 
@@ -133,7 +179,7 @@ def expand_inputs(input_specs: Sequence[str]) -> tuple[list[Path], list[tuple[Pa
     seen: set[Path] = set()
 
     for input_spec in input_specs:
-        expanded_spec = os.path.expanduser(input_spec)
+        expanded_spec = str(Path(input_spec).expanduser())
 
         if glob.has_magic(expanded_spec):
             matches = sorted(glob.glob(expanded_spec, recursive=True))
@@ -185,48 +231,7 @@ def write_json_exclusively(path: Path, value: Any, sort_keys: bool = False) -> N
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     "Parse args."
-    parser = argparse.ArgumentParser(
-        description="Merge JSON files with matching schemas, including bilingual string dictionaries."
-    )
-    parser.add_argument(
-        "inputs",
-        nargs="+",
-        help="Input JSON files or glob patterns; quote patterns containing wildcards",
-    )
-    parser.add_argument(
-        "--output-dir",
-        type=Path,
-        default=Path.cwd(),
-        help="Directory for a randomly named output file (default: current directory)",
-    )
-    parser.add_argument(
-        "--output",
-        type=Path,
-        help="Write to this exact path; existing files are not overwritten",
-    )
-    parser.add_argument(
-        "--conflict",
-        choices=("last", "first", "list", "error"),
-        default="last",
-        help="How to handle keys with different values (default: last)",
-    )
-    parser.add_argument(
-        "-d",
-        "--dedup",
-        action="store_true",
-        help="Remove duplicate list items and repeated values after merging",
-    )
-    parser.add_argument(
-        "-s",
-        "--sort-keys",
-        action="store_true",
-        help="Sort object keys in the output JSON",
-    )
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Report which files would be merged without writing an output file",
-    )
+    parser = _ParserShim()
     return parser.parse_args(argv)
 
 
@@ -341,5 +346,30 @@ def main(argv: Sequence[str] | None = None) -> int:
     return 0
 
 
-if __name__ == "__main__":
+def _run() -> None:
     raise SystemExit(main())
+
+
+app = typer.Typer(
+    add_completion=False,
+    context_settings={"help_option_names": ["-h", "--help"]},
+    pretty_exceptions_show_locals=False,
+)
+
+
+@app.command(help="Merge JSON files with matching schemas, including bilingual string dictionaries.")
+def cli(
+    inputs: Annotated[list[str], typer.Argument(help="Input JSON files or glob patterns; quote patterns containing wildcards")],
+    output_dir: Annotated[Path, typer.Option("--output-dir", help="Directory for a randomly named output file (default: current directory)")] = Path.cwd(),
+    output: Annotated[Path | None, typer.Option("--output", help="Write to this exact path; existing files are not overwritten")] = None,
+    conflict: Annotated[Conflict, typer.Option("--conflict", help="How to handle keys with different values (default: last)")] = Conflict.last,
+    dedup: Annotated[bool, typer.Option("-d", "--dedup", help="Remove duplicate list items and repeated values after merging")] = False,
+    sort_keys: Annotated[bool, typer.Option("-s", "--sort-keys", help="Sort object keys in the output JSON")] = False,
+    dry_run: Annotated[bool, typer.Option("--dry-run", help="Report which files would be merged without writing an output file")] = False,
+) -> None:
+    _STATE.update(inputs=inputs, output_dir=output_dir, output=output, conflict=conflict, dedup=dedup, sort_keys=sort_keys, dry_run=dry_run)
+    _run()
+
+
+if __name__ == "__main__":
+    app()

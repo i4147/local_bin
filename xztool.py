@@ -66,7 +66,7 @@ from __future__ import annotations
 import argparse
 import importlib
 import io
-import logging
+from loguru import logger
 import lzma
 import os
 import shutil
@@ -80,10 +80,68 @@ from datetime import datetime
 from pathlib import Path
 from types import ModuleType
 from typing import Callable, Iterable, Iterator, Sequence
+from enum import StrEnum
+from types import SimpleNamespace
+from typing import Annotated
+
+import click
+import typer
+
+
+def _version_callback(value: bool) -> None:
+    if value:
+        typer.echo(f"%(prog)s {__version__}")
+        raise typer.Exit()
+
+
+class Report(StrEnum):
+    'Enumerate the supported Report values.'
+    plain = "plain"
+    rich = "rich"
+    auto = "auto"
+
+
+class Report2(StrEnum):
+    'Enumerate the supported Report2 values.'
+    plain = "plain"
+    rich = "rich"
+    auto = "auto"
+
+
+_STATE: dict[str, object] = {}
+
+
+class _Args(SimpleNamespace):
+    """argparse.Namespace look-alike: unknown attributes read as None."""
+
+    def __getattr__(self, name):
+        if name.startswith("__"):
+            raise AttributeError(name)
+        return None
+
+
+class _ParserShim:
+    """Stand-in for the removed argparse parser; hands back what Typer parsed."""
+
+    def parse_args(self, args=None, namespace=None):
+        'Parse args.'
+        return _Args(**_STATE)
+
+    def error(self, message):
+        raise typer.BadParameter(message)
+
+    def print_help(self, file=None):
+        'Print help.'
+        typer.echo(click.get_current_context().get_help(), file=file)
+
+    def print_usage(self, file=None):
+        'Print usage.'
+        typer.echo(click.get_current_context().get_usage(), file=file)
+
 
 __version__ = "1.0.0"
 
-LOG = logging.getLogger("xztool")
+LOG = logger
 
 # ---------------------------------------------------------------------------
 # Optional third-party back-ends (stdlib fallbacks are always available).
@@ -1274,122 +1332,17 @@ def _rich_report(
 
 def build_parser() -> argparse.ArgumentParser:
     """Build the ``xztool`` argument parser (subcommand based)."""
-    parser = argparse.ArgumentParser(
-        prog="xztool",
-        description="Recursive LZMA/XZ/7Z compression toolkit merged from 13 sibling scripts.",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=textwrap.dedent("""
-            commands:
-              compress    recursively compress files (xz | lzma | 7z backends)
-              decompress  recursively restore .xz/.tar.xz/.lzma/.7z files
-              archive     one verified .tar.xz per top-level subdirectory
-              pack        whole directory -> ../<name>.tar.xz, verified
+    parser = _ParserShim()
 
-            examples:
-              xztool compress                          # cwd, xz, preset 9
-              xztool compress ~/data -p 6 -w 8 -k      # keep originals
-              xztool compress -t                       # tar subdirs first
-              xztool compress --backend lzma --only-if-smaller --min-size 1024
-              xztool compress -e txt log csv           # only those extensions
-              xztool decompress ~/data --no-extract-tar
-              xztool archive ~/buckets -w 4
-              xztool pack ~/stuff -p 6
-            """),
-    )
-    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
-    sub = parser.add_subparsers(dest="command", required=True, metavar="command")
 
-    pc = sub.add_parser("compress", aliases=["c"], help="compress files recursively")
-    pc.add_argument("root", nargs="?", default=".", help="root directory (default: cwd)")
-    pc.add_argument(
-        "-f", "--backend", choices=sorted(BACKEND_SUFFIX), default="xz", help="compression backend (default: xz)"
-    )
-    pc.add_argument("-p", "--preset", type=int, choices=range(10), default=9, help="LZMA preset 0-9 (default: 9)")
-    pc.add_argument(
-        "-t", "--tar-subdirs", action="store_true", help="tar top-level subdirectories first, then compress them"
-    )
-    pc.add_argument("--threads", type=int, default=4, help="threads per file for the lzma_mt backend (default: 4)")
-    pc.add_argument("-w", "--workers", type=int, default=0, help="parallel worker processes (default: auto)")
-    pc.add_argument("-k", "--keep-original", action="store_true", help="keep original files after compression")
-    pc.add_argument("--overwrite", action="store_true", help="overwrite existing outputs instead of skipping them")
-    pc.add_argument("--extreme", action="store_true", help="enable LZMA PRESET_EXTREME (slower, slightly smaller)")
-    pc.add_argument(
-        "--only-if-smaller", action="store_true", help="discard the archive when it does not shrink the file"
-    )
-    pc.add_argument(
-        "--min-size", type=int, default=MIN_SIZE_DEFAULT, help="only compress files of at least this many bytes"
-    )
-    pc.add_argument(
-        "-e", "--ext", nargs="+", default=[], help="compress only files with these extensions (e.g. txt log)"
-    )
-    pc.add_argument("--exclude", nargs="+", default=[], help="exclude paths containing these substrings")
-    pc.add_argument(
-        "--include-media", action="store_true", help="also compress media/binary files (jpg, mp4, pdf, ...)"
-    )
-    pc.add_argument(
-        "--no-skip-compressed", action="store_true", help="also compress foreign archives (own outputs stay skipped)"
-    )
-    pc.add_argument(
-        "--out", type=Path, default=None, help="write archives into this directory (relative paths preserved)"
-    )
-    pc.add_argument(
-        "--report", choices=("plain", "rich", "auto"), default="auto", help="summary renderer (default: auto)"
-    )
-    pc.add_argument("--dry-run", action="store_true", help="show what would happen")
-    pc.add_argument("-v", "--verbose", action="store_true", help="chatty output")
-    pc.set_defaults(handler=_cmd_compress)
-
-    pd = sub.add_parser("decompress", aliases=["d"], help="decompress archives recursively")
-    pd.add_argument("root", nargs="?", default=".", help="root directory (default: cwd)")
-    pd.add_argument("-k", "--keep-original", action="store_true", help="keep the archive files after decompression")
-    pd.add_argument(
-        "--no-extract-tar", action="store_true", help="turn .tar.xz into .tar files instead of extracting them"
-    )
-    pd.add_argument("--overwrite", action="store_true", help="overwrite existing outputs instead of skipping them")
-    pd.add_argument("-w", "--workers", type=int, default=0, help="parallel worker processes (default: auto)")
-    pd.add_argument("--exclude", nargs="+", default=[], help="exclude paths containing these substrings")
-    pd.add_argument(
-        "--out", type=Path, default=None, help="write results into this directory (relative paths preserved)"
-    )
-    pd.add_argument(
-        "--report", choices=("plain", "rich", "auto"), default="auto", help="summary renderer (default: auto)"
-    )
-    pd.add_argument("--dry-run", action="store_true", help="show what would happen")
-    pd.add_argument("-v", "--verbose", action="store_true", help="chatty output")
-    pd.set_defaults(handler=_cmd_decompress)
-
-    pa = sub.add_parser("archive", help="verified .tar.xz per top-level subdirectory")
-    pa.add_argument("root", nargs="?", default=".", help="directory containing subdirs")
-    pa.add_argument("-p", "--preset", type=int, choices=range(10), default=9, help="xz preset (default: 9)")
-    pa.add_argument("-w", "--workers", type=int, default=0, help="parallel worker processes (default: auto)")
-    pa.add_argument("-k", "--keep-original", action="store_true", help="keep source directories after archiving")
-    pa.add_argument("--no-verify", action="store_true", help="skip the read-back verification pass")
-    pa.add_argument("-v", "--verbose", action="store_true", help="chatty output")
-    pa.set_defaults(handler=_cmd_archive)
-
-    pp = sub.add_parser("pack", help="pack one directory into ../<name>.tar.xz")
-    pp.add_argument("root", nargs="?", default=".", help="directory to pack (default: cwd)")
-    pp.add_argument(
-        "-p",
-        "--preset",
-        type=int,
-        choices=range(10),
-        default=6,
-        help="xz preset (default: 6, as in the original ptrr.py)",
-    )
-    pp.add_argument("-v", "--verbose", action="store_true", help="chatty output")
-    pp.set_defaults(handler=_cmd_pack)
     return parser
 
 
 def _configure_logging(verbose: bool) -> None:
     """Route xztool logs to stderr (results stay on stdout)."""
-    logging.basicConfig(
-        level=logging.DEBUG if verbose else logging.INFO,
-        format="%(levelname).1s %(message)s",
-        stream=sys.stderr,
-        force=True,
-    )
+    logger.remove()
+    level = "DEBUG" if verbose else "INFO"
+    logger.add(sys.stderr, level=level, format="<level>{level: <1.1}</level> {message}")
 
 
 def _cmd_compress(args: argparse.Namespace) -> int:
@@ -1506,5 +1459,98 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 130
 
 
-if __name__ == "__main__":
+def _run() -> None:
     raise SystemExit(main())
+
+
+app = typer.Typer(
+    help="Recursive LZMA/XZ/7Z compression toolkit merged from 13 sibling scripts.",
+    add_completion=False,
+    context_settings={"help_option_names": ["-h", "--help"]},
+    pretty_exceptions_show_locals=False,
+)
+
+
+@app.callback()
+def _root(
+    version: Annotated[bool, typer.Option("--version", callback=_version_callback, is_eager=True, help="show program's version number and exit")] = False,
+) -> None:
+    pass
+
+
+@app.command("compress", help="compress files recursively")
+def cmd_compress(
+    root: Annotated[str, typer.Argument(help="root directory (default: cwd)")] = ".",
+    backend: Annotated[str, typer.Option("-f", "--backend", help="compression backend (default: xz)")] = "xz",
+    preset: Annotated[int, typer.Option("-p", "--preset", help="LZMA preset 0-9 (default: 9)")] = 9,
+    tar_subdirs: Annotated[bool, typer.Option("-t", "--tar-subdirs", help="tar top-level subdirectories first, then compress them")] = False,
+    threads: Annotated[int, typer.Option("--threads", help="threads per file for the lzma_mt backend (default: 4)")] = 4,
+    workers: Annotated[int, typer.Option("-w", "--workers", help="parallel worker processes (default: auto)")] = 0,
+    keep_original: Annotated[bool, typer.Option("-k", "--keep-original", help="keep original files after compression")] = False,
+    overwrite: Annotated[bool, typer.Option("--overwrite", help="overwrite existing outputs instead of skipping them")] = False,
+    extreme: Annotated[bool, typer.Option("--extreme", help="enable LZMA PRESET_EXTREME (slower, slightly smaller)")] = False,
+    only_if_smaller: Annotated[bool, typer.Option("--only-if-smaller", help="discard the archive when it does not shrink the file")] = False,
+    min_size: Annotated[int, typer.Option("--min-size", help="only compress files of at least this many bytes")] = MIN_SIZE_DEFAULT,
+    ext: Annotated[list[str], typer.Option("-e", "--ext", help="compress only files with these extensions (e.g. txt log)")] = [],
+    exclude: Annotated[list[str], typer.Option("--exclude", help="exclude paths containing these substrings")] = [],
+    include_media: Annotated[bool, typer.Option("--include-media", help="also compress media/binary files (jpg, mp4, pdf, ...)")] = False,
+    no_skip_compressed: Annotated[bool, typer.Option("--no-skip-compressed", help="also compress foreign archives (own outputs stay skipped)")] = False,
+    out: Annotated[Path | None, typer.Option("--out", help="write archives into this directory (relative paths preserved)")] = None,
+    report: Annotated[Report, typer.Option("--report", help="summary renderer (default: auto)")] = Report.auto,
+    dry_run: Annotated[bool, typer.Option("--dry-run", help="show what would happen")] = False,
+    verbose: Annotated[bool, typer.Option("-v", "--verbose", help="chatty output")] = False,
+) -> None:
+    if backend is not None and backend not in sorted(BACKEND_SUFFIX):
+        raise typer.BadParameter(f"invalid choice: {backend!r} (choose from {sorted(BACKEND_SUFFIX)})")
+    if preset is not None and preset not in range(10):
+        raise typer.BadParameter(f"invalid choice: {preset!r} (choose from {range(10)})")
+    _STATE.update(root=root, backend=backend, preset=preset, tar_subdirs=tar_subdirs, threads=threads, workers=workers, keep_original=keep_original, overwrite=overwrite, extreme=extreme, only_if_smaller=only_if_smaller, min_size=min_size, ext=ext, exclude=exclude, include_media=include_media, no_skip_compressed=no_skip_compressed, out=out, report=report, dry_run=dry_run, verbose=verbose, command="compress", handler=_cmd_compress)
+    _run()
+
+
+@app.command("decompress", help="decompress archives recursively")
+def cmd_decompress(
+    root: Annotated[str, typer.Argument(help="root directory (default: cwd)")] = ".",
+    keep_original: Annotated[bool, typer.Option("-k", "--keep-original", help="keep the archive files after decompression")] = False,
+    no_extract_tar: Annotated[bool, typer.Option("--no-extract-tar", help="turn .tar.xz into .tar files instead of extracting them")] = False,
+    overwrite: Annotated[bool, typer.Option("--overwrite", help="overwrite existing outputs instead of skipping them")] = False,
+    workers: Annotated[int, typer.Option("-w", "--workers", help="parallel worker processes (default: auto)")] = 0,
+    exclude: Annotated[list[str], typer.Option("--exclude", help="exclude paths containing these substrings")] = [],
+    out: Annotated[Path | None, typer.Option("--out", help="write results into this directory (relative paths preserved)")] = None,
+    report: Annotated[Report2, typer.Option("--report", help="summary renderer (default: auto)")] = Report2.auto,
+    dry_run: Annotated[bool, typer.Option("--dry-run", help="show what would happen")] = False,
+    verbose: Annotated[bool, typer.Option("-v", "--verbose", help="chatty output")] = False,
+) -> None:
+    _STATE.update(root=root, keep_original=keep_original, no_extract_tar=no_extract_tar, overwrite=overwrite, workers=workers, exclude=exclude, out=out, report=report, dry_run=dry_run, verbose=verbose, command="decompress", handler=_cmd_decompress)
+    _run()
+
+
+@app.command("archive", help="verified .tar.xz per top-level subdirectory")
+def cmd_archive(
+    root: Annotated[str, typer.Argument(help="directory containing subdirs")] = ".",
+    preset: Annotated[int, typer.Option("-p", "--preset", help="xz preset (default: 9)")] = 9,
+    workers: Annotated[int, typer.Option("-w", "--workers", help="parallel worker processes (default: auto)")] = 0,
+    keep_original: Annotated[bool, typer.Option("-k", "--keep-original", help="keep source directories after archiving")] = False,
+    no_verify: Annotated[bool, typer.Option("--no-verify", help="skip the read-back verification pass")] = False,
+    verbose: Annotated[bool, typer.Option("-v", "--verbose", help="chatty output")] = False,
+) -> None:
+    if preset is not None and preset not in range(10):
+        raise typer.BadParameter(f"invalid choice: {preset!r} (choose from {range(10)})")
+    _STATE.update(root=root, preset=preset, workers=workers, keep_original=keep_original, no_verify=no_verify, verbose=verbose, command="archive", handler=_cmd_archive)
+    _run()
+
+
+@app.command("pack", help="pack one directory into ../<name>.tar.xz")
+def cmd_pack(
+    root: Annotated[str, typer.Argument(help="directory to pack (default: cwd)")] = ".",
+    preset: Annotated[int, typer.Option("-p", "--preset", help="xz preset (default: 6, as in the original ptrr.py)")] = 6,
+    verbose: Annotated[bool, typer.Option("-v", "--verbose", help="chatty output")] = False,
+) -> None:
+    if preset is not None and preset not in range(10):
+        raise typer.BadParameter(f"invalid choice: {preset!r} (choose from {range(10)})")
+    _STATE.update(root=root, preset=preset, verbose=verbose, command="pack", handler=_cmd_pack)
+    _run()
+
+
+if __name__ == "__main__":
+    app()

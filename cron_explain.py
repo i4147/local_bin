@@ -6,13 +6,16 @@ Fully type-annotated and self-contained for Python 3.12+.
 
 from __future__ import annotations
 
-import argparse
 import dataclasses
 import json
 import os
 import sys
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+from types import SimpleNamespace
+from typing import Annotated
+
+import typer
 
 # --- Data Models ---
 
@@ -400,7 +403,7 @@ def discover_sources(file_path: str | None) -> list[tuple[str, int, str]]:
     "Discover sources."
     lines = []
     if file_path:
-        if not os.path.exists(file_path):
+        if not Path(file_path).exists():
             raise FileNotFoundError(f"File not found: {file_path}")
         # Permission check for /etc/cron.d/ files
         if "cron.d" in file_path:
@@ -421,19 +424,27 @@ def discover_sources(file_path: str | None) -> list[tuple[str, int, str]]:
 # --- CLI & Render Module ---
 
 
-def main() -> None:
-    "Run the command-line interface."
-    parser = argparse.ArgumentParser(description="Advanced Crontab Explainer & DST Simulator")
-    parser.add_argument("expression", nargs="?", help="Cron expression string (e.g., '*/5 9-17 * * MON-FRI')")
-    parser.add_argument("--file", help="Path to crontab or cron.d file")
-    parser.add_argument("--tz", default="UTC", help="Target timezone (e.g., America/Toronto, Europe/London)")
-    parser.add_argument("--next", type=int, default=5, help="Number of next runs to compute")
-    parser.add_argument("--dst-warnings", action="store_true", help="Enable strict DST gap/fold analysis")
-    parser.add_argument("--overlaps", action="store_true", help="Check for overlapping job executions")
-    parser.add_argument("--min-duration", default="30m", help="Assumed job duration for overlap analysis")
-    parser.add_argument("--json", action="store_true", help="Output results in JSON format")
+app = typer.Typer(
+    add_completion=False,
+    context_settings={"help_option_names": ["-h", "--help"]},
+    pretty_exceptions_show_locals=False,
+)
 
-    args = parser.parse_args()
+
+@app.command(help="Advanced Crontab Explainer & DST Simulator")
+def main(
+    expression: Annotated[str | None, typer.Argument(help="Cron expression string (e.g., '*/5 9-17 * * MON-FRI')")] = None,
+    file: Annotated[str | None, typer.Option("--file", help="Path to crontab or cron.d file")] = None,
+    tz: Annotated[str, typer.Option("--tz", help="Target timezone (e.g., America/Toronto, Europe/London)")] = "UTC",
+    next: Annotated[int, typer.Option("--next", help="Number of next runs to compute")] = 5,
+    dst_warnings: Annotated[bool, typer.Option("--dst-warnings", help="Enable strict DST gap/fold analysis")] = False,
+    overlaps: Annotated[bool, typer.Option("--overlaps", help="Check for overlapping job executions")] = False,
+    min_duration: Annotated[str, typer.Option("--min-duration", help="Assumed job duration for overlap analysis")] = "30m",
+    json: Annotated[bool, typer.Option("--json", help="Output results in JSON format")] = False,
+) -> None:
+    "Run the command-line interface."
+
+    args = SimpleNamespace(expression=expression, file=file, tz=tz, next=next, dst_warnings=dst_warnings, overlaps=overlaps, min_duration=min_duration, json=json)
 
     try:
         tz = ZoneInfo(args.tz)
@@ -518,4 +529,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    app()

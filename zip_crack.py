@@ -4,7 +4,6 @@
 
 from __future__ import annotations
 
-import argparse
 import multiprocessing
 import sys
 import time
@@ -13,6 +12,9 @@ from dataclasses import dataclass, field
 from itertools import islice
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
+from typing import Annotated
+
+import typer
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -160,48 +162,29 @@ def brute_force_zip(
     return result
 
 
-def main() -> None:
+app = typer.Typer(
+    add_completion=False,
+    context_settings={"help_option_names": ["-h", "--help"]},
+    pretty_exceptions_show_locals=False,
+)
+
+
+@app.command(help="Optimized Zip Brute-Forcer for Python 3.11+")
+def main(
+    zip_file: Annotated[Path, typer.Argument(help="Path to the protected zip file")],
+    wordlist: Annotated[Path, typer.Option("-w", "--wordlist", help="Path to the password wordlist")] = Path("wordlist.txt"),
+    processes: Annotated[int | None, typer.Option("-p", "--processes", help="Number of parallel processes (default: CPU count)")] = None,
+    batch_size: Annotated[int, typer.Option("-b", "--batch-size", help="Passwords per worker batch")] = DEFAULT_BATCH_SIZE,
+    interval: Annotated[float, typer.Option("-i", "--interval", help="Status update interval in seconds")] = DEFAULT_UPDATE_INTERVAL,
+) -> None:
     "Run the command-line interface."
-    parser = argparse.ArgumentParser(
-        description="Optimized Zip Brute-Forcer for Python 3.11+",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-    )
-    parser.add_argument("zip_file", type=Path, help="Path to the protected zip file")
-    parser.add_argument(
-        "-w",
-        "--wordlist",
-        type=Path,
-        default=Path("wordlist.txt"),
-        help="Path to the password wordlist",
-    )
-    parser.add_argument(
-        "-p",
-        "--processes",
-        type=int,
-        help="Number of parallel processes (default: CPU count)",
-    )
-    parser.add_argument(
-        "-b",
-        "--batch-size",
-        type=int,
-        default=DEFAULT_BATCH_SIZE,
-        help="Passwords per worker batch",
-    )
-    parser.add_argument(
-        "-i",
-        "--interval",
-        type=float,
-        default=DEFAULT_UPDATE_INTERVAL,
-        help="Status update interval in seconds",
-    )
-    args = parser.parse_args()
     try:
         result = brute_force_zip(
-            args.zip_file,
-            args.wordlist,
-            num_processes=args.processes,
-            batch_size=args.batch_size,
-            update_interval=args.interval,
+            zip_file,
+            wordlist,
+            num_processes=processes,
+            batch_size=batch_size,
+            update_interval=interval,
         )
         sys.exit(0 if result.success else 1)
     except Exception as e:
@@ -210,4 +193,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    app()

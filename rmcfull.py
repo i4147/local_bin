@@ -634,7 +634,7 @@ def iter_python_files(root_dir: Path, *, use_fastwalk: bool = False) -> Iterator
     fastwalk returns a list and cannot prune directories with its supplied API;
     pathlib is lazy and prunes skipped directories before traversal.
     """
-    root_dir = Path(os.path.abspath(root_dir.expanduser()))
+    root_dir = root_dir.expanduser().resolve()
     if has_symlink_component(root_dir):
         return
     if not root_dir.exists():

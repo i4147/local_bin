@@ -15,7 +15,6 @@ Install the grammar wheels in ``requirements.txt`` to enable all published
 bindings. A missing language binding affects only files of that language.
 """
 
-import argparse
 import importlib
 import re
 from dataclasses import dataclass
@@ -28,6 +27,9 @@ from rich.live import Live
 from rich.table import Table
 from rich.text import Text
 from tree_sitter import Language, Node, Parser
+from typing import Annotated
+
+import typer
 
 _EXTENSION_TO_LANGUAGE: Final[dict[str, str]] = {
     ".rs": "rust",
@@ -322,26 +324,34 @@ def build_table(results: list[ProcessResult], total: int, width: int) -> Table:
     return table
 
 
-def main(argv: list[str] | None = None) -> int:
+app = typer.Typer(
+    add_completion=False,
+    context_settings={"help_option_names": ["-h", "--help"]},
+    pretty_exceptions_show_locals=False,
+)
+
+
+@app.command()
+def main(
+    check: Annotated[bool, typer.Option("--check", help="report potential savings without writing")] = False,
+    paths: Annotated[list[Path] | None, typer.Argument(help="files/directories (default: current directory)")] = None,
+) -> int:
     """Run the command line and return a shell-compatible exit code."""
-    argument_parser = argparse.ArgumentParser(description=__doc__)
-    argument_parser.add_argument("--check", action="store_true", help="report potential savings without writing")
-    argument_parser.add_argument("paths", nargs="*", type=Path, help="files/directories (default: current directory)")
-    args = argument_parser.parse_args(argv)
-    files = find_files(args.paths or [Path.cwd()])
+    paths = paths or []
+    files = find_files(paths or [Path.cwd()])
     console = Console()
     if not files:
         console.print("[yellow]No supported files found.[/]")
-        return 0
+        return
     results: list[ProcessResult] = []
     total_freed = 0
     with Live(build_table(results, len(files), console.width), console=console, refresh_per_second=12) as live:
         for path in files:
-            result = process_file(path, check_only=args.check)
+            result = process_file(path, check_only=check)
             results.append(result)
             total_freed += result.reduced_bytes
             live.update(build_table(results, len(files), console.width))
-    total_label = "Potential space freed" if args.check else "Total space freed"
+    total_label = "Potential space freed" if check else "Total space freed"
     console.print(f"\n[bold]{total_label}:[/] [green]{total_freed}[/] bytes")
     errors = [result for result in results if result.status in {"invalid", "error"}]
     for result in errors:
@@ -350,4 +360,4 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    app()

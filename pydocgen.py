@@ -13,6 +13,43 @@ from itertools import count
 from multiprocessing import get_context
 from pathlib import Path
 from typing import Any
+from types import SimpleNamespace
+from typing import Annotated
+
+import click
+import typer
+
+
+_STATE: dict[str, object] = {}
+
+
+class _Args(SimpleNamespace):
+    """argparse.Namespace look-alike: unknown attributes read as None."""
+
+    def __getattr__(self, name):
+        if name.startswith("__"):
+            raise AttributeError(name)
+        return None
+
+
+class _ParserShim:
+    """Stand-in for the removed argparse parser; hands back what Typer parsed."""
+
+    def parse_args(self, args=None, namespace=None):
+        'Parse args.'
+        return _Args(**_STATE)
+
+    def error(self, message):
+        raise typer.BadParameter(message)
+
+    def print_help(self, file=None):
+        'Print help.'
+        typer.echo(click.get_current_context().get_help(), file=file)
+
+    def print_usage(self, file=None):
+        'Print usage.'
+        typer.echo(click.get_current_context().get_usage(), file=file)
+
 
 DOC_SUFFIXES: frozenset[str] = frozenset({".py", ".pyi", ".pyx", ".pxd"})
 SKIP_DIRS: frozenset[str] = frozenset({
@@ -586,17 +623,7 @@ def resolve_backend(name: str) -> str:
 
 def build_parser() -> argparse.ArgumentParser:
     "Build parser."
-    parser = argparse.ArgumentParser(
-        description="Generate readable markdown documentation from Python sources (libcst, tree-sitter or ast backend)."
-    )
-    parser.add_argument(
-        "targets", nargs="*", help="files, directories or dotted module names (default: current directory)"
-    )
-    parser.add_argument(
-        "-b", "--backend", choices=tuple(BACKENDS), default="libcst", help="parsing backend (default: %(default)s)"
-    )
-    parser.add_argument("-o", "--out", default=None, help="output directory (default: ./<cwd-name>_doc)")
-    parser.add_argument("-j", "--workers", type=int, default=8, help="worker processes (default: %(default)s)")
+    parser = _ParserShim()
     return parser
 
 
@@ -630,5 +657,30 @@ def main(argv: Sequence[str] | None = None) -> int:
     return 0
 
 
-if __name__ == "__main__":
+def _run() -> None:
     raise SystemExit(main())
+
+
+app = typer.Typer(
+    add_completion=False,
+    context_settings={"help_option_names": ["-h", "--help"]},
+    pretty_exceptions_show_locals=False,
+)
+
+
+@app.command(help="Generate readable markdown documentation from Python sources (libcst, tree-sitter or ast backend).")
+def cli(
+    targets: Annotated[list[str] | None, typer.Argument(help="files, directories or dotted module names (default: current directory)")] = None,
+    backend: Annotated[str, typer.Option("-b", "--backend", help="parsing backend (default: libcst)")] = "libcst",
+    out: Annotated[str | None, typer.Option("-o", "--out", help="output directory (default: ./<cwd-name>_doc)")] = None,
+    workers: Annotated[int, typer.Option("-j", "--workers", help="worker processes (default: 8)")] = 8,
+) -> None:
+    targets = targets or []
+    if backend is not None and backend not in tuple(BACKENDS):
+        raise typer.BadParameter(f"invalid choice: {backend!r} (choose from {tuple(BACKENDS)})")
+    _STATE.update(targets=targets, backend=backend, out=out, workers=workers)
+    _run()
+
+
+if __name__ == "__main__":
+    app()

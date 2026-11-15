@@ -15,6 +15,43 @@ from pathlib import Path
 from typing import Any, Callable, Iterable, Optional
 
 from dh import SKIP_DIRS
+from types import SimpleNamespace
+from typing import Annotated
+
+import click
+import typer
+
+
+_STATE: dict[str, object] = {}
+
+
+class _Args(SimpleNamespace):
+    """argparse.Namespace look-alike: unknown attributes read as None."""
+
+    def __getattr__(self, name):
+        if name.startswith("__"):
+            raise AttributeError(name)
+        return None
+
+
+class _ParserShim:
+    """Stand-in for the removed argparse parser; hands back what Typer parsed."""
+
+    def parse_args(self, args=None, namespace=None):
+        'Parse args.'
+        return _Args(**_STATE)
+
+    def error(self, message):
+        raise typer.BadParameter(message)
+
+    def print_help(self, file=None):
+        'Print help.'
+        typer.echo(click.get_current_context().get_help(), file=file)
+
+    def print_usage(self, file=None):
+        'Print usage.'
+        typer.echo(click.get_current_context().get_usage(), file=file)
+
 
 try:
     import py7zr
@@ -516,19 +553,7 @@ def cmd_sizes(directory: str) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     "Build parser."
-    parser: argparse.ArgumentParser = argparse.ArgumentParser(
-        prog="archive_report.py",
-        description=(
-            "Unified archive scanner and uncompressed-size reporter (merges xreport.py, xreport2.py, zreport.py)."
-        ),
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=(
-            "examples:\n"
-            "  archive_report.py scan . -a -v\n"
-            "  archive_report.py scan ~/Downloads -j\n"
-            "  archive_report.py sizes ~/Downloads\n"
-        ),
-    )
+    parser = _ParserShim()
     sub: argparse._SubParsersAction[Any] = parser.add_subparsers(dest="command")
     sp_scan: argparse.ArgumentParser = sub.add_parser(
         "scan",
@@ -593,5 +618,21 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
     return args.func(args)
 
 
-if __name__ == "__main__":
+def _run() -> None:
     raise SystemExit(main())
+
+
+app = typer.Typer(
+    add_completion=False,
+    context_settings={"help_option_names": ["-h", "--help"]},
+    pretty_exceptions_show_locals=False,
+)
+
+
+@app.command(help="Unified archive scanner and uncompressed-size reporter (merges xreport.py, xreport2.py, zreport.py).", epilog="examples:\n  archive_report.py scan . -a -v\n  archive_report.py scan ~/Downloads -j\n  archive_report.py sizes ~/Downloads\n")
+def cli() -> None:
+    _run()
+
+
+if __name__ == "__main__":
+    app()

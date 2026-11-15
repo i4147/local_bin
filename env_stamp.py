@@ -158,6 +158,57 @@ from importlib.metadata import Distribution, distributions
 from pathlib import Path
 from typing import Any, ClassVar, TypeVar
 from venv import create as _venv_create
+from enum import StrEnum
+from types import SimpleNamespace
+from typing import Annotated
+
+import click
+import typer
+
+
+def _version_callback(value: bool) -> None:
+    if value:
+        typer.echo(f"%(prog)s {__version__}")
+        raise typer.Exit()
+
+
+class Format(StrEnum):
+    'Enumerate the supported Format values.'
+    terminal = "terminal"
+    markdown = "markdown"
+    json = "json"
+
+
+_STATE: dict[str, object] = {}
+
+
+class _Args(SimpleNamespace):
+    """argparse.Namespace look-alike: unknown attributes read as None."""
+
+    def __getattr__(self, name):
+        if name.startswith("__"):
+            raise AttributeError(name)
+        return None
+
+
+class _ParserShim:
+    """Stand-in for the removed argparse parser; hands back what Typer parsed."""
+
+    def parse_args(self, args=None, namespace=None):
+        'Parse args.'
+        return _Args(**_STATE)
+
+    def error(self, message):
+        raise typer.BadParameter(message)
+
+    def print_help(self, file=None):
+        'Print help.'
+        typer.echo(click.get_current_context().get_help(), file=file)
+
+    def print_usage(self, file=None):
+        'Print usage.'
+        typer.echo(click.get_current_context().get_usage(), file=file)
+
 
 if sys.version_info < (3, 12):  # pragma: no cover - exercised only on old pythons
     raise SystemExit("env-stamp requires Python 3.12 or newer")
@@ -2193,96 +2244,9 @@ def _cmd_bisect(args: argparse.Namespace) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     """Build the ``env-stamp`` argument parser (documented in --help)."""
-    parser = argparse.ArgumentParser(
-        prog="env-stamp",
-        description="Reproducible environment fingerprints: capture, diff, bisect.",
-        epilog=(
-            "examples:\n"
-            "  env-stamp capture --out good.json\n"
-            "  env-stamp capture --out broken.json\n"
-            "  env-stamp diff good.json broken.json\n"
-            "  cat broken.json | env-stamp diff good.json --stdin\n"
-            "  env-stamp bisect --baseline good.json "
-            '--test "pytest -x tests/test_x.py" --venv .venv\n'
-        ),
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
-    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
-    sub = parser.add_subparsers(dest="command", metavar="COMMAND", required=True)
+    parser = _ParserShim()
 
-    cap = sub.add_parser("capture", help="fingerprint the current (or --venv) environment")
-    cap.add_argument("--out", "-o", type=Path, default=None, help="write the stamp JSON to this file (default: stdout)")
-    cap.add_argument(
-        "--venv", type=Path, default=None, help="fingerprint the packages of this venv without activating it"
-    )
-    cap.add_argument(
-        "--allow-values",
-        default=",".join(sorted(SAFE_VALUE_KEYS)),
-        help="comma-separated env names whose values may be recorded "
-        "(default: TZ,LANG,PYTHONHASHSEED); replaces the default",
-    )
-    cap.add_argument(
-        "--no-redact", action="store_true", help="record ALL env values (prints a warning; do not share the file)"
-    )
-    cap.add_argument("--no-paths", action="store_true", help="strip editable/file:// package origins (leak safety)")
-    cap.add_argument("--no-tools", action="store_true", help="skip probing external tool versions (pip/uv/gcc/...)")
-    cap.add_argument("--quiet", "-q", action="store_true", help="suppress summary output")
-    cap.set_defaults(handler=_cmd_capture)
 
-    dif = sub.add_parser("diff", help="rank the differences between two stamps")
-    dif.add_argument("baseline", help="path to the baseline (good) stamp JSON")
-    dif.add_argument(
-        "suspect", nargs="?", default=None, help="path to the suspect (broken) stamp JSON, or '-' for stdin"
-    )
-    dif.add_argument("--stdin", action="store_true", help="read the suspect stamp from stdin")
-    dif.add_argument(
-        "--format",
-        choices=("terminal", "markdown", "json"),
-        default="terminal",
-        help="output renderer (default: terminal)",
-    )
-    dif.add_argument("--all", action="store_true", help="show every change, not just the top 10")
-    dif.add_argument(
-        "--max-lines",
-        type=int,
-        default=DEFAULT_MAX_DIFF_LINES,
-        help=f"truncate to N lines (default: {DEFAULT_MAX_DIFF_LINES})",
-    )
-    dif.set_defaults(handler=_cmd_diff)
-
-    bis = sub.add_parser("bisect", help="find the smallest change set that flips a test to FAIL")
-    bis.add_argument("--baseline", required=True, help="stamp of the environment where the test passes")
-    bis.add_argument("--test", required=True, help="shell command; exit code 0 = PASS, anything else = FAIL")
-    bis.add_argument(
-        "--venv", type=Path, default=None, help="suspect venv to compare against (default: current environment)"
-    )
-    bis.add_argument(
-        "--python", default=None, help="interpreter used to build candidate venvs (default: running python)"
-    )
-    bis.add_argument(
-        "--find-links",
-        action="append",
-        default=[],
-        metavar="DIR",
-        help="local wheel directory; repeatable; implies --no-index (offline mode)",
-    )
-    bis.add_argument(
-        "--max-runs", type=int, default=DEFAULT_MAX_RUNS, help=f"cap on test executions (default: {DEFAULT_MAX_RUNS})"
-    )
-    bis.add_argument(
-        "--timeout", type=float, default=DEFAULT_TEST_TIMEOUT, help="per-test timeout in seconds (default: 900)"
-    )
-    bis.add_argument(
-        "--workdir", type=Path, default=None, help="where throwaway venvs live (default: a fresh temp dir)"
-    )
-    bis.add_argument(
-        "--parallel", action="store_true", help="run axis-level probes concurrently (each in its own venv)"
-    )
-    bis.add_argument("--force-pip", action="store_true", help="use pip even when uv is available")
-    bis.add_argument("--keep", action="store_true", help="keep throwaway venvs for inspection")
-    bis.add_argument("--verbose", action="store_true", help="show tail of the failing test output")
-    bis.add_argument("--quiet", "-q", action="store_true", help="suppress progress logging")
-    bis.set_defaults(handler=_cmd_bisect)
     return parser
 
 
@@ -2297,5 +2261,72 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 2
 
 
-if __name__ == "__main__":  # pragma: no cover
+def _run() -> None:
     raise SystemExit(main())
+
+
+app = typer.Typer(
+    help="Reproducible environment fingerprints: capture, diff, bisect.",
+    epilog="examples:\n  env-stamp capture --out good.json\n  env-stamp capture --out broken.json\n  env-stamp diff good.json broken.json\n  cat broken.json | env-stamp diff good.json --stdin\n  env-stamp bisect --baseline good.json --test \"pytest -x tests/test_x.py\" --venv .venv\n",
+    add_completion=False,
+    context_settings={"help_option_names": ["-h", "--help"]},
+    pretty_exceptions_show_locals=False,
+)
+
+
+@app.callback()
+def _root(
+    version: Annotated[bool, typer.Option("--version", callback=_version_callback, is_eager=True, help="show program's version number and exit")] = False,
+) -> None:
+    pass
+
+
+@app.command("capture", help="fingerprint the current (or --venv) environment")
+def cmd_capture(
+    out: Annotated[Path | None, typer.Option("--out", "-o", help="write the stamp JSON to this file (default: stdout)")] = None,
+    venv: Annotated[Path | None, typer.Option("--venv", help="fingerprint the packages of this venv without activating it")] = None,
+    allow_values: Annotated[str, typer.Option("--allow-values", help="comma-separated env names whose values may be recorded (default: TZ,LANG,PYTHONHASHSEED); replaces the default")] = ",".join(sorted(SAFE_VALUE_KEYS)),
+    no_redact: Annotated[bool, typer.Option("--no-redact", help="record ALL env values (prints a warning; do not share the file)")] = False,
+    no_paths: Annotated[bool, typer.Option("--no-paths", help="strip editable/file:// package origins (leak safety)")] = False,
+    no_tools: Annotated[bool, typer.Option("--no-tools", help="skip probing external tool versions (pip/uv/gcc/...)")] = False,
+    quiet: Annotated[bool, typer.Option("--quiet", "-q", help="suppress summary output")] = False,
+) -> None:
+    _STATE.update(out=out, venv=venv, allow_values=allow_values, no_redact=no_redact, no_paths=no_paths, no_tools=no_tools, quiet=quiet, command="capture", handler=_cmd_capture)
+    _run()
+
+
+@app.command("diff", help="rank the differences between two stamps")
+def cmd_diff(
+    baseline: Annotated[str, typer.Argument(help="path to the baseline (good) stamp JSON")],
+    suspect: Annotated[str | None, typer.Argument(help="path to the suspect (broken) stamp JSON, or '-' for stdin")] = None,
+    stdin: Annotated[bool, typer.Option("--stdin", help="read the suspect stamp from stdin")] = False,
+    format: Annotated[Format, typer.Option("--format", help="output renderer (default: terminal)")] = Format.terminal,
+    all: Annotated[bool, typer.Option("--all", help="show every change, not just the top 10")] = False,
+    max_lines: Annotated[int, typer.Option("--max-lines", help=f"truncate to N lines (default: {DEFAULT_MAX_DIFF_LINES})")] = DEFAULT_MAX_DIFF_LINES,
+) -> None:
+    _STATE.update(baseline=baseline, suspect=suspect, stdin=stdin, format=format, all=all, max_lines=max_lines, command="diff", handler=_cmd_diff)
+    _run()
+
+
+@app.command("bisect", help="find the smallest change set that flips a test to FAIL")
+def cmd_bisect(
+    baseline: Annotated[str, typer.Option("--baseline", help="stamp of the environment where the test passes")],
+    test: Annotated[str, typer.Option("--test", help="shell command; exit code 0 = PASS, anything else = FAIL")],
+    venv: Annotated[Path | None, typer.Option("--venv", help="suspect venv to compare against (default: current environment)")] = None,
+    python: Annotated[str | None, typer.Option("--python", help="interpreter used to build candidate venvs (default: running python)")] = None,
+    find_links: Annotated[list[str], typer.Option("--find-links", help="local wheel directory; repeatable; implies --no-index (offline mode)", metavar="DIR")] = [],
+    max_runs: Annotated[int, typer.Option("--max-runs", help=f"cap on test executions (default: {DEFAULT_MAX_RUNS})")] = DEFAULT_MAX_RUNS,
+    timeout: Annotated[float, typer.Option("--timeout", help="per-test timeout in seconds (default: 900)")] = DEFAULT_TEST_TIMEOUT,
+    workdir: Annotated[Path | None, typer.Option("--workdir", help="where throwaway venvs live (default: a fresh temp dir)")] = None,
+    parallel: Annotated[bool, typer.Option("--parallel", help="run axis-level probes concurrently (each in its own venv)")] = False,
+    force_pip: Annotated[bool, typer.Option("--force-pip", help="use pip even when uv is available")] = False,
+    keep: Annotated[bool, typer.Option("--keep", help="keep throwaway venvs for inspection")] = False,
+    verbose: Annotated[bool, typer.Option("--verbose", help="show tail of the failing test output")] = False,
+    quiet: Annotated[bool, typer.Option("--quiet", "-q", help="suppress progress logging")] = False,
+) -> None:
+    _STATE.update(baseline=baseline, test=test, venv=venv, python=python, find_links=find_links, max_runs=max_runs, timeout=timeout, workdir=workdir, parallel=parallel, force_pip=force_pip, keep=keep, verbose=verbose, quiet=quiet, command="bisect", handler=_cmd_bisect)
+    _run()
+
+
+if __name__ == "__main__":
+    app()

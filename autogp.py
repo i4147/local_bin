@@ -1,16 +1,18 @@
 #!/data/data/com.termux/files/usr/bin/env python
 "Auto format Python files and auto commit/push in a git repo."
 
-import argparse
 import concurrent.futures
 import json
-import logging
+from loguru import logger
 import multiprocessing
 import os
 import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
+from typing import Annotated
+
+import typer
 
 DEFAULT_CONFIG = {
     "skip_dirs": ["venv", ".venv", ".git", "__pycache__", ".mypy_cache", ".ruff_cache"],
@@ -25,7 +27,7 @@ DEFAULT_CONFIG = {
 HOME = Path.home()
 CONFIG_PATH = HOME / ".auto_git_fmt_config.json"
 GLOBAL_GITIGNORE = HOME / ".gitignore_global"
-LOG = logging.getLogger("auto_git_fmt")
+LOG = logger
 DEFAULT_GITIGNORE_CONTENT = "\n.vscode/\n.idea/\n*.swp\n*.swo\n*.sublime-project\n*.sublime-workspace\n*.pyc\n*.pyo\n__pycache__/\n*.egg\n*.egg-info/\nenv/\n.venv/\nvenv/\n.ipynb_checkpoints/\n.vscode/\n.idea/\n*.swo\n*.swp\n*.log\n"
 
 
@@ -45,8 +47,9 @@ def load_config() -> dict:
 
 def setup_logging(level_name: str):
     "Set up logging."
-    level = getattr(logging, level_name.upper(), logging.INFO)
-    logging.basicConfig(level=level, format="%(asctime)s %(levelname)-5s %(name)s: %(message)s")
+    logger.remove()
+    lvl = level_name.upper() if level_name else "INFO"
+    logger.add(sys.stderr, level=lvl, format="{time:YYYY-MM-DD HH:mm:ss} <level>{level: <5}</level> auto_git_fmt: {message}")
 
 
 def run_cmd(
@@ -350,51 +353,56 @@ def ensure_precommit(repo_root: Path, cfg: dict) -> None:
         LOG.debug("pre-commit install exception: %s", e)
 
 
-def main(argv=None) -> int:
+app = typer.Typer(
+    add_completion=False,
+    context_settings={"help_option_names": ["-h", "--help"]},
+    pretty_exceptions_show_locals=False,
+)
+
+
+@app.command(help="Auto format Python files and auto commit/push in a git repo.")
+def main(
+    dry_run: Annotated[bool, typer.Option("--dry-run", help="Show what would happen without making changes.")] = False,
+    no_precommit: Annotated[bool, typer.Option("--no-precommit", help="Do not set up pre-commit integration.")] = False,
+    verbose: Annotated[bool, typer.Option("--verbose", "-v", help="Verbose logging (DEBUG).")] = False,
+) -> int:
     "Run the command-line interface."
     cfg = load_config()
-    parser = argparse.ArgumentParser(
-        prog="auto-git-fmt", description="Auto format Python files and auto commit/push in a git repo."
-    )
-    parser.add_argument("--dry-run", action="store_true", help="Show what would happen without making changes.")
-    parser.add_argument("--no-precommit", action="store_true", help="Do not set up pre-commit integration.")
-    parser.add_argument("--verbose", "-v", action="store_true", help="Verbose logging (DEBUG).")
-    args = parser.parse_args(argv)
-    if args.verbose:
+    if verbose:
         cfg["logging_level"] = "DEBUG"
-    if args.dry_run:
+    if dry_run:
         cfg["dry_run"] = True
-    if args.no_precommit:
+    if no_precommit:
         cfg["precommit"] = False
     setup_logging(cfg.get("logging_level", "INFO"))
     LOG.debug("Config: %s", cfg)
     if not is_inside_git_repo():
         LOG.info("Not inside a git repository. Doing nothing.")
-        return 0
+        return
     repo_root = git_repo_root()
     if not repo_root:
         LOG.info("Could not determine git repo root. Doing nothing.")
-        return 0
+        return
     LOG.info("Repo root: %s", repo_root)
     ensure_gitignore(repo_root)
     ensure_precommit(repo_root, cfg)
     skip_dirs = set(cfg.get("skip_dirs", []))
     if is_repo_clean(repo_root):
         LOG.info("Repository clean (no staged or unstaged changes). Nothing to do.")
-        return 0
+        return
     py_files = detect_python_files(repo_root, skip_dirs, cfg)
     if not py_files:
         LOG.info("No python files detected. Exiting.")
-        return 0
+        return
     if not run_black_on_files(repo_root, py_files, cfg):
         LOG.error("Black formatting failed. Aborting.")
-        return 1
+        raise typer.Exit(1)
     if not git_add_all(repo_root, cfg):
         LOG.error("git add failed. Aborting.")
-        return 1
+        raise typer.Exit(1)
     git_commit_and_push(repo_root, cfg)
-    return 0
+    return
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    app()

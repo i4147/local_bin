@@ -245,7 +245,7 @@ def should_process_file(fname: str, cfg: Config) -> bool:
         return False
     if matches_glob(fname, cfg.ignore_file_patterns):
         return False
-    ext = os.path.splitext(fname)[1]
+    ext = Path(fname).suffix
     if ext in cfg.disallow_exts:
         return False
     if cfg.allow_exts and ext not in cfg.allow_exts:

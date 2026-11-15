@@ -10,7 +10,7 @@ import hashlib
 import importlib
 import importlib.util
 import io
-import logging
+from loguru import logger
 import lzma
 import os
 import shutil
@@ -27,10 +27,47 @@ from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import IO, Any, Literal, cast
+from types import SimpleNamespace
+from typing import Annotated
+
+import click
+import typer
+
+
+_STATE: dict[str, object] = {}
+
+
+class _Args(SimpleNamespace):
+    """argparse.Namespace look-alike: unknown attributes read as None."""
+
+    def __getattr__(self, name):
+        if name.startswith("__"):
+            raise AttributeError(name)
+        return None
+
+
+class _ParserShim:
+    """Stand-in for the removed argparse parser; hands back what Typer parsed."""
+
+    def parse_args(self, args=None, namespace=None):
+        'Parse args.'
+        return _Args(**_STATE)
+
+    def error(self, message):
+        raise typer.BadParameter(message)
+
+    def print_help(self, file=None):
+        'Print help.'
+        typer.echo(click.get_current_context().get_help(), file=file)
+
+    def print_usage(self, file=None):
+        'Print usage.'
+        typer.echo(click.get_current_context().get_usage(), file=file)
+
 
 CHUNK = 1 << 20
 ZSTD_NATIVE = sys.version_info >= (3, 14)
-log = logging.getLogger("archconv")
+log = logger
 
 
 class ToolError(Exception):
@@ -747,29 +784,7 @@ def print_formats() -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     "Build parser."
-    parser = argparse.ArgumentParser(
-        prog="archconv",
-        description="Convert archives and compressed files between formats with auto-detected input.",
-    )
-    parser.add_argument("inputs", nargs="*", type=Path, help="files to convert")
-    parser.add_argument(
-        "--to", metavar="FORMAT", help="target: zip whl 7z tar gz bz2 xz zst br lz4 tar.<codec> tgz txz ..."
-    )
-    parser.add_argument(
-        "-r", "--remove", action="store_true", help="remove the original after a verified successful conversion"
-    )
-    parser.add_argument("-o", "--output-dir", type=Path, help="write outputs here instead of next to the input")
-    parser.add_argument("-f", "--force", action="store_true", help="overwrite existing outputs")
-    parser.add_argument("-l", "--level", type=int, help="compression level for the target format")
-    parser.add_argument("-n", "--dry-run", action="store_true", help="show what would happen without writing")
-    parser.add_argument("-j", "--jobs", type=int, default=1, help="parallel files (0 = all CPUs)")
-    parser.add_argument("--verify", action="store_true", help="integrity-check the output (implied by -r)")
-    parser.add_argument("--strict", action="store_true", help="fail when extension and magic bytes disagree")
-    parser.add_argument("--tmpdir", type=Path, help="scratch directory for staged conversions")
-    parser.add_argument("--list-formats", action="store_true", help="show supported formats and dependency status")
-    noise = parser.add_mutually_exclusive_group()
-    noise.add_argument("-v", "--verbose", action="store_true")
-    noise.add_argument("-q", "--quiet", action="store_true")
+    parser = _ParserShim()
     return parser
 
 
@@ -784,10 +799,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.error("no input files given")
     if not args.to:
         parser.error("--to is required")
-    logging.basicConfig(
-        level=logging.ERROR if args.quiet else logging.DEBUG if args.verbose else logging.INFO,
-        format="%(message)s",
-    )
+    logger.remove()
+    log_level = "ERROR" if args.quiet else ("DEBUG" if args.verbose else "INFO")
+    logger.add(sys.stderr, level=log_level, format="{message}")
     opts = Options(
         to=args.to,
         remove=args.remove,
@@ -830,5 +844,40 @@ def main(argv: Sequence[str] | None = None) -> int:
     return 1 if counts["failed"] else 0
 
 
-if __name__ == "__main__":
+def _run() -> None:
     raise SystemExit(main())
+
+
+app = typer.Typer(
+    add_completion=False,
+    context_settings={"help_option_names": ["-h", "--help"]},
+    pretty_exceptions_show_locals=False,
+)
+
+
+@app.command(help="Convert archives and compressed files between formats with auto-detected input.")
+def cli(
+    inputs: Annotated[list[Path] | None, typer.Argument(help="files to convert")] = None,
+    to: Annotated[str | None, typer.Option("--to", help="target: zip whl 7z tar gz bz2 xz zst br lz4 tar.<codec> tgz txz ...", metavar="FORMAT")] = None,
+    remove: Annotated[bool, typer.Option("-r", "--remove", help="remove the original after a verified successful conversion")] = False,
+    output_dir: Annotated[Path | None, typer.Option("-o", "--output-dir", help="write outputs here instead of next to the input")] = None,
+    force: Annotated[bool, typer.Option("-f", "--force", help="overwrite existing outputs")] = False,
+    level: Annotated[int | None, typer.Option("-l", "--level", help="compression level for the target format")] = None,
+    dry_run: Annotated[bool, typer.Option("-n", "--dry-run", help="show what would happen without writing")] = False,
+    jobs: Annotated[int, typer.Option("-j", "--jobs", help="parallel files (0 = all CPUs)")] = 1,
+    verify: Annotated[bool, typer.Option("--verify", help="integrity-check the output (implied by -r)")] = False,
+    strict: Annotated[bool, typer.Option("--strict", help="fail when extension and magic bytes disagree")] = False,
+    tmpdir: Annotated[Path | None, typer.Option("--tmpdir", help="scratch directory for staged conversions")] = None,
+    list_formats: Annotated[bool, typer.Option("--list-formats", help="show supported formats and dependency status")] = False,
+    verbose: Annotated[bool, typer.Option("-v", "--verbose")] = False,
+    quiet: Annotated[bool, typer.Option("-q", "--quiet")] = False,
+) -> None:
+    if sum((bool(verbose), bool(quiet),)) > 1:
+        raise typer.BadParameter("-v, -q are mutually exclusive")
+    inputs = inputs or []
+    _STATE.update(inputs=inputs, to=to, remove=remove, output_dir=output_dir, force=force, level=level, dry_run=dry_run, jobs=jobs, verify=verify, strict=strict, tmpdir=tmpdir, list_formats=list_formats, verbose=verbose, quiet=quiet)
+    _run()
+
+
+if __name__ == "__main__":
+    app()

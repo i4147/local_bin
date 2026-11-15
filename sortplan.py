@@ -67,6 +67,49 @@ import xml.etree.ElementTree as ET
 import zipfile
 from pathlib import Path
 from typing import Any, Callable, Iterator, Mapping, Sequence
+from enum import StrEnum
+from types import SimpleNamespace
+from typing import Annotated
+
+import click
+import typer
+
+
+class By(StrEnum):
+    'Enumerate the supported By values.'
+    content = "content"
+
+
+_STATE: dict[str, object] = {}
+
+
+class _Args(SimpleNamespace):
+    """argparse.Namespace look-alike: unknown attributes read as None."""
+
+    def __getattr__(self, name):
+        if name.startswith("__"):
+            raise AttributeError(name)
+        return None
+
+
+class _ParserShim:
+    """Stand-in for the removed argparse parser; hands back what Typer parsed."""
+
+    def parse_args(self, args=None, namespace=None):
+        'Parse args.'
+        return _Args(**_STATE)
+
+    def error(self, message):
+        raise typer.BadParameter(message)
+
+    def print_help(self, file=None):
+        'Print help.'
+        typer.echo(click.get_current_context().get_help(), file=file)
+
+    def print_usage(self, file=None):
+        'Print usage.'
+        typer.echo(click.get_current_context().get_usage(), file=file)
+
 
 VERSION = 1
 DEFAULT_STATE = Path.home() / ".sortplan"
@@ -79,7 +122,7 @@ DATE_RE = re.compile(
 
 def absolute(path: str | Path) -> Path:
     """Expand user home and make an absolute path without resolving symlinks."""
-    return Path(os.path.abspath(os.path.expanduser(str(path))))
+    return Path(path).expanduser().resolve()
 
 
 def safe_id(value: str) -> str:
@@ -483,7 +526,7 @@ def destination(path: Path, result: Mapping[str, Any]) -> Path:
 def available(path: Path, reserved: set[str]) -> bool:
     """Conservatively treat case-fold-equivalent directory entries as collisions."""
     key = str(path).casefold()
-    if key in reserved or os.path.lexists(path):
+    if key in reserved or path.is_symlink() or path.exists():
         return False
     try:
         return not any(entry.name.casefold() == path.name.casefold() for entry in os.scandir(path.parent))
@@ -905,7 +948,7 @@ def _undo_plan_unlocked(plan_id: str, *, state: str | Path = DEFAULT_STATE) -> d
     errors: list[dict[str, str]] = []
     for item in reversed(moves):
         src, dst = Path(item["src"]), Path(item["dst"])
-        src_exists, dst_exists = os.path.lexists(src), os.path.lexists(dst)
+        src_exists, dst_exists = (src.is_symlink() or src.exists()), (dst.is_symlink() or dst.exists())
         if src_exists and not dst_exists:
             if same_content(src, item):
                 already += 1
@@ -1024,8 +1067,7 @@ def print_plan(plan: Mapping[str, Any]) -> None:
 
 def make_parser() -> argparse.ArgumentParser:
     """Construct the CLI parser."""
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    sub = parser.add_subparsers(dest="command", required=True)
+    parser = _ParserShim()
 
     def state_arg(p: argparse.ArgumentParser) -> None:
         p.add_argument("--state-dir", default=str(DEFAULT_STATE), help="state/journal directory (default: ~/.sortplan)")
@@ -1046,27 +1088,9 @@ def make_parser() -> argparse.ArgumentParser:
         p.add_argument("--json", action="store_true", help="print machine-readable result")
         state_arg(p)
 
-    p = sub.add_parser("plan", help="create a persistent dry-run plan")
-    p.add_argument("root", nargs="?", help="scan root; overrides general.root")
     scan_args(p)
-    p = sub.add_parser("dedupe", help="plan duplicate quarantine (does not move anything)")
-    p.add_argument("root", nargs="?", help="scan root; overrides general.root")
-    p.add_argument("--by", choices=("content",), default="content")
     scan_args(p)
-    p = sub.add_parser("apply", help="execute a plan with a durable undo journal")
-    p.add_argument("--plan", required=True)
-    p.add_argument("--yes", action="store_true", help="required confirmation")
-    p = sub.add_parser("undo", help="undo a journal")
-    g = p.add_mutually_exclusive_group(required=True)
-    g.add_argument("--last", action="store_true")
-    g.add_argument("--plan-id")
     state_arg(p)
-    p.add_argument("--json", action="store_true")
-    p = sub.add_parser("explain", help="explain a rule match for an existing file")
-    p.add_argument("file")
-    p.add_argument("--config", required=True)
-    p.add_argument("--max-inspect-ms", type=int, default=200)
-    p.add_argument("--json", action="store_true")
     return parser
 
 
@@ -1114,5 +1138,67 @@ def main(argv: Sequence[str] | None = None) -> int:
     return 2
 
 
-if __name__ == "__main__":
+def _run() -> None:
     raise SystemExit(main())
+
+
+app = typer.Typer(
+    add_completion=False,
+    context_settings={"help_option_names": ["-h", "--help"]},
+    pretty_exceptions_show_locals=False,
+)
+
+
+@app.command("plan", help="create a persistent dry-run plan")
+def cmd_plan(
+    root: Annotated[str | None, typer.Argument(help="scan root; overrides general.root")] = None,
+) -> None:
+    _STATE.update(root=root, command="plan")
+    _run()
+
+
+@app.command("dedupe", help="plan duplicate quarantine (does not move anything)")
+def cmd_dedupe(
+    root: Annotated[str | None, typer.Argument(help="scan root; overrides general.root")] = None,
+    by: Annotated[By, typer.Option("--by")] = By.content,
+) -> None:
+    _STATE.update(root=root, by=by, command="dedupe")
+    _run()
+
+
+@app.command("apply", help="execute a plan with a durable undo journal")
+def cmd_apply(
+    plan: Annotated[str, typer.Option("--plan")],
+    yes: Annotated[bool, typer.Option("--yes", help="required confirmation")] = False,
+) -> None:
+    _STATE.update(plan=plan, yes=yes, command="apply")
+    _run()
+
+
+@app.command("undo", help="undo a journal")
+def cmd_undo(
+    last: Annotated[bool, typer.Option("--last")] = False,
+    plan_id: Annotated[str | None, typer.Option("--plan-id")] = None,
+    json: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    if sum((bool(last), plan_id is not None,)) > 1:
+        raise typer.BadParameter("--last, --plan-id are mutually exclusive")
+    if not any((bool(last), plan_id is not None,)):
+        raise typer.BadParameter("one of --last, --plan-id is required")
+    _STATE.update(last=last, plan_id=plan_id, json=json, command="undo")
+    _run()
+
+
+@app.command("explain", help="explain a rule match for an existing file")
+def cmd_explain(
+    file: Annotated[str, typer.Argument()],
+    config: Annotated[str, typer.Option("--config")],
+    max_inspect_ms: Annotated[int, typer.Option("--max-inspect-ms")] = 200,
+    json: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    _STATE.update(file=file, config=config, max_inspect_ms=max_inspect_ms, json=json, command="explain")
+    _run()
+
+
+if __name__ == "__main__":
+    app()

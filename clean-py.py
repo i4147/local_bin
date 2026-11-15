@@ -6,7 +6,7 @@ from __future__ import absolute_import
 import contextlib
 import difflib
 import json
-import logging
+from loguru import logger
 import shutil
 import sys
 import tempfile
@@ -25,7 +25,6 @@ from black import (DEFAULT_LINE_LENGTH, FileMode, NothingChanged,
                    format_file_contents)
 from isort import code as isort_code
 from rich.console import Console
-from rich.logging import RichHandler
 from rich.progress import (BarColumn, Progress, SpinnerColumn,
                            TaskProgressColumn, TextColumn)
 from rich.table import Table
@@ -112,7 +111,7 @@ PROFILES: dict[str, dict[str, Any]] = {
 }
 
 console: Console = Console()
-log = logging.getLogger("clean-py")
+log = logger
 
 
 @dataclass
@@ -177,15 +176,9 @@ def setup_logging(verbose: bool, quiet: bool, no_color: bool) -> None:
     global console
     if no_color:
         console = Console(no_color=True)
-    level = logging.DEBUG if verbose else (logging.ERROR if quiet else logging.INFO)
-    handler = RichHandler(rich_tracebacks=True, console=console)
-    logging.basicConfig(
-        level=level,
-        format="%(message)s",
-        datefmt="[%X]",
-        handlers=[handler],
-        force=True,
-    )
+    level = "DEBUG" if verbose else ("ERROR" if quiet else "INFO")
+    logger.remove()
+    logger.add(sys.stderr, level=level, format="{message}", colorize=not no_color)
 
 
 def _has_fmt_off(source: str) -> bool:

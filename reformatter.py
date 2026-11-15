@@ -61,6 +61,43 @@ import time
 import tokenize
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass, replace
+from types import SimpleNamespace
+from typing import Annotated
+
+import click
+import typer
+
+
+_STATE: dict[str, object] = {}
+
+
+class _Args(SimpleNamespace):
+    """argparse.Namespace look-alike: unknown attributes read as None."""
+
+    def __getattr__(self, name):
+        if name.startswith("__"):
+            raise AttributeError(name)
+        return None
+
+
+class _ParserShim:
+    """Stand-in for the removed argparse parser; hands back what Typer parsed."""
+
+    def parse_args(self, args=None, namespace=None):
+        'Parse args.'
+        return _Args(**_STATE)
+
+    def error(self, message):
+        raise typer.BadParameter(message)
+
+    def print_help(self, file=None):
+        'Print help.'
+        typer.echo(click.get_current_context().get_help(), file=file)
+
+    def print_usage(self, file=None):
+        'Print usage.'
+        typer.echo(click.get_current_context().get_usage(), file=file)
+
 
 BUILTIN_NAMES: frozenset[str] = frozenset(dir(builtins))
 
@@ -2774,43 +2811,7 @@ def format_stats_report(stats: BatchStats, *, dry_run: bool = False) -> str:
 
 def build_arg_parser() -> argparse.ArgumentParser:
     """Create the command-line argument parser."""
-    parser = argparse.ArgumentParser(
-        prog="reformatter",
-        description=(
-            "Automatically reconstruct missing newlines and 4-space indentations in broken Python files in-place."
-        ),
-    )
-    parser.add_argument(
-        "paths",
-        nargs="*",
-        help=(
-            "Python files or directories to fix in-place. Defaults to broken*.py in the current directory if omitted."
-        ),
-    )
-    parser.add_argument(
-        "--dry-run",
-        "--check",
-        dest="dry_run",
-        action="store_true",
-        help="Analyze and report fixes without modifying files on disk.",
-    )
-    parser.add_argument(
-        "--force",
-        action="store_true",
-        help="Re-infer indentation even on files that already compile cleanly.",
-    )
-    parser.add_argument(
-        "--beam-width",
-        type=int,
-        default=64,
-        help="Beam width for dataflow-guided indentation search (default: 64).",
-    )
-    parser.add_argument(
-        "--json",
-        dest="json_output",
-        action="store_true",
-        help="Output batch statistics as JSON.",
-    )
+    parser = _ParserShim()
     return parser
 
 
@@ -2851,5 +2852,29 @@ def main(argv: Sequence[str] | None = None) -> int:
     return 1 if stats.failed_files > 0 else 0
 
 
-if __name__ == "__main__":
+def _run() -> None:
     raise SystemExit(main())
+
+
+app = typer.Typer(
+    add_completion=False,
+    context_settings={"help_option_names": ["-h", "--help"]},
+    pretty_exceptions_show_locals=False,
+)
+
+
+@app.command(help="Automatically reconstruct missing newlines and 4-space indentations in broken Python files in-place.")
+def cli(
+    paths: Annotated[list[str] | None, typer.Argument(help="Python files or directories to fix in-place. Defaults to broken*.py in the current directory if omitted.")] = None,
+    dry_run: Annotated[bool, typer.Option("--dry-run", "--check", help="Analyze and report fixes without modifying files on disk.")] = False,
+    force: Annotated[bool, typer.Option("--force", help="Re-infer indentation even on files that already compile cleanly.")] = False,
+    beam_width: Annotated[int, typer.Option("--beam-width", help="Beam width for dataflow-guided indentation search (default: 64).")] = 64,
+    json_output: Annotated[bool, typer.Option("--json", help="Output batch statistics as JSON.")] = False,
+) -> None:
+    paths = paths or []
+    _STATE.update(paths=paths, dry_run=dry_run, force=force, beam_width=beam_width, json_output=json_output)
+    _run()
+
+
+if __name__ == "__main__":
+    app()

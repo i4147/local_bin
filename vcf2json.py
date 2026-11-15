@@ -10,6 +10,42 @@ import re
 import sys
 from pathlib import Path
 from typing import Any
+from types import SimpleNamespace
+from typing import Annotated
+
+import click
+import typer
+
+
+_STATE: dict[str, object] = {}
+
+
+class _Args(SimpleNamespace):
+    """argparse.Namespace look-alike: unknown attributes read as None."""
+
+    def __getattr__(self, name):
+        if name.startswith("__"):
+            raise AttributeError(name)
+        return None
+
+
+class _ParserShim:
+    """Stand-in for the removed argparse parser; hands back what Typer parsed."""
+
+    def parse_args(self, args=None, namespace=None):
+        'Parse args.'
+        return _Args(**_STATE)
+
+    def error(self, message):
+        raise typer.BadParameter(message)
+
+    def print_help(self, file=None):
+        'Print help.'
+        typer.echo(click.get_current_context().get_help(), file=file)
+
+    def print_usage(self, file=None):
+        'Print usage.'
+        typer.echo(click.get_current_context().get_usage(), file=file)
 
 
 def split_unquoted(value: str, separator: str) -> list[str]:
@@ -153,48 +189,9 @@ def write_csv(cards: list[dict[str, list[dict[str, Any]]]], output_path: Path) -
 
 def build_parser() -> argparse.ArgumentParser:
     "Build parser."
-    parser = argparse.ArgumentParser(description="Convert a vCard (.vcf) file to JSON or CSV.")
-    parser.add_argument("input", type=Path, help="Path to the input .vcf file")
+    parser = _ParserShim()
 
-    formats = parser.add_mutually_exclusive_group()
-    formats.add_argument(
-        "--json",
-        dest="format",
-        action="store_const",
-        const="json",
-        help="Write JSON output (the default)",
-    )
-    formats.add_argument(
-        "--csv",
-        dest="format",
-        action="store_const",
-        const="csv",
-        help="Write CSV output",
-    )
 
-    parser.set_defaults(format="json")
-    parser.add_argument(
-        "-r",
-        "--remove",
-        action="store_true",
-        help="Remove the input file after a successful conversion",
-    )
-    parser.add_argument(
-        "-o",
-        "--output",
-        type=Path,
-        help="Output path (default: beside the input file with the selected extension)",
-    )
-    parser.add_argument(
-        "--encoding",
-        default="utf-8-sig",
-        help="Input file encoding (default: utf-8-sig)",
-    )
-    parser.add_argument(
-        "--compact",
-        action="store_true",
-        help="Write compact JSON instead of indented JSON",
-    )
     return parser
 
 
@@ -234,5 +231,34 @@ def main() -> int:
     return 0
 
 
-if __name__ == "__main__":
+def _run() -> None:
     raise SystemExit(main())
+
+
+app = typer.Typer(
+    add_completion=False,
+    context_settings={"help_option_names": ["-h", "--help"]},
+    pretty_exceptions_show_locals=False,
+)
+
+
+@app.command(help="Convert a vCard (.vcf) file to JSON or CSV.")
+def cli(
+    input: Annotated[Path, typer.Argument(help="Path to the input .vcf file")],
+    format: Annotated[bool, typer.Option("--json", help="Write JSON output (the default)")] = False,
+    format_2: Annotated[bool, typer.Option("--csv", help="Write CSV output")] = False,
+    remove: Annotated[bool, typer.Option("-r", "--remove", help="Remove the input file after a successful conversion")] = False,
+    output: Annotated[Path | None, typer.Option("-o", "--output", help="Output path (default: beside the input file with the selected extension)")] = None,
+    encoding: Annotated[str, typer.Option("--encoding", help="Input file encoding (default: utf-8-sig)")] = "utf-8-sig",
+    compact: Annotated[bool, typer.Option("--compact", help="Write compact JSON instead of indented JSON")] = False,
+) -> None:
+    if sum((bool(format), bool(format_2),)) > 1:
+        raise typer.BadParameter("--json, --csv are mutually exclusive")
+    format = "json" if format else None
+    format = "csv" if format else None
+    _STATE.update(input=input, format=format, remove=remove, output=output, encoding=encoding, compact=compact)
+    _run()
+
+
+if __name__ == "__main__":
+    app()

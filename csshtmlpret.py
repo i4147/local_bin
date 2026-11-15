@@ -6,12 +6,23 @@ import itertools
 import os
 import re
 import sys
-from argparse import ArgumentParser, Namespace
+from argparse import Namespace
 from datetime import datetime
 from multiprocessing import get_context
 from pathlib import Path
 from subprocess import getoutput
 from time import sleep
+from types import SimpleNamespace
+from typing import Annotated
+
+import typer
+
+
+def _version_callback(value: bool) -> None:
+    if value:
+        typer.echo("1.4.7")
+        raise typer.Exit()
+
 
 try:
     from bs4 import BeautifulSoup
@@ -297,82 +308,34 @@ def process_single_html_file(html_path: str) -> str:
     return pretty_html
 
 
-def make_arguments_parser() -> Namespace:
+app = typer.Typer(
+    add_completion=False,
+    context_settings={"help_option_names": ["-h", "--help"]},
+    pretty_exceptions_show_locals=False,
+)
+
+
+@app.command(epilog="CSS-HTML-Prettify:\n    Takes file or folder full path string and process all CSS/SCSS/HTML found.\n    If argument is not file/folder will fail. Check Updates works on Python3.\n    StdIn to StdOut is deprecated since may fail with unicode characters.\n    CSS Properties are AlphaSorted,to help spot cloned ones,Selectors not.\n    Watch works for whole folders, with minimum of ~60 Secs between runs.")
+def make_arguments_parser(
+    fullpath: Annotated[str, typer.Argument(help="Full path to local file or folder.", metavar="fullpath")],
+    version: Annotated[bool, typer.Option("--version", callback=_version_callback, is_eager=True, help="show program's version number and exit")] = False,
+    prefix: Annotated[str | None, typer.Option("--prefix", help="Prefix string to prepend on output filenames.")] = None,
+    timestamp: Annotated[bool, typer.Option("--timestamp", help="Add a Time Stamp on all CSS/SCSS output files.")] = False,
+    quiet: Annotated[bool, typer.Option("--quiet", help="Quiet, Silent, force disable all Logging.")] = False,
+    after: Annotated[str | None, typer.Option("--after", help="Command to execute after run (Experimental).")] = None,
+    before: Annotated[str | None, typer.Option("--before", help="Command to execute before run (Experimental).")] = None,
+    watch: Annotated[bool, typer.Option("--watch", help="Re-Compress if file changes (Experimental).")] = False,
+    group: Annotated[bool, typer.Option("--group", help="Group Alphabetically CSS Poperties by name.")] = False,
+    justify: Annotated[bool, typer.Option("--justify", help="Right Justify CSS Properties (Experimental).")] = False,
+    extraline: Annotated[bool, typer.Option("--extraline", help="Add 1 New Line for each New Line (Experimental)")] = False,
+) -> Namespace:
     "Create arguments parser."
-    parser = ArgumentParser(
-        description=__doc__,
-        epilog="CSS-HTML-Prettify:\n    Takes file or folder full path string and process all CSS/SCSS/HTML found.\n    If argument is not file/folder will fail. Check Updates works on Python3.\n    StdIn to StdOut is deprecated since may fail with unicode characters.\n    CSS Properties are AlphaSorted,to help spot cloned ones,Selectors not.\n    Watch works for whole folders, with minimum of ~60 Secs between runs.",
-    )
-    parser.add_argument("--version", action="version", version="1.4.7")
-    parser.add_argument(
-        "fullpath",
-        metavar="fullpath",
-        type=str,
-        help="Full path to local file or folder.",
-    )
-    parser.add_argument("--prefix", type=str, help="Prefix string to prepend on output filenames.")
-    parser.add_argument(
-        "--timestamp",
-        action="store_true",
-        help="Add a Time Stamp on all CSS/SCSS output files.",
-    )
-    parser.add_argument("--quiet", action="store_true", help="Quiet, Silent, force disable all Logging.")
-    parser.add_argument("--after", type=str, help="Command to execute after run (Experimental).")
-    parser.add_argument("--before", type=str, help="Command to execute before run (Experimental).")
-    parser.add_argument(
-        "--watch",
-        action="store_true",
-        help="Re-Compress if file changes (Experimental).",
-    )
-    parser.add_argument(
-        "--group",
-        action="store_true",
-        help="Group Alphabetically CSS Poperties by name.",
-    )
-    parser.add_argument(
-        "--justify",
-        action="store_true",
-        help="Right Justify CSS Properties (Experimental).",
-    )
-    parser.add_argument(
-        "--extraline",
-        action="store_true",
-        help="Add 1 New Line for each New Line (Experimental)",
-    )
     global args
-    args = parser.parse_args()
+    args = SimpleNamespace(fullpath=fullpath, prefix=prefix, timestamp=timestamp, quiet=quiet, after=after, before=before, watch=watch, group=group, justify=justify, extraline=extraline)
     return args
 
 
-def main() -> None:
-    "Run the command-line interface."
-    make_arguments_parser()
-    global log
-    if args.before and getoutput:
-        print(getoutput(str(args.before)))
-    if Path(args.fullpath).is_file() and args.fullpath.endswith((".css", ".scss")):
-        print("Target is a CSS / SCSS File.")
-        list_of_files = str(args.fullpath)
-        process_single_css_file(args.fullpath)
-    elif Path(args.fullpath).is_file() and args.fullpath.endswith((".htm", ".html")):
-        print("Target is a HTML File.")
-        list_of_files = str(args.fullpath)
-        process_single_html_file(args.fullpath)
-    elif Path(args.fullpath).is_dir():
-        print("Target is a Folder with CSS / SCSS, HTML, JS.")
-        print("Processing a whole Folder may take some time...")
-        list_of_files = walk2list(args.fullpath, (".css", ".scss", ".html", ".htm"), ".min.css")
-        pool = get_context("spawn").Pool(4)
-        pool.map(process_multiple_files, list_of_files)
-        pool.close()
-        pool.join()
-    else:
-        print("File or folder not found,or cant be read,or I/O Error.")
-        sys.exit(1)
-    if args.after and getoutput:
-        print(getoutput(str(args.after)))
-    print(f"\n {'-' * 40} \n Files Processed: {list_of_files}.")
-    print(f"Number of Files Processed:\n          {(len(list_of_files) if isinstance(list_of_files, tuple) else 1)}")
+app()
 
 
 if __name__ in "__main__":

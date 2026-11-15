@@ -43,6 +43,61 @@ from lxml import etree
 from lxml import html as lxml_html
 from lxml_html_clean import Cleaner
 from tinycss2.ast import StringToken
+from enum import StrEnum
+from types import SimpleNamespace
+from typing import Annotated
+
+import click
+import typer
+
+
+class Resource_handling(StrEnum):
+    'Enumerate the supported Resource handling values.'
+    inline = "inline"
+    external = "external"
+    mixed = "mixed"
+
+
+class Log_level(StrEnum):
+    'Enumerate the supported Log level values.'
+    TRACE = "TRACE"
+    DEBUG = "DEBUG"
+    INFO = "INFO"
+    SUCCESS = "SUCCESS"
+    WARNING = "WARNING"
+    ERROR = "ERROR"
+    CRITICAL = "CRITICAL"
+
+
+_STATE: dict[str, object] = {}
+
+
+class _Args(SimpleNamespace):
+    """argparse.Namespace look-alike: unknown attributes read as None."""
+
+    def __getattr__(self, name):
+        if name.startswith("__"):
+            raise AttributeError(name)
+        return None
+
+
+class _ParserShim:
+    """Stand-in for the removed argparse parser; hands back what Typer parsed."""
+
+    def parse_args(self, args=None, namespace=None):
+        'Parse args.'
+        return _Args(**_STATE)
+
+    def error(self, message):
+        raise typer.BadParameter(message)
+
+    def print_help(self, file=None):
+        'Print help.'
+        typer.echo(click.get_current_context().get_help(), file=file)
+
+    def print_usage(self, file=None):
+        'Print usage.'
+        typer.echo(click.get_current_context().get_usage(), file=file)
 
 
 class ConversionProfile(str, Enum):
@@ -2298,59 +2353,7 @@ class MHTMLConverter:
 
 def _build_argument_parser() -> argparse.ArgumentParser:
     """Create the standalone script's command-line argument parser."""
-    parser = argparse.ArgumentParser(description="Convert an MHTML archive to a self-contained HTML document.")
-    parser.add_argument("input", type=Path, help="Input .mhtml or .mht file")
-    parser.add_argument(
-        "-o",
-        "--output",
-        type=Path,
-        help="Output HTML path (default: beside input, with a .html suffix)",
-    )
-    parser.add_argument(
-        "--profile",
-        choices=[profile.value for profile in ConversionProfile],
-        default=ConversionProfile.STANDARD.value,
-        help="Conversion preset (default: standard)",
-    )
-    parser.add_argument(
-        "--fetch-external",
-        action="store_true",
-        help="Allow fetching referenced public HTTP(S) assets",
-    )
-    parser.add_argument(
-        "--allow-domain",
-        action="append",
-        default=[],
-        metavar="DOMAIN",
-        help="Restrict external fetches to this domain; may be repeated",
-    )
-    parser.add_argument(
-        "--block-domain",
-        action="append",
-        default=[],
-        metavar="DOMAIN",
-        help="Block external fetches to this domain; may be repeated",
-    )
-    parser.add_argument(
-        "--resource-handling",
-        choices=["inline", "external", "mixed"],
-        help="Override the profile's resource handling strategy",
-    )
-    parser.add_argument(
-        "--minify",
-        action="store_true",
-        help="Minify HTML and CSS output",
-    )
-    parser.add_argument(
-        "--log-level",
-        choices=["TRACE", "DEBUG", "INFO", "SUCCESS", "WARNING", "ERROR", "CRITICAL"],
-        help="Set Loguru's minimum log level",
-    )
-    parser.add_argument(
-        "--progress",
-        action="store_true",
-        help="Print conversion progress to standard error",
-    )
+    parser = _ParserShim()
     return parser
 
 
@@ -2388,5 +2391,35 @@ def main(argv: Sequence[str] | None = None) -> int:
     return 0
 
 
-if __name__ == "__main__":
+def _run() -> None:
     raise SystemExit(main())
+
+
+app = typer.Typer(
+    add_completion=False,
+    context_settings={"help_option_names": ["-h", "--help"]},
+    pretty_exceptions_show_locals=False,
+)
+
+
+@app.command(help="Convert an MHTML archive to a self-contained HTML document.")
+def cli(
+    input: Annotated[Path, typer.Argument(help="Input .mhtml or .mht file")],
+    output: Annotated[Path | None, typer.Option("-o", "--output", help="Output HTML path (default: beside input, with a .html suffix)")] = None,
+    profile: Annotated[str, typer.Option("--profile", help="Conversion preset (default: standard)")] = ConversionProfile.STANDARD.value,
+    fetch_external: Annotated[bool, typer.Option("--fetch-external", help="Allow fetching referenced public HTTP(S) assets")] = False,
+    allow_domain: Annotated[list[str], typer.Option("--allow-domain", help="Restrict external fetches to this domain; may be repeated", metavar="DOMAIN")] = [],
+    block_domain: Annotated[list[str], typer.Option("--block-domain", help="Block external fetches to this domain; may be repeated", metavar="DOMAIN")] = [],
+    resource_handling: Annotated[Resource_handling | None, typer.Option("--resource-handling", help="Override the profile's resource handling strategy")] = None,
+    minify: Annotated[bool, typer.Option("--minify", help="Minify HTML and CSS output")] = False,
+    log_level: Annotated[Log_level | None, typer.Option("--log-level", help="Set Loguru's minimum log level")] = None,
+    progress: Annotated[bool, typer.Option("--progress", help="Print conversion progress to standard error")] = False,
+) -> None:
+    if profile is not None and profile not in [profile.value for profile in ConversionProfile]:
+        raise typer.BadParameter(f"invalid choice: {profile!r} (choose from {[profile.value for profile in ConversionProfile]})")
+    _STATE.update(input=input, output=output, profile=profile, fetch_external=fetch_external, allow_domain=allow_domain, block_domain=block_domain, resource_handling=resource_handling, minify=minify, log_level=log_level, progress=progress)
+    _run()
+
+
+if __name__ == "__main__":
+    app()

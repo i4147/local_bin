@@ -2,7 +2,6 @@
 
 "Utilities for similarity check."
 
-import argparse
 import ast
 import collections
 import datetime as dt
@@ -19,6 +18,10 @@ import subprocess
 import tokenize
 import zlib
 from typing import Any, Sequence
+from types import SimpleNamespace
+from typing import Annotated
+
+import typer
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
@@ -1331,15 +1334,23 @@ def render_svg(rep: dict[str, Any], out: pathlib.Path) -> None:
     out.write_text("\n".join(svg) + "\n", encoding="utf-8")
 
 
-def main() -> int:
+app = typer.Typer(
+    add_completion=False,
+    context_settings={"help_option_names": ["-h", "--help"]},
+    pretty_exceptions_show_locals=False,
+)
+
+
+@app.command()
+def main(
+    root: Annotated[pathlib.Path, typer.Option("--root", help="repository root")] = ROOT,
+    out_dir: Annotated[pathlib.Path, typer.Option("--out-dir")] = pathlib.Path(__file__).resolve().parent,
+    threshold: Annotated[float, typer.Option("--threshold", help="minimum score for two scripts to share a group")] = 0.55,
+    no_svg: Annotated[bool, typer.Option("--no-svg")] = False,
+    no_md: Annotated[bool, typer.Option("--no-md")] = False,
+) -> int:
     "Run the command-line interface."
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--root", type=pathlib.Path, default=ROOT, help="repository root")
-    ap.add_argument("--out-dir", type=pathlib.Path, default=pathlib.Path(__file__).resolve().parent)
-    ap.add_argument("--threshold", type=float, default=0.55, help="minimum score for two scripts to share a group")
-    ap.add_argument("--no-svg", action="store_true")
-    ap.add_argument("--no-md", action="store_true")
-    args = ap.parse_args()
+    args = SimpleNamespace(root=root, out_dir=out_dir, threshold=threshold, no_svg=no_svg, no_md=no_md)
 
     out_dir: pathlib.Path = args.out_dir
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -1362,8 +1373,8 @@ def main() -> int:
         f"scripts; {s['singletons']} singletons",
         flush=True,
     )
-    return 0
+    return
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    app()

@@ -16,6 +16,56 @@ from pathlib import Path
 from typing import Any, Final
 
 from dotenv import load_dotenv
+from enum import StrEnum
+from types import SimpleNamespace
+from typing import Annotated
+
+import click
+import typer
+
+
+def _version_callback(value: bool) -> None:
+    if value:
+        typer.echo(f"scaffold {SCAFFOLD_VERSION}")
+        raise typer.Exit()
+
+
+class Readme_format(StrEnum):
+    'Enumerate the supported Readme format values.'
+    md = "md"
+    rst = "rst"
+
+
+_STATE: dict[str, object] = {}
+
+
+class _Args(SimpleNamespace):
+    """argparse.Namespace look-alike: unknown attributes read as None."""
+
+    def __getattr__(self, name):
+        if name.startswith("__"):
+            raise AttributeError(name)
+        return None
+
+
+class _ParserShim:
+    """Stand-in for the removed argparse parser; hands back what Typer parsed."""
+
+    def parse_args(self, args=None, namespace=None):
+        'Parse args.'
+        return _Args(**_STATE)
+
+    def error(self, message):
+        raise typer.BadParameter(message)
+
+    def print_help(self, file=None):
+        'Print help.'
+        typer.echo(click.get_current_context().get_help(), file=file)
+
+    def print_usage(self, file=None):
+        'Print usage.'
+        typer.echo(click.get_current_context().get_usage(), file=file)
+
 
 ENV_PATH: Final[Path] = Path.home() / ".env"
 GITHUB_API: Final[str] = "https://api.github.com"
@@ -1238,87 +1288,9 @@ def build_config_from_args(args: argparse.Namespace) -> ProjectConfig:
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
     "Parse args."
-    parser = argparse.ArgumentParser(
-        prog=Path(sys.argv[0]).name,
-        description=(
-            "Scaffold a new Python project or rename an existing one. "
-            "Dry-run by default; use --apply / -g for side effects."
-        ),
-    )
-    parser.add_argument("pkgname", nargs="?", help="Package name (or old name for --rename)")
-    parser.add_argument("-V", "--scaffold-version", action="version", version=f"scaffold {SCAFFOLD_VERSION}")
-    parser.add_argument("--rename", metavar="NEW", help="Rename the current (or given) project to NEW")
+    parser = _ParserShim()
 
-    layout_group = parser.add_mutually_exclusive_group()
-    layout_group.add_argument("-s", "--single-file", action="store_true", dest="single_file")
-    layout_group.add_argument("-c", "--cython", action="store_true", dest="cython")
-    layout_group.add_argument("--cython-package", action="store_true", dest="cython_package")
 
-    cli_group = parser.add_mutually_exclusive_group()
-    cli_group.add_argument("--cli", action="store_true", dest="cli")
-    cli_group.add_argument("--no-cli", action="store_true", dest="no_cli")
-
-    test_group = parser.add_mutually_exclusive_group()
-    test_group.add_argument("--tests", action="store_true", dest="tests")
-    test_group.add_argument("--no-tests", action="store_true", dest="no_tests")
-
-    pc_group = parser.add_mutually_exclusive_group()
-    pc_group.add_argument("--pre-commit", action="store_true", dest="pre_commit")
-    pc_group.add_argument("--no-pre-commit", action="store_true", dest="no_pre_commit")
-
-    parser.add_argument("-g", "--git", action="store_true", dest="git")
-    parser.add_argument("--author", default=None)
-    parser.add_argument("--email", default=None)
-    parser.add_argument("--description", default=None)
-    parser.add_argument("--version", default=None)
-    parser.add_argument("--python", default=None)
-    parser.add_argument("--license", default=None, choices=VALID_LICENSES)
-    parser.add_argument("--url", default=None)
-    parser.add_argument("--keywords", default=None, help="Comma-separated")
-    parser.add_argument("--readme-format", default=None, choices=("md", "rst"))
-    parser.add_argument("--build-backend", default=None, choices=VALID_BACKENDS, dest="backend")
-    parser.add_argument("--layout", default=None, choices=VALID_LAYOUTS)
-    parser.add_argument("--cli-framework", default=None, choices=VALID_CLI)
-    parser.add_argument("--tests-framework", default=None, choices=VALID_TEST_FRAMEWORKS)
-    parser.add_argument("--docs", default=None, choices=VALID_DOCS)
-    parser.add_argument("--ci", default=None, choices=VALID_CI)
-    parser.add_argument("--docker", action="store_true", dest="docker")
-    parser.add_argument("--py-typed", action="store_true", dest="py_typed")
-    parser.add_argument("--executable", action="store_true", dest="executable")
-    parser.add_argument("--module-vars", action="store_true", dest="module_vars")
-    parser.add_argument("--cython-annotate", action="store_true", dest="cython_annotate")
-    parser.add_argument("--cython-directives", default=None)
-    parser.add_argument("--cython-include-dirs", default=None)
-    parser.add_argument("--cython-pure-python", action="store_true", dest="cython_pure_python")
-    parser.add_argument("--repo-templates", action="store_true", dest="repo_templates")
-    parser.add_argument("--git-message", default=None, dest="git_message")
-    parser.add_argument("--initial-tag", default=None, dest="initial_tag")
-    parser.add_argument("--git-user-name", default=None, dest="git_user_name")
-    parser.add_argument("--git-user-email", default=None, dest="git_user_email")
-    parser.add_argument("--ssh-remote", action="store_true", dest="ssh_remote")
-    parser.add_argument("--no-scrub", action="store_true", dest="no_scrub")
-    parser.add_argument("--public", action="store_true", dest="public")
-    parser.add_argument("--github-description", default=None, dest="github_description")
-    parser.add_argument("--github-topics", default=None, dest="github_topics")
-    parser.add_argument("--github-org", default=None, dest="github_org")
-    parser.add_argument("--env-file", default=None, dest="env_file")
-    parser.add_argument("--token-env", default=None, dest="token_env")
-    parser.add_argument("--no-dotenv", action="store_true", dest="no_dotenv")
-    parser.add_argument("--check-auth", action="store_true", dest="check_auth")
-    parser.add_argument("--dry-run", action="store_true", dest="dry_run")
-    parser.add_argument("--force", action="store_true", dest="force")
-    parser.add_argument("--check-pypi", action="store_true", dest="check_pypi")
-    parser.add_argument("--require-git-clean", action="store_true", dest="require_git_clean")
-    parser.add_argument("-q", "--quiet", action="store_true", dest="quiet")
-    parser.add_argument("-v", "--verbose", action="store_true", dest="verbose")
-    parser.add_argument("--json", action="store_true", dest="json_output")
-    parser.add_argument("--no-color", action="store_true", dest="no_color")
-    parser.add_argument("--tree", action="store_true", dest="tree")
-    parser.add_argument("--next-steps", action="store_true", dest="next_steps")
-    parser.add_argument("--interactive", action="store_true", dest="interactive")
-    parser.add_argument("--config", default=None, dest="config")
-    parser.add_argument("--save-config", action="store_true", dest="save_config")
-    parser.add_argument("--profile", default=None, dest="profile")
     return parser.parse_args(argv)
 
 
@@ -1416,5 +1388,110 @@ def main(argv: list[str] | None = None) -> int:
         user = get_
 
 
-if __name__ == "__main__":
+def _run() -> None:
     raise SystemExit(main())
+
+
+app = typer.Typer(
+    add_completion=False,
+    context_settings={"help_option_names": ["-h", "--help"]},
+    pretty_exceptions_show_locals=False,
+)
+
+
+@app.command(help="Scaffold a new Python project or rename an existing one. Dry-run by default; use --apply / -g for side effects.")
+def cli(
+    pkgname: Annotated[str | None, typer.Argument(help="Package name (or old name for --rename)")] = None,
+    scaffold_version: Annotated[bool, typer.Option("-V", "--scaffold-version", callback=_version_callback, is_eager=True, help="show program's version number and exit")] = False,
+    rename: Annotated[str | None, typer.Option("--rename", help="Rename the current (or given) project to NEW", metavar="NEW")] = None,
+    single_file: Annotated[bool, typer.Option("-s", "--single-file")] = False,
+    cython: Annotated[bool, typer.Option("-c", "--cython")] = False,
+    cython_package: Annotated[bool, typer.Option("--cython-package")] = False,
+    cli: Annotated[bool, typer.Option("--cli")] = False,
+    no_cli: Annotated[bool, typer.Option("--no-cli")] = False,
+    tests: Annotated[bool, typer.Option("--tests")] = False,
+    no_tests: Annotated[bool, typer.Option("--no-tests")] = False,
+    pre_commit: Annotated[bool, typer.Option("--pre-commit")] = False,
+    no_pre_commit: Annotated[bool, typer.Option("--no-pre-commit")] = False,
+    git: Annotated[bool, typer.Option("-g", "--git")] = False,
+    author: Annotated[str | None, typer.Option("--author")] = None,
+    email: Annotated[str | None, typer.Option("--email")] = None,
+    description: Annotated[str | None, typer.Option("--description")] = None,
+    version: Annotated[str | None, typer.Option("--version")] = None,
+    python: Annotated[str | None, typer.Option("--python")] = None,
+    license: Annotated[str | None, typer.Option("--license")] = None,
+    url: Annotated[str | None, typer.Option("--url")] = None,
+    keywords: Annotated[str | None, typer.Option("--keywords", help="Comma-separated")] = None,
+    readme_format: Annotated[Readme_format | None, typer.Option("--readme-format")] = None,
+    backend: Annotated[str | None, typer.Option("--build-backend")] = None,
+    layout: Annotated[str | None, typer.Option("--layout")] = None,
+    cli_framework: Annotated[str | None, typer.Option("--cli-framework")] = None,
+    tests_framework: Annotated[str | None, typer.Option("--tests-framework")] = None,
+    docs: Annotated[str | None, typer.Option("--docs")] = None,
+    ci: Annotated[str | None, typer.Option("--ci")] = None,
+    docker: Annotated[bool, typer.Option("--docker")] = False,
+    py_typed: Annotated[bool, typer.Option("--py-typed")] = False,
+    executable: Annotated[bool, typer.Option("--executable")] = False,
+    module_vars: Annotated[bool, typer.Option("--module-vars")] = False,
+    cython_annotate: Annotated[bool, typer.Option("--cython-annotate")] = False,
+    cython_directives: Annotated[str | None, typer.Option("--cython-directives")] = None,
+    cython_include_dirs: Annotated[str | None, typer.Option("--cython-include-dirs")] = None,
+    cython_pure_python: Annotated[bool, typer.Option("--cython-pure-python")] = False,
+    repo_templates: Annotated[bool, typer.Option("--repo-templates")] = False,
+    git_message: Annotated[str | None, typer.Option("--git-message")] = None,
+    initial_tag: Annotated[str | None, typer.Option("--initial-tag")] = None,
+    git_user_name: Annotated[str | None, typer.Option("--git-user-name")] = None,
+    git_user_email: Annotated[str | None, typer.Option("--git-user-email")] = None,
+    ssh_remote: Annotated[bool, typer.Option("--ssh-remote")] = False,
+    no_scrub: Annotated[bool, typer.Option("--no-scrub")] = False,
+    public: Annotated[bool, typer.Option("--public")] = False,
+    github_description: Annotated[str | None, typer.Option("--github-description")] = None,
+    github_topics: Annotated[str | None, typer.Option("--github-topics")] = None,
+    github_org: Annotated[str | None, typer.Option("--github-org")] = None,
+    env_file: Annotated[str | None, typer.Option("--env-file")] = None,
+    token_env: Annotated[str | None, typer.Option("--token-env")] = None,
+    no_dotenv: Annotated[bool, typer.Option("--no-dotenv")] = False,
+    check_auth: Annotated[bool, typer.Option("--check-auth")] = False,
+    dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
+    force: Annotated[bool, typer.Option("--force")] = False,
+    check_pypi: Annotated[bool, typer.Option("--check-pypi")] = False,
+    require_git_clean: Annotated[bool, typer.Option("--require-git-clean")] = False,
+    quiet: Annotated[bool, typer.Option("-q", "--quiet")] = False,
+    verbose: Annotated[bool, typer.Option("-v", "--verbose")] = False,
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+    no_color: Annotated[bool, typer.Option("--no-color")] = False,
+    tree: Annotated[bool, typer.Option("--tree")] = False,
+    next_steps: Annotated[bool, typer.Option("--next-steps")] = False,
+    interactive: Annotated[bool, typer.Option("--interactive")] = False,
+    config: Annotated[str | None, typer.Option("--config")] = None,
+    save_config: Annotated[bool, typer.Option("--save-config")] = False,
+    profile: Annotated[str | None, typer.Option("--profile")] = None,
+) -> None:
+    if sum((bool(single_file), bool(cython), bool(cython_package),)) > 1:
+        raise typer.BadParameter("-s, -c, --cython-package are mutually exclusive")
+    if sum((bool(cli), bool(no_cli),)) > 1:
+        raise typer.BadParameter("--cli, --no-cli are mutually exclusive")
+    if sum((bool(tests), bool(no_tests),)) > 1:
+        raise typer.BadParameter("--tests, --no-tests are mutually exclusive")
+    if sum((bool(pre_commit), bool(no_pre_commit),)) > 1:
+        raise typer.BadParameter("--pre-commit, --no-pre-commit are mutually exclusive")
+    if license is not None and license not in VALID_LICENSES:
+        raise typer.BadParameter(f"invalid choice: {license!r} (choose from {VALID_LICENSES})")
+    if backend is not None and backend not in VALID_BACKENDS:
+        raise typer.BadParameter(f"invalid choice: {backend!r} (choose from {VALID_BACKENDS})")
+    if layout is not None and layout not in VALID_LAYOUTS:
+        raise typer.BadParameter(f"invalid choice: {layout!r} (choose from {VALID_LAYOUTS})")
+    if cli_framework is not None and cli_framework not in VALID_CLI:
+        raise typer.BadParameter(f"invalid choice: {cli_framework!r} (choose from {VALID_CLI})")
+    if tests_framework is not None and tests_framework not in VALID_TEST_FRAMEWORKS:
+        raise typer.BadParameter(f"invalid choice: {tests_framework!r} (choose from {VALID_TEST_FRAMEWORKS})")
+    if docs is not None and docs not in VALID_DOCS:
+        raise typer.BadParameter(f"invalid choice: {docs!r} (choose from {VALID_DOCS})")
+    if ci is not None and ci not in VALID_CI:
+        raise typer.BadParameter(f"invalid choice: {ci!r} (choose from {VALID_CI})")
+    _STATE.update(pkgname=pkgname, rename=rename, single_file=single_file, cython=cython, cython_package=cython_package, cli=cli, no_cli=no_cli, tests=tests, no_tests=no_tests, pre_commit=pre_commit, no_pre_commit=no_pre_commit, git=git, author=author, email=email, description=description, version=version, python=python, license=license, url=url, keywords=keywords, readme_format=readme_format, backend=backend, layout=layout, cli_framework=cli_framework, tests_framework=tests_framework, docs=docs, ci=ci, docker=docker, py_typed=py_typed, executable=executable, module_vars=module_vars, cython_annotate=cython_annotate, cython_directives=cython_directives, cython_include_dirs=cython_include_dirs, cython_pure_python=cython_pure_python, repo_templates=repo_templates, git_message=git_message, initial_tag=initial_tag, git_user_name=git_user_name, git_user_email=git_user_email, ssh_remote=ssh_remote, no_scrub=no_scrub, public=public, github_description=github_description, github_topics=github_topics, github_org=github_org, env_file=env_file, token_env=token_env, no_dotenv=no_dotenv, check_auth=check_auth, dry_run=dry_run, force=force, check_pypi=check_pypi, require_git_clean=require_git_clean, quiet=quiet, verbose=verbose, json_output=json_output, no_color=no_color, tree=tree, next_steps=next_steps, interactive=interactive, config=config, save_config=save_config, profile=profile)
+    _run()
+
+
+if __name__ == "__main__":
+    app()

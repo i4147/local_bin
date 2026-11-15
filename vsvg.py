@@ -34,7 +34,6 @@ Environment: Linux, Python 3.12+.  No hard dependencies.
 
 from __future__ import annotations
 
-import argparse
 import base64
 import fcntl
 import glob
@@ -52,6 +51,41 @@ import xml.etree.ElementTree as ET
 import zlib
 from array import array
 from collections import Counter
+from enum import StrEnum
+from types import SimpleNamespace
+from typing import Annotated
+
+import typer
+
+
+class Renderer(StrEnum):
+    'Enumerate the supported Renderer values.'
+    auto = "auto"
+    blocks = "blocks"
+    halfblock = "halfblock"
+    sixel = "sixel"
+    kitty = "kitty"
+
+
+class Engine(StrEnum):
+    'Enumerate the supported Engine values.'
+    auto = "auto"
+    cairosvg = "cairosvg"
+    builtin = "builtin"
+
+
+class Color(StrEnum):
+    'Enumerate the supported Color values.'
+    auto = "auto"
+    truecolor = "truecolor"
+    v_256 = "256"
+
+
+def _version_callback(value: bool) -> None:
+    if value:
+        typer.echo(f"svgview.py {__version__}")
+        raise typer.Exit()
+
 
 __version__ = "1.0.0"
 
@@ -2165,50 +2199,31 @@ def export_png(args, status, data, name):
     return encode_png(tw, th, rgba)
 
 
-def main(argv=None):
+app = typer.Typer(
+    add_completion=False,
+    context_settings={"help_option_names": ["-h", "--help"]},
+    pretty_exceptions_show_locals=False,
+)
+
+
+@app.command(help="One-shot terminal SVG viewer with PNG auto-save.")
+def main(
+    files: Annotated[list[str], typer.Argument(help="SVG file(s), glob patterns allowed", metavar="SVG")],
+    renderer: Annotated[Renderer, typer.Option("--renderer", help="terminal output backend (default: auto-detect)")] = Renderer.auto,
+    engine: Annotated[Engine, typer.Option("--engine", help="rendering engine (default: cairosvg if importable)")] = Engine.auto,
+    bg: Annotated[str | None, typer.Option("--bg", help="background color for transparency (name or hex); 'none' keeps alpha in saved PNGs only", metavar="COLOR")] = None,
+    png: Annotated[str | None, typer.Option("--png", help="save PNG to exactly this path (single input only)", metavar="PATH")] = None,
+    png_width: Annotated[int | None, typer.Option("--png-width", help="width of saved PNGs (default: intrinsic, capped at 512 px on the long side)", metavar="PX")] = None,
+    no_save: Annotated[bool, typer.Option("--no-save", help="do not auto-save <file>.svg.png")] = False,
+    ss: Annotated[int, typer.Option("--ss", help="supersampling factor for the built-in engine", metavar="1-5")] = 3,
+    width: Annotated[int | None, typer.Option("--width", help="maximum terminal columns to use", metavar="COLS")] = None,
+    color: Annotated[Color, typer.Option("--color", help="color depth for half-block output")] = Color.auto,
+    quiet: Annotated[bool, typer.Option("-q", "--quiet", help="suppress status messages on stderr")] = False,
+    verbose: Annotated[bool, typer.Option("--verbose", help="extra diagnostics on stderr")] = False,
+    version: Annotated[bool, typer.Option("--version", callback=_version_callback, is_eager=True, help="show program's version number and exit")] = False,
+):
     "Run the command-line interface."
-    ap = argparse.ArgumentParser(
-        prog="svgview.py",
-        description="One-shot terminal SVG viewer with PNG auto-save.",
-        epilog=EPILOG,
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
-    ap.add_argument("files", nargs="+", metavar="SVG", help="SVG file(s), glob patterns allowed")
-    ap.add_argument(
-        "--renderer",
-        default="auto",
-        choices=("auto", "blocks", "halfblock", "sixel", "kitty"),
-        help="terminal output backend (default: auto-detect)",
-    )
-    ap.add_argument(
-        "--engine",
-        default="auto",
-        choices=("auto", "cairosvg", "builtin"),
-        help="rendering engine (default: cairosvg if importable)",
-    )
-    ap.add_argument(
-        "--bg",
-        default=None,
-        metavar="COLOR",
-        help="background color for transparency (name or hex); 'none' keeps alpha in saved PNGs only",
-    )
-    ap.add_argument("--png", metavar="PATH", help="save PNG to exactly this path (single input only)")
-    ap.add_argument(
-        "--png-width",
-        type=int,
-        metavar="PX",
-        help="width of saved PNGs (default: intrinsic, capped at 512 px on the long side)",
-    )
-    ap.add_argument("--no-save", action="store_true", help="do not auto-save <file>.svg.png")
-    ap.add_argument("--ss", type=int, default=3, metavar="1-5", help="supersampling factor for the built-in engine")
-    ap.add_argument("--width", type=int, metavar="COLS", help="maximum terminal columns to use")
-    ap.add_argument(
-        "--color", default="auto", choices=("auto", "truecolor", "256"), help="color depth for half-block output"
-    )
-    ap.add_argument("-q", "--quiet", action="store_true", help="suppress status messages on stderr")
-    ap.add_argument("--verbose", action="store_true", help="extra diagnostics on stderr")
-    ap.add_argument("--version", action="version", version=f"svgview.py {__version__}")
-    args = ap.parse_args(argv)
+    args = SimpleNamespace(files=files, renderer=renderer, engine=engine, bg=bg, png=png, png_width=png_width, no_save=no_save, ss=ss, width=width, color=color, quiet=quiet, verbose=verbose)
 
     # expand globs (shell may have done it already)
     files = []
@@ -2219,10 +2234,10 @@ def main(argv=None):
         else:
             files.append(pat)
     if args.png and len(files) > 1:
-        ap.error("--png needs exactly one input file")
+        raise typer.BadParameter("--png needs exactly one input file")
 
     if args.ss < 1 or args.ss > 5:
-        ap.error("--ss must be between 1 and 5")
+        raise typer.BadParameter("--ss must be between 1 and 5")
 
     term = TermInfo()
     renderer = args.renderer
@@ -2249,7 +2264,7 @@ def main(argv=None):
                 c = parse_color(args.bg)
                 bg = (c[0], c[1], c[2])
             except ValueError:
-                ap.error(f"unknown --bg color {args.bg!r}")
+                raise typer.BadParameter(f"unknown --bg color {args.bg!r}")
 
     cs = load_cairosvg() if args.engine in ("auto", "cairosvg") else None
     status = {"cairosvg": cs}
@@ -2284,7 +2299,7 @@ def main(argv=None):
             sys.stdout.buffer.write(out)
             sys.stdout.buffer.flush()
         except BrokenPipeError:
-            return 0
+            return
 
         png_path = None
         try:
@@ -2329,4 +2344,4 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    app()

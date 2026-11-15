@@ -12,6 +12,42 @@ from pathlib import Path
 from typing import NamedTuple
 
 from dh import get_files, runcmd
+from types import SimpleNamespace
+from typing import Annotated
+
+import click
+import typer
+
+
+_STATE: dict[str, object] = {}
+
+
+class _Args(SimpleNamespace):
+    """argparse.Namespace look-alike: unknown attributes read as None."""
+
+    def __getattr__(self, name):
+        if name.startswith("__"):
+            raise AttributeError(name)
+        return None
+
+
+class _ParserShim:
+    """Stand-in for the removed argparse parser; hands back what Typer parsed."""
+
+    def parse_args(self, args=None, namespace=None):
+        'Parse args.'
+        return _Args(**_STATE)
+
+    def error(self, message):
+        raise typer.BadParameter(message)
+
+    def print_help(self, file=None):
+        'Print help.'
+        typer.echo(click.get_current_context().get_help(), file=file)
+
+    def print_usage(self, file=None):
+        'Print usage.'
+        typer.echo(click.get_current_context().get_usage(), file=file)
 
 
 class FileResult(NamedTuple):
@@ -104,19 +140,7 @@ def find_html_files(directory: Path) -> list[Path]:
 
 def parse_args() -> argparse.Namespace:
     "Parse args."
-    parser = argparse.ArgumentParser(description="Minify HTML files in the current directory in place.")
-    parser.add_argument(
-        "--binary",
-        default="min-html",
-        help="min-html executable name or path (default: min-html)",
-    )
-    parser.add_argument(
-        "-j",
-        "--workers",
-        type=int,
-        default=max(1, os.cpu_count() or 1),
-        help="number of files to process concurrently",
-    )
+    parser = _ParserShim()
     return parser.parse_args()
 
 
@@ -167,5 +191,25 @@ def main() -> int:
     return 1 if has_errors else 0
 
 
-if __name__ == "__main__":
+def _run() -> None:
     raise SystemExit(main())
+
+
+app = typer.Typer(
+    add_completion=False,
+    context_settings={"help_option_names": ["-h", "--help"]},
+    pretty_exceptions_show_locals=False,
+)
+
+
+@app.command(help="Minify HTML files in the current directory in place.")
+def cli(
+    binary: Annotated[str, typer.Option("--binary", help="min-html executable name or path (default: min-html)")] = "min-html",
+    workers: Annotated[int, typer.Option("-j", "--workers", help="number of files to process concurrently")] = max(1, os.cpu_count() or 1),
+) -> None:
+    _STATE.update(binary=binary, workers=workers)
+    _run()
+
+
+if __name__ == "__main__":
+    app()
