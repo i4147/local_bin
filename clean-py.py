@@ -72,7 +72,7 @@ except ImportError:
     _HAS_WATCHDOG = False
 
 
-TARGET_VERSIONS: Dict[str, Any] = {}
+TARGET_VERSIONS: dict[str, Any] = {}
 if _HAS_TARGET_VERSION:
     for _name in (
         "PY33",
@@ -90,7 +90,7 @@ if _HAS_TARGET_VERSION:
         if hasattr(TargetVersion, _name):
             TARGET_VERSIONS[_name.lower()] = getattr(TargetVersion, _name)
 
-PROFILES: Dict[str, Dict[str, Any]] = {
+PROFILES: dict[str, dict[str, Any]] = {
     "default": {},
     "strict": {
         "line_length": 88,
@@ -162,11 +162,11 @@ class Config:
     verbose: bool = False
     cache: bool = False
     include: Optional[str] = None
-    exclude: Tuple[str, ...] = ()
+    exclude: tuple[str, ...] = ()
     respect_gitignore: bool = False
     follow_symlinks: bool = False
     max_depth: Optional[int] = None
-    extensions: Tuple[str, ...] = (".py", ".pyi", ".ipynb")
+    extensions: tuple[str, ...] = (".py", ".pyi", ".ipynb")
     notebook_version: Optional[int] = None
 
 
@@ -178,7 +178,7 @@ class Stats:
     changed: int = 0
     unchanged: int = 0
     errors: int = 0
-    files: List[Dict[str, Any]] = field(default_factory=list)
+    files: list[dict[str, Any]] = field(default_factory=list)
 
 
 def setup_logging(verbose: bool, quiet: bool, no_color: bool) -> None:
@@ -202,7 +202,7 @@ def _has_fmt_off(source: str) -> bool:
 
 
 def _build_file_mode(config: Config) -> FileMode:
-    kwargs: Dict[str, Any] = {
+    kwargs: dict[str, Any] = {
         "line_length": config.line_length,
         "is_pyi": False,
         "string_normalization": config.string_normalization,
@@ -215,10 +215,10 @@ def _build_file_mode(config: Config) -> FileMode:
     return FileMode(**kwargs)
 
 
-def remove_duplicate_cells(cells: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def remove_duplicate_cells(cells: list[dict[str, Any]]) -> list[dict[str, Any]]:
     "Remove duplicate cells."
-    seen: Set[str] = set()
-    result: List[Dict[str, Any]] = []
+    seen: set[str] = set()
+    result: list[dict[str, Any]] = []
     for cell in cells:
         src = cell.get("source", "")
         key = "".join(src) if isinstance(src, list) else str(src)
@@ -229,9 +229,9 @@ def remove_duplicate_cells(cells: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return result
 
 
-def remove_empty_cells(cells: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def remove_empty_cells(cells: list[dict[str, Any]]) -> list[dict[str, Any]]:
     "Remove empty cells."
-    result: List[Dict[str, Any]] = []
+    result: list[dict[str, Any]] = []
     for cell in cells:
         src = cell.get("source", "")
         text = "".join(src) if isinstance(src, list) else str(src)
@@ -243,7 +243,7 @@ def remove_empty_cells(cells: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 def remove_magics(source: str) -> str:
     "Remove magics."
     invalid = ("%", "?")
-    lines: List[str] = []
+    lines: list[str] = []
     for line in source.split("\n"):
         if not line:
             continue
@@ -303,7 +303,7 @@ def _print_diff(path: Path, old: str, new: str) -> None:
         console.print(line.rstrip("\n"), highlight=False, markup=False)
 
 
-def _split_header(source: str, config: Config) -> Tuple[str, str]:
+def _split_header(source: str, config: Config) -> tuple[str, str]:
     if not config.skip_header:
         return "", source
     if source.startswith("#!"):
@@ -372,7 +372,7 @@ def clear_ipynb_output(ipynb_file_path: Path) -> None:
     )
 
 
-def clean_ipynb_cell(cell_dict: Dict[str, Any], config: Config) -> Dict[str, Any]:
+def clean_ipynb_cell(cell_dict: dict[str, Any], config: Config) -> dict[str, Any]:
     "Clean ipynb cell."
     if cell_dict.get("cell_type") != "code":
         return cell_dict
@@ -414,7 +414,7 @@ def clean_ipynb(ipynb_file_path: Path, config: Config) -> bool:
             log.warning("Unable to clear outputs for %s: %s", ipynb_file_path, e)
 
     with open(ipynb_file_path, encoding="utf-8") as fh:
-        ipynb_dict: Dict[str, Any] = json.load(fh)
+        ipynb_dict: dict[str, Any] = json.load(fh)
 
     if config.dedupe_cells:
         ipynb_dict["cells"] = remove_duplicate_cells(ipynb_dict["cells"])
@@ -461,9 +461,9 @@ def _load_gitignore(root: Path) -> Optional[Any]:
     return _pathspec.PathSpec.from_lines("gitwildmatch", lines)
 
 
-def discover_files(paths: Sequence[Path], config: Config) -> List[Path]:
+def discover_files(paths: Sequence[Path], config: Config) -> list[Path]:
     "Discover files."
-    result: List[Path] = []
+    result: list[Path] = []
     for root in paths:
         if root.is_file():
             result.append(root)
@@ -495,7 +495,7 @@ def _cache_key(path: Path) -> str:
     return f"{path}:{st.st_mtime_ns}:{st.st_size}"
 
 
-def _load_cache(cache_file: Path) -> Set[str]:
+def _load_cache(cache_file: Path) -> set[str]:
     if not cache_file.exists():
         return set()
     try:
@@ -504,14 +504,14 @@ def _load_cache(cache_file: Path) -> Set[str]:
         return set()
 
 
-def _save_cache(cache_file: Path, keys: Set[str]) -> None:
+def _save_cache(cache_file: Path, keys: set[str]) -> None:
     try:
         cache_file.write_text(json.dumps(sorted(keys)), encoding="utf-8")
     except Exception as e:
         log.warning("Unable to save cache: %s", e)
 
 
-def load_config_file(path: Path) -> Dict[str, Any]:
+def load_config_file(path: Path) -> dict[str, Any]:
     "Load config file."
     if tomllib is None or not path.exists():
         return {}
@@ -541,7 +541,7 @@ def find_config_file(start: Path) -> Optional[Path]:
     return None
 
 
-def _git_changed_files(rev: str, root: Path) -> List[Path]:
+def _git_changed_files(rev: str, root: Path) -> list[Path]:
     try:
         result = run(
             ["git", "-C", str(root), "diff", "--name-only", "--diff-filter=ACMR", rev],
@@ -642,7 +642,7 @@ app = typer.Typer(
 
 @app.command()
 def main(
-    path: Optional[List[Path]] = typer.Argument(None, help="File or directory to clean"),
+    path: Optional[list[Path]] = typer.Argument(None, help="File or directory to clean"),
     stdin: bool = typer.Option(False, "--stdin", help="Read source from stdin, write to stdout"),
     py: bool = typer.Option(True, help="Apply to .py source"),
     ipynb: bool = typer.Option(True, help="Apply to .ipynb source"),
@@ -681,7 +681,7 @@ def main(
     no_parallel: bool = typer.Option(False, "--no-parallel"),
     cache: bool = typer.Option(False, "--cache/--no-cache"),
     include: Optional[str] = typer.Option(None, "--include"),
-    exclude: List[str] = typer.Option([], "--exclude"),
+    exclude: list[str] = typer.Option([], "--exclude"),
     respect_gitignore: bool = typer.Option(False, "--respect-gitignore"),
     follow_symlinks: bool = typer.Option(False, "--follow-symlinks/--no-follow-symlinks"),
     max_depth: Optional[int] = typer.Option(None, "--max-depth"),
@@ -698,7 +698,7 @@ def main(
     require_changes: bool = typer.Option(False, "--require-changes"),
     since: Optional[str] = typer.Option(None, "--since"),
     watch: bool = typer.Option(False, "--watch"),
-    linters: List[str] = typer.Option([], "--linters"),
+    linters: list[str] = typer.Option([], "--linters"),
     doctor: bool = typer.Option(False, "--doctor"),
 ) -> None:
     "Run the command-line interface."
@@ -708,7 +708,7 @@ def main(
         run_doctor()
         return
 
-    paths: List[Path] = list(path or [])
+    paths: list[Path] = list(path or [])
 
     if not paths and not stdin:
         console.print("[red]Error: No paths provided[/red]")
@@ -804,7 +804,7 @@ def main(
 
     cache_file = Path(tempfile.gettempdir()) / "clean-py-cache.json"
     cached_keys = _load_cache(cache_file) if cfg.cache else set()
-    new_keys: Set[str] = set()
+    new_keys: set[str] = set()
     stats = Stats()
 
     def process_file(f: Path) -> None:

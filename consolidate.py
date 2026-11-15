@@ -9,7 +9,7 @@ import time
 import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import NoReturn, Optional, Union
+from typing import NoReturn, Optional
 
 from loguru import logger
 from dh import MAX_WORKERS
@@ -19,7 +19,7 @@ MERGED_FILE_HEADER_RE: re.Pattern[str] = re.compile(r"^#\s*File:\s*(.+?)\s*$", r
 STDLIB_MODULES: frozenset[str] = frozenset(getattr(sys, "stdlib_module_names", ()))
 ModuleKey = tuple[str, ...]
 Renames = dict[tuple[ModuleKey, str], str]
-FuncNode = Union[ast.FunctionDef, ast.AsyncFunctionDef]
+FuncNode = ast.FunctionDef | ast.AsyncFunctionDef
 FUNC_NODES: tuple[type, ...] = (ast.FunctionDef, ast.AsyncFunctionDef)
 DEFINITION_NODES: tuple[type, ...] = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
 _DEF_NODES: tuple[type, ...] = (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)

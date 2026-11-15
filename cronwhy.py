@@ -53,7 +53,7 @@ def humanize_list(values: Sequence[int], names: Optional[dict] = None) -> str:
 
 
 def field_summary(
-    field_name: str, values: Set[int], *, names: Optional[dict] = None, use_wildcard: bool = False
+    field_name: str, values: set[int], *, names: Optional[dict] = None, use_wildcard: bool = False
 ) -> str:
     ordered = sorted(values)
     if field_name == "minute":
@@ -112,10 +112,10 @@ def parse_token(field_name: str, token: str) -> int:
     raise ValueError(f"Unsupported token '{token}' in field '{field_name}'")
 
 
-def parse_field(field_name: str, text: str) -> Set[int]:
+def parse_field(field_name: str, text: str) -> set[int]:
     "Parse field."
     lo, hi = FIELD_RANGES[field_name]
-    values: Set[int] = set()
+    values: set[int] = set()
 
     if text == "*":
         return set(range(lo, hi + 1))
@@ -171,11 +171,11 @@ def parse_field(field_name: str, text: str) -> Set[int]:
 class CronSpec:
     "Store minute, hour, day_of_month, month, day_of_week and related state."
 
-    minute: Set[int]
-    hour: Set[int]
-    day_of_month: Set[int]
-    month: Set[int]
-    day_of_week: Set[int]
+    minute: set[int]
+    hour: set[int]
+    day_of_month: set[int]
+    month: set[int]
+    day_of_week: set[int]
     raw: str
 
     @property
@@ -266,7 +266,7 @@ def explain_spec(spec: CronSpec) -> str:
 
 def iter_next_runs(
     spec: CronSpec, tz: ZoneInfo, after: Optional[datetime] = None, count: int = 5, max_steps: int = 1_000_000
-) -> List[datetime]:
+) -> list[datetime]:
     "Yield next runs from the supplied input."
     if after is None:
         after = datetime.now(tz)
@@ -276,7 +276,7 @@ def iter_next_runs(
     if candidate <= after:
         candidate += timedelta(minutes=1)
 
-    results: List[datetime] = []
+    results: list[datetime] = []
     steps = 0
     while steps < max_steps and len(results) < count:
         if matches(spec, candidate):
@@ -299,8 +299,8 @@ def is_dst_quirky(dt: datetime, tz: ZoneInfo) -> bool:
         return False
 
 
-def dump_cron_file(path: str) -> List[str]:
-    entries: List[str] = []
+def dump_cron_file(path: str) -> list[str]:
+    entries: list[str] = []
     with open(path, "r", encoding="utf-8") as fh:
         for raw_line in fh:
             line = raw_line.strip()
@@ -316,13 +316,13 @@ def dump_cron_file(path: str) -> List[str]:
     return entries
 
 
-def detect_overlaps(specs: Sequence[CronSpec], tz: ZoneInfo, horizon_days: int = 30) -> List[dict]:
+def detect_overlaps(specs: Sequence[CronSpec], tz: ZoneInfo, horizon_days: int = 30) -> list[dict]:
     "Detect overlaps."
     now = datetime.now(tz)
     horizon_minutes = horizon_days * 24 * 60
-    results: List[dict] = []
+    results: list[dict] = []
 
-    occurrences_by_spec: List[Set[datetime]] = []
+    occurrences_by_spec: list[set[datetime]] = []
     for spec in specs:
         times = set()
         for dt in iter_next_runs(spec, tz, after=now, count=200, max_steps=horizon_minutes):

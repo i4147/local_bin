@@ -851,9 +851,9 @@ class _Rewriter(cst.CSTTransformer):
 
     def _rewrite_declaration(
         self,
-        original_node: Union[cst.Global, cst.Nonlocal],
-        updated_node: Union[cst.Global, cst.Nonlocal],
-    ) -> Union[cst.Global, cst.Nonlocal]:
+        original_node: cst.Global | cst.Nonlocal,
+        updated_node: cst.Global | cst.Nonlocal,
+    ) -> cst.Global | cst.Nonlocal:
         try:
             scope = self.get_metadata(ScopeProvider, original_node)
         except KeyError:
@@ -899,7 +899,7 @@ class _Rewriter(cst.CSTTransformer):
 
 
 def shorten_names(
-    path: Union[str, Path],
+    path: str | Path,
     backup: bool = True,
     *,
     dry_run: bool = False,

@@ -2770,7 +2770,7 @@ class Resource:
     id: str
     content_type: Optional[str] = None
     transfer_encoding: Optional[str] = None
-    data: Union[str, bytes] = ""
+    data: str | bytes = ""
     raw_data: Optional[bytes] = None
     used: bool = False
     not_found: bool = False
@@ -2865,9 +2865,7 @@ def _parse_header_line(line_string: str, obj: dict, header_key: Optional[str]) -
     return header_key
 
 
-def parse_mhtml(
-    mhtml: Union[str, bytes, bytearray], config: Optional[dict] = None, context: Optional[dict] = None
-) -> Mhtml:
+def parse_mhtml(mhtml: str | bytes | bytearray, config: Optional[dict] = None, context: Optional[dict] = None) -> Mhtml:
     """Parse MHTML data into the structured :class:`Mhtml` representation."""
     if isinstance(mhtml, str):
         mhtml = encode_string(mhtml)
@@ -4292,14 +4290,14 @@ class ConvertConfig:
         return ConvertConfig(**data)
 
 
-def parse(data: Union[str, bytes, bytearray, Path]) -> Mhtml:
+def parse(data: str | bytes | bytearray | Path) -> Mhtml:
     """Parse MHTML data (bytes, string or file path) into an :class:`Mhtml`."""
     if isinstance(data, Path):
         data = data.read_bytes()
     return parse_mhtml(data)
 
 
-def convert(mhtml: Union[str, bytes, bytearray, Path, Mhtml], config: Optional[ConvertConfig] = None) -> "PageData":
+def convert(mhtml: str | bytes | bytearray | Path | Mhtml, config: Optional[ConvertConfig] = None) -> "PageData":
     """Convert an MHTML archive into a single HTML page.
 
     Returns a :class:`PageData` with the HTML, title, favicons, the
