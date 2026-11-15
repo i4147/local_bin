@@ -196,6 +196,7 @@ def _make_replacement_fn(rule: Rule, literal: bool) -> Callable[[re.Match[str]],
         if rule.capitalize:
             text = text.capitalize()
         return text
+
     return fn
 
 
@@ -279,13 +280,11 @@ def _file_allowed(path: Path, opts: Options, root: Path) -> bool:
     except ValueError:
         rel = str(path)
     if opts.globs and not any(
-        fnmatch.fnmatch(name, g) or fnmatch.fnmatch(rel, g) or fnmatch.fnmatch(str(path), g)
-        for g in opts.globs
+        fnmatch.fnmatch(name, g) or fnmatch.fnmatch(rel, g) or fnmatch.fnmatch(str(path), g) for g in opts.globs
     ):
         return False
     if opts.excludes and any(
-        fnmatch.fnmatch(name, e) or fnmatch.fnmatch(rel, e) or fnmatch.fnmatch(str(path), e)
-        for e in opts.excludes
+        fnmatch.fnmatch(name, e) or fnmatch.fnmatch(rel, e) or fnmatch.fnmatch(str(path), e) for e in opts.excludes
     ):
         return False
     if opts.types:
@@ -530,7 +529,7 @@ def _process_one(
             auto_all = False
             for m in matches:
                 if auto_all:
-                    chunks.append(text[last:m.start()])
+                    chunks.append(text[last : m.start()])
                     chunks.append(rep(m))
                     last = m.end()
                     continue
@@ -546,12 +545,12 @@ def _process_one(
                 if ans == "a":
                     prompt_state["all"] = True
                     auto_all = True
-                    chunks.append(text[last:m.start()])
+                    chunks.append(text[last : m.start()])
                     chunks.append(rep(m))
                     last = m.end()
                     continue
                 if ans == "y":
-                    chunks.append(text[last:m.start()])
+                    chunks.append(text[last : m.start()])
                     chunks.append(rep(m))
                     last = m.end()
             if quit_now:
@@ -962,25 +961,39 @@ def main() -> int:
     elapsed = time.time() - t0
 
     if opts.json_out:
-        _safe_print(json.dumps({
-            "files_scanned": files_scanned,
-            "files_skipped": files_skipped,
-            "files_changed": len(changed),
-            "files_matched": len(matched),
-            "elapsed_seconds": round(elapsed, 3),
-            "results": [
-                {"path": r.path, "matches": r.matches, "changed": r.changed,
-                 "skipped": r.skipped, "reason": r.reason, "diff": r.diff}
-                for r in results
-            ],
-        }, indent=2))
+        _safe_print(
+            json.dumps(
+                {
+                    "files_scanned": files_scanned,
+                    "files_skipped": files_skipped,
+                    "files_changed": len(changed),
+                    "files_matched": len(matched),
+                    "elapsed_seconds": round(elapsed, 3),
+                    "results": [
+                        {
+                            "path": r.path,
+                            "matches": r.matches,
+                            "changed": r.changed,
+                            "skipped": r.skipped,
+                            "reason": r.reason,
+                            "diff": r.diff,
+                        }
+                        for r in results
+                    ],
+                },
+                indent=2,
+            )
+        )
 
     if opts.stats and not opts.json_out:
-        _safe_print(_colorize(
-            f"\nStats: scanned={files_scanned} skipped={files_skipped} "
-            f"matched={len(matched)} changed={len(changed)} elapsed={elapsed:.2f}s",
-            "cyan", opts.color,
-        ))
+        _safe_print(
+            _colorize(
+                f"\nStats: scanned={files_scanned} skipped={files_skipped} "
+                f"matched={len(matched)} changed={len(changed)} elapsed={elapsed:.2f}s",
+                "cyan",
+                opts.color,
+            )
+        )
 
     if opts.check:
         return EXIT_OK if matched else EXIT_NO_MATCH
