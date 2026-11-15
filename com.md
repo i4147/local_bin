@@ -1,4 +1,5 @@
-Add useful comments and docstrings to the Python files that their name starts with (a,b,c,d,e,f,g,h,i) in root of repository.
+Add useful comments and docstrings to the Python files that their name starts with:
+(a,b,c,d) in root of repository.
 
 First, inspect the repository structure and read its contribution guidelines, style configuration,
 and existing documentation conventions.
