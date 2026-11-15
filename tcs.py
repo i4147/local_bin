@@ -13,7 +13,6 @@ import subprocess
 import sys
 from typing import Iterator
 
-
 try:
     import libcst as cst
 except ImportError:

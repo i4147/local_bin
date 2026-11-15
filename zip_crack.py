@@ -14,7 +14,6 @@ import zipfile
 
 import typer
 
-
 if TYPE_CHECKING:
     from collections.abc import Generator
 DEFAULT_BATCH_SIZE: Final[int] = 2000

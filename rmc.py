@@ -34,7 +34,6 @@ from rich.table import Table
 from rich.text import Text
 import typer
 
-
 if TYPE_CHECKING:
     from collections.abc import Iterator, Sequence
 

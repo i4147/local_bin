@@ -11,7 +11,6 @@ from typing import Callable
 
 import typer
 
-
 RemoveFn = Callable[[Path, Path, int, int], None]
 Backend = tuple[str, RemoveFn]
 

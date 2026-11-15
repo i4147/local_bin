@@ -149,15 +149,17 @@ except ImportError:
         _tomllib = None
 __version__ = "1.0.0"
 LOGGER = logger
-DEFAULT_EXCLUDE_DIRS: frozenset[str] = frozenset({
-    ".venv",
-    ".git",
-    "__pycache__",
-    "node_modules",
-    ".tox",
-    ".mypy_cache",
-    ".pytest_cache",
-})
+DEFAULT_EXCLUDE_DIRS: frozenset[str] = frozenset(
+    {
+        ".venv",
+        ".git",
+        "__pycache__",
+        "node_modules",
+        ".tox",
+        ".mypy_cache",
+        ".pytest_cache",
+    }
+)
 PYTHON_SUFFIXES: frozenset[str] = frozenset({".py", ".pyi"})
 NOTEBOOK_SUFFIX: str = ".ipynb"
 CACHE_FILENAME: str = ".pydup-cache.json"
@@ -172,14 +174,16 @@ _MINHASH_A: tuple[int, ...] = tuple(_MINHASH_SEED.getrandbits(64) | 1 for _ in r
 _MINHASH_B: tuple[int, ...] = tuple(_MINHASH_SEED.getrandbits(64) for _ in range(MINHASH_SIG_BITS))
 CACHE_VERSION: int = 1
 NGRAM_SIZE: int = 3
-SKIP_TOKEN_TYPES: frozenset[int] = frozenset({
-    tokenize.ENCODING,
-    tokenize.NL,
-    tokenize.NEWLINE,
-    tokenize.COMMENT,
-    tokenize.INDENT,
-    tokenize.DEDENT,
-})
+SKIP_TOKEN_TYPES: frozenset[int] = frozenset(
+    {
+        tokenize.ENCODING,
+        tokenize.NL,
+        tokenize.NEWLINE,
+        tokenize.COMMENT,
+        tokenize.INDENT,
+        tokenize.DEDENT,
+    }
+)
 ScanIssue: TypeAlias = tuple[str, str]
 Failure: TypeAlias = tuple[str, str]
 
@@ -1768,18 +1772,20 @@ _MP_METHOD_ALIASES: dict[str, str] = {canonical.lower(): canonical for canonical
 for _mp_name in MP_METHOD_CANONICAL:
     if _mp_name.startswith("mp.pool."):
         _MP_METHOD_ALIASES["mp." + _mp_name.split("mp.pool.")[1]] = _mp_name
-_MP_METHOD_ALIASES.update({
-    "cf.process": "cf.ProcessPoolExecutor",
-    "cf.thread": "cf.ThreadPoolExecutor",
-    "cf.interpreter": "cf.InterpreterPoolExecutor",
-    "cf.proceszpoolexecutor": "cf.ProcessPoolExecutor",
-    "processpoolexecutor": "cf.ProcessPoolExecutor",
-    "threadpoolexecutor": "cf.ThreadPoolExecutor",
-    "interpreterpoolexecutor": "cf.InterpreterPoolExecutor",
-    "mp.pool.starmao_async": "mp.pool.starmap_async",
-    "mp.pool.imap_async": "mp.pool.imap_unordered",
-    "joblib.parallel": "joblib",
-})
+_MP_METHOD_ALIASES.update(
+    {
+        "cf.process": "cf.ProcessPoolExecutor",
+        "cf.thread": "cf.ThreadPoolExecutor",
+        "cf.interpreter": "cf.InterpreterPoolExecutor",
+        "cf.proceszpoolexecutor": "cf.ProcessPoolExecutor",
+        "processpoolexecutor": "cf.ProcessPoolExecutor",
+        "threadpoolexecutor": "cf.ThreadPoolExecutor",
+        "interpreterpoolexecutor": "cf.InterpreterPoolExecutor",
+        "mp.pool.starmao_async": "mp.pool.starmap_async",
+        "mp.pool.imap_async": "mp.pool.imap_unordered",
+        "joblib.parallel": "joblib",
+    }
+)
 
 
 def _mp_method_value(value: str) -> str:
@@ -2296,19 +2302,21 @@ def _report_ndjson(outcome: ScanOutcome, args: argparse.Namespace) -> None:
             emit({"type": "near_duplicate", "paths": list(pair.paths), "similarity": pair.similarity})
     if args.functions:
         for group in outcome.definition_groups:
-            emit({
-                "type": "definition_group",
-                "digest": group.digest,
-                "members": [
-                    {
-                        "path": member.path,
-                        "lineno": member.lineno,
-                        "name": member.name,
-                        "kind": member.kind,
-                    }
-                    for member in group.members
-                ],
-            })
+            emit(
+                {
+                    "type": "definition_group",
+                    "digest": group.digest,
+                    "members": [
+                        {
+                            "path": member.path,
+                            "lineno": member.lineno,
+                            "name": member.name,
+                            "kind": member.kind,
+                        }
+                        for member in group.members
+                    ],
+                }
+            )
     if args.stats:
         emit({"type": "stats", **_stats_payload(outcome.stats)})
 
@@ -2319,14 +2327,16 @@ def _report_csv(outcome: ScanOutcome, args: argparse.Namespace) -> None:
     for index, group in enumerate(outcome.groups, start=1):
         wasted = _group_wasted(group)
         for path in group.paths:
-            writer.writerow([
-                index,
-                group.digest,
-                str(path),
-                1 if path == group.keeper else 0,
-                group.sizes.get(str(path), 0),
-                wasted,
-            ])
+            writer.writerow(
+                [
+                    index,
+                    group.digest,
+                    str(path),
+                    1 if path == group.keeper else 0,
+                    group.sizes.get(str(path), 0),
+                    wasted,
+                ]
+            )
 
 
 def _stats_payload(stats: RunStats) -> dict[str, Any]:
@@ -3059,10 +3069,12 @@ def cli(
     ] = False,
 ) -> None:
     if (
-        sum((
-            bool(to_trash),
-            quarantine is not None,
-        ))
+        sum(
+            (
+                bool(to_trash),
+                quarantine is not None,
+            )
+        )
         > 1
     ):
         msg = "--to-trash, --quarantine are mutually exclusive"

@@ -50,7 +50,6 @@ import re
 import sys
 from typing import Any, Callable, Iterable, Sequence
 
-
 __version__ = "12.0.0"
 
 # --------------------------------------------------------------------------

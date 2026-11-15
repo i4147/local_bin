@@ -14,7 +14,6 @@ from typing import Annotated, Any, Optional
 import click
 import typer
 
-
 _STATE: dict[str, object] = {}
 
 

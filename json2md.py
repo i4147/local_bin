@@ -168,8 +168,7 @@ def stringify(value: Any, *, array_mode: str, null_text: str) -> str:
 def escape_markdown_cell(value: str) -> str:
     """Escape characters that would break a Markdown table cell."""
     return (
-        value
-        .replace("\\", "\\\\")
+        value.replace("\\", "\\\\")
         .replace("|", "\\|")
         .replace("\r\n", "<br>")
         .replace("\n", "<br>")

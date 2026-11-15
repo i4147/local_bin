@@ -12,7 +12,6 @@ from typing import TYPE_CHECKING, Annotated, Any
 import click
 import typer
 
-
 if TYPE_CHECKING:
     import argparse
     from pathlib import Path
@@ -186,12 +185,14 @@ def write_csv(cards: list[dict[str, list[dict[str, Any]]]], output_path: Path) -
         for card_number, card in enumerate(cards, start=1):
             for property_name, entries in card.items():
                 for entry in entries:
-                    writer.writerow([
-                        card_number,
-                        property_name,
-                        json.dumps(entry["parameters"], ensure_ascii=False),
-                        entry["value"],
-                    ])
+                    writer.writerow(
+                        [
+                            card_number,
+                            property_name,
+                            json.dumps(entry["parameters"], ensure_ascii=False),
+                            entry["value"],
+                        ]
+                    )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -264,10 +265,12 @@ def cli(
     compact: Annotated[bool, typer.Option("--compact", help="Write compact JSON instead of indented JSON")] = False,
 ) -> None:
     if (
-        sum((
-            bool(format),
-            bool(format_2),
-        ))
+        sum(
+            (
+                bool(format),
+                bool(format_2),
+            )
+        )
         > 1
     ):
         msg = "--json, --csv are mutually exclusive"

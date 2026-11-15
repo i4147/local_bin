@@ -27,7 +27,6 @@ import requests
 from tldextract import tldextract
 import ujson as json
 
-
 __project__ = "auto_extract"
 __version__ = "0.1.3"
 
@@ -402,9 +401,13 @@ def get_content(response_body: bytes, title: str, language: str, url: str) -> tu
         date_text = date_text or "NOTGONNAMATCH"
         texts = [texts[x] for x in good_inds]
         first_ind = min(good_inds)
-        body = "\n".join([
-            x.text for x in texts if not x.is_boilerplate and x.num_ > first_ind and different(x.text, title, date_text)
-        ])
+        body = "\n".join(
+            [
+                x.text
+                for x in texts
+                if not x.is_boilerplate and x.num_ > first_ind and different(x.text, title, date_text)
+            ]
+        )
     return date, body
 
 

@@ -64,7 +64,6 @@ from typing import TYPE_CHECKING, Annotated
 import click
 import typer
 
-
 if TYPE_CHECKING:
     import argparse
     from collections.abc import Sequence
@@ -105,47 +104,53 @@ BUILTIN_NAMES: frozenset[str] = frozenset(dir(builtins))
 
 STRING_PREFIXES: frozenset[str] = frozenset({"r", "u", "f", "b", "fr", "rf", "br", "rb"})
 
-ALWAYS_COMPOUND_KEYWORDS: frozenset[str] = frozenset({
-    "def",
-    "class",
-    "elif",
-    "try",
-    "except",
-    "finally",
-    "while",
-    "with",
-    "async",
-    "for",
-})
+ALWAYS_COMPOUND_KEYWORDS: frozenset[str] = frozenset(
+    {
+        "def",
+        "class",
+        "elif",
+        "try",
+        "except",
+        "finally",
+        "while",
+        "with",
+        "async",
+        "for",
+    }
+)
 
-METHOD_DECORATOR_NAMES: frozenset[str] = frozenset({
-    "staticmethod",
-    "classmethod",
-    "property",
-    "cached_property",
-    "abstractmethod",
-    "overload",
-})
+METHOD_DECORATOR_NAMES: frozenset[str] = frozenset(
+    {
+        "staticmethod",
+        "classmethod",
+        "property",
+        "cached_property",
+        "abstractmethod",
+        "overload",
+    }
+)
 
 HEREDOC_BRIDGE_RE: re.Pattern[str] = re.compile(
     r"(PY|EOF|HEREDOC|END_PY|END_PYTHON)\s+[^\n]*?\bpython3?\b[^\n]*?"
     r"<<-?\s*(?:'[A-Za-z_]\w*'|\"[A-Za-z_]\w*\"|[A-Za-z_]\w*)"
 )
 
-EXCLUDED_SCAN_DIRS: frozenset[str] = frozenset({
-    ".git",
-    "__pycache__",
-    ".pytest_cache",
-    ".mypy_cache",
-    ".ruff_cache",
-    ".venv",
-    "venv",
-    "node_modules",
-    "build",
-    "dist",
-    "result",
-    "tests",
-})
+EXCLUDED_SCAN_DIRS: frozenset[str] = frozenset(
+    {
+        ".git",
+        "__pycache__",
+        ".pytest_cache",
+        ".mypy_cache",
+        ".ruff_cache",
+        ".venv",
+        "venv",
+        "node_modules",
+        "build",
+        "dist",
+        "result",
+        "tests",
+    }
+)
 
 
 class ReformatterError(ValueError):

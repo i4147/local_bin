@@ -26,7 +26,6 @@ from rich.progress import BarColumn, Progress, SpinnerColumn, TaskProgressColumn
 from rich.table import Table
 import typer
 
-
 try:
     from black import TargetVersion  # type: ignore[attr-defined]
 

@@ -21,7 +21,6 @@ import click
 from dh import MAX_WORKERS, SKIP_DIRS
 import typer
 
-
 _STATE: dict[str, object] = {}
 
 

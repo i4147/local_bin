@@ -8,7 +8,6 @@ import shutil
 
 from dh import gsz
 
-
 DIRS_TO_DELETE = [
     "$PREFIX/lib/python3.*/site-packages/**/test",
     "$PREFIX/lib/python3.*/site-packages/**/tests",

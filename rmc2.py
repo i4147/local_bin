@@ -17,7 +17,6 @@ from typing import TYPE_CHECKING, Annotated, Any
 import click
 import typer
 
-
 if TYPE_CHECKING:
     import argparse
     from collections.abc import Iterable, Sequence
@@ -70,24 +69,26 @@ __version__ = "2.1.0"
 PROG = "strip_comments"
 BACKUP_SUFFIX = ".pystripbak"
 PY_SUFFIXES = frozenset({".py", ".pyi", ".pyw"})
-SKIP_DIRS = frozenset({
-    ".git",
-    ".hg",
-    ".svn",
-    ".tox",
-    ".nox",
-    ".venv",
-    "venv",
-    "env",
-    "__pycache__",
-    ".mypy_cache",
-    ".pytest_cache",
-    ".ruff_cache",
-    "node_modules",
-    "build",
-    "dist",
-    ".eggs",
-})
+SKIP_DIRS = frozenset(
+    {
+        ".git",
+        ".hg",
+        ".svn",
+        ".tox",
+        ".nox",
+        ".venv",
+        "venv",
+        "env",
+        "__pycache__",
+        ".mypy_cache",
+        ".pytest_cache",
+        ".ruff_cache",
+        "node_modules",
+        "build",
+        "dist",
+        ".eggs",
+    }
+)
 PARALLEL_MIN_FILES = 4
 
 

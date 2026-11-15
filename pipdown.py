@@ -74,14 +74,16 @@ PYPI = "https://pypi.org/simple/"
 TSINGHUA = "https://pypi.tuna.tsinghua.edu.cn/simple/"
 YANDEX = "https://mirror-pypi.runflare.com/simple/"
 DEFAULT_INDEXES: tuple[str, ...] = (YANDEX, TSINGHUA, PYPI)
-HASH_ALGOS: frozenset[str] = frozenset({
-    "sha256",
-    "sha512",
-    "sha384",
-    "sha224",
-    "sha1",
-    "md5",
-})
+HASH_ALGOS: frozenset[str] = frozenset(
+    {
+        "sha256",
+        "sha512",
+        "sha384",
+        "sha224",
+        "sha1",
+        "md5",
+    }
+)
 HASH_PREFERENCE: dict[str, int] = {
     "sha512": 6,
     "sha384": 5,
@@ -935,10 +937,12 @@ def cli(
     verbose: Annotated[bool, typer.Option("-v", "--verbose", help="debug logging")] = False,
 ) -> None:
     if (
-        sum((
-            bool(no_binary),
-            bool(only_binary),
-        ))
+        sum(
+            (
+                bool(no_binary),
+                bool(only_binary),
+            )
+        )
         > 1
     ):
         msg = "--no-binary, --only-binary are mutually exclusive"

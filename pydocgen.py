@@ -15,7 +15,6 @@ from typing import TYPE_CHECKING, Annotated, Any
 import click
 import typer
 
-
 if TYPE_CHECKING:
     import argparse
     from collections.abc import Callable, Iterator, Sequence
@@ -53,24 +52,26 @@ class _ParserShim:
 
 
 DOC_SUFFIXES: frozenset[str] = frozenset({".py", ".pyi", ".pyx", ".pxd"})
-SKIP_DIRS: frozenset[str] = frozenset({
-    "__pycache__",
-    ".git",
-    ".hg",
-    ".svn",
-    ".tox",
-    ".venv",
-    "venv",
-    ".mypy_cache",
-    ".pytest_cache",
-    ".ruff_cache",
-    ".eggs",
-    ".idea",
-    ".vscode",
-    "node_modules",
-    "build",
-    "dist",
-})
+SKIP_DIRS: frozenset[str] = frozenset(
+    {
+        "__pycache__",
+        ".git",
+        ".hg",
+        ".svn",
+        ".tox",
+        ".venv",
+        "venv",
+        ".mypy_cache",
+        ".pytest_cache",
+        ".ruff_cache",
+        ".eggs",
+        ".idea",
+        ".vscode",
+        "node_modules",
+        "build",
+        "dist",
+    }
+)
 FENCE: str = "```"
 FileTask = tuple[str, str, str, str]
 ModuleTask = tuple[str, str, str]

@@ -26,7 +26,6 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-
 try:
     from loguru import logger
 except ImportError as _exc:
@@ -1568,34 +1567,36 @@ def markdown_to_html(text: str, opts: Options) -> str:
 
 
 _SKIP_TAGS: Final = frozenset({"script", "style", "head", "noscript", "iframe", "svg", "canvas", "template"})
-_HTML_BLOCK_TAGS: Final = frozenset({
-    "p",
-    "div",
-    "section",
-    "article",
-    "header",
-    "footer",
-    "main",
-    "aside",
-    "h1",
-    "h2",
-    "h3",
-    "h4",
-    "h5",
-    "h6",
-    "ul",
-    "ol",
-    "li",
-    "blockquote",
-    "pre",
-    "table",
-    "tr",
-    "hr",
-    "figure",
-    "figcaption",
-    "details",
-    "summary",
-})
+_HTML_BLOCK_TAGS: Final = frozenset(
+    {
+        "p",
+        "div",
+        "section",
+        "article",
+        "header",
+        "footer",
+        "main",
+        "aside",
+        "h1",
+        "h2",
+        "h3",
+        "h4",
+        "h5",
+        "h6",
+        "ul",
+        "ol",
+        "li",
+        "blockquote",
+        "pre",
+        "table",
+        "tr",
+        "hr",
+        "figure",
+        "figcaption",
+        "details",
+        "summary",
+    }
+)
 
 
 def clean_html(text: str) -> tuple[str, str]:
@@ -1932,12 +1933,14 @@ def render_with_rich(text: str, opts: Options) -> str:
     color = resolve_color(opts)
     width = resolve_width(opts, text)
     code_theme = "monokai" if opts.theme != "light" else "default"
-    theme = Theme({
-        "markdown.h1": "bold",
-        "markdown.h2": "bold",
-        "markdown.code": "bold",
-        "markdown.link": "underline",
-    })
+    theme = Theme(
+        {
+            "markdown.h1": "bold",
+            "markdown.h2": "bold",
+            "markdown.code": "bold",
+            "markdown.link": "underline",
+        }
+    )
     buf = io.StringIO()
     console = Console(
         file=buf,

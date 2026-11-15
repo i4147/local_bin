@@ -12,7 +12,6 @@ import unicodedata
 
 import typer
 
-
 app = typer.Typer(add_completion=False)
 
 colours: dict[str, str] = {
@@ -279,14 +278,7 @@ def is_special_fs(fs: str) -> bool:
 
 def get_row_mp(mp: Optional[str]) -> Optional[list[tuple[str, Any]]]:
     "Return row mp."
-    global \
-        local_fs_colour, \
-        remote_fs_colour, \
-        special_fs_colour, \
-        readonly_fs_colour, \
-        full_fs_colour, \
-        filled_fs_colour, \
-        header_colour
+    global local_fs_colour, remote_fs_colour, special_fs_colour, readonly_fs_colour, full_fs_colour, filled_fs_colour, header_colour
     if mp:
         if mp in mountpoints:
             device, fstype, opts = mountpoints[mp]
@@ -551,23 +543,7 @@ def main(
     inodes_opt: bool = typer.Option(False, "-i", "--inodes", help="show inode instead of block usage"),
 ):
     "Run the command-line interface."
-    global \
-        blocksize, \
-        allfss, \
-        localonly, \
-        hidebinds, \
-        inodes, \
-        sizeformat, \
-        normal_colour, \
-        header_colour, \
-        local_fs_colour, \
-        remote_fs_colour, \
-        special_fs_colour, \
-        filled_fs_colour, \
-        full_fs_colour, \
-        mountfile, \
-        terminal_width, \
-        mountpoints
+    global blocksize, allfss, localonly, hidebinds, inodes, sizeformat, normal_colour, header_colour, local_fs_colour, remote_fs_colour, special_fs_colour, filled_fs_colour, full_fs_colour, mountfile, terminal_width, mountpoints
 
     blocksize = block_size
     allfss = show_all

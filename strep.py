@@ -10,7 +10,6 @@ from zipfile import ZipFile
 from dh import fsz, gsz, runcmd
 from rich.console import Console
 
-
 SO_RE = re.compile(r"\.so(\.\d+)*$", re.IGNORECASE)
 WHL_SUFFIX = ".whl"
 console = Console()

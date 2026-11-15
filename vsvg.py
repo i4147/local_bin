@@ -964,20 +964,24 @@ def _stroke_run(pts, closed, hw, cap, join, miter):
         elif cap == "square":
             ux, uy = d0
             nx, ny = -uy * hw, ux * hw
-            polys.append([
-                (p0[0] + nx, p0[1] + ny),
-                (p0[0] + nx - ux * hw, p0[1] + ny - uy * hw),
-                (p0[0] - nx - ux * hw, p0[1] - ny - uy * hw),
-                (p0[0] - nx, p0[1] - ny),
-            ])
+            polys.append(
+                [
+                    (p0[0] + nx, p0[1] + ny),
+                    (p0[0] + nx - ux * hw, p0[1] + ny - uy * hw),
+                    (p0[0] - nx - ux * hw, p0[1] - ny - uy * hw),
+                    (p0[0] - nx, p0[1] - ny),
+                ]
+            )
             ux, uy = d1
             nx, ny = -uy * hw, ux * hw
-            polys.append([
-                (p1[0] + nx, p1[1] + ny),
-                (p1[0] + nx + ux * hw, p1[1] + ny + uy * hw),
-                (p1[0] - nx + ux * hw, p1[1] - ny + uy * hw),
-                (p1[0] - nx, p1[1] - ny),
-            ])
+            polys.append(
+                [
+                    (p1[0] + nx, p1[1] + ny),
+                    (p1[0] + nx + ux * hw, p1[1] + ny + uy * hw),
+                    (p1[0] - nx + ux * hw, p1[1] - ny + uy * hw),
+                    (p1[0] - nx, p1[1] - ny),
+                ]
+            )
     return polys
 
 
@@ -1818,8 +1822,7 @@ class TermInfo:
             if "4" in attrs:
                 self.sixel = True
         m = re.search(
-            rb"\x1b\]11;rgb:([0-9a-fA-F]{1,4})/([0-9a-fA-F]{1,4})"
-            rb"/([0-9a-fA-F]{1,4})(?:\x07|\x1b\\)",
+            rb"\x1b\]11;rgb:([0-9a-fA-F]{1,4})/([0-9a-fA-F]{1,4})" rb"/([0-9a-fA-F]{1,4})(?:\x07|\x1b\\)",
             resp,
         )
         if m:

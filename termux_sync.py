@@ -14,7 +14,6 @@ import threading
 import time
 from typing import Optional
 
-
 try:
     from rich import box
     from rich.align import Align

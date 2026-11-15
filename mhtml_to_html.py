@@ -72,7 +72,6 @@ import click
 from loguru import logger
 import typer
 
-
 if TYPE_CHECKING:
     import argparse
 
@@ -1113,20 +1112,22 @@ T_COMMENT = 25
 # are keyed by (charCode << 8).
 _ADJ_BASE: dict[int, frozenset[int]] = {
     T_IDENT: frozenset({T_IDENT, T_FUNCTION, T_HASH, T_URL, 8, T_NUMBER, T_PERCENTAGE, T_DIMENSION, T_CDC, 21, 0x2D00}),
-    T_ATKEYWORD: frozenset({
-        T_IDENT,
-        T_FUNCTION,
-        T_STRING,
-        T_URL,
-        8,
-        T_NUMBER,
-        T_PERCENTAGE,
-        T_DIMENSION,
-        T_CDC,
-        T_COLON,
-        21,
-        0x2D00,
-    }),
+    T_ATKEYWORD: frozenset(
+        {
+            T_IDENT,
+            T_FUNCTION,
+            T_STRING,
+            T_URL,
+            8,
+            T_NUMBER,
+            T_PERCENTAGE,
+            T_DIMENSION,
+            T_CDC,
+            T_COLON,
+            21,
+            0x2D00,
+        }
+    ),
     T_HASH: frozenset({T_IDENT, T_FUNCTION, T_HASH, T_URL, 8, T_NUMBER, T_PERCENTAGE, T_DIMENSION, T_CDC, 0x2D00}),
     T_NUMBER: frozenset({T_IDENT, T_FUNCTION, T_URL, 8, T_NUMBER, T_PERCENTAGE, T_DIMENSION, T_CDC, 0x2500}),
     T_PERCENTAGE: frozenset({T_FUNCTION, T_PERCENTAGE, T_DIMENSION, 0x2D00}),
@@ -1702,17 +1703,19 @@ class CssRule(CssNode):
         self.block = block  # list of block items or None
 
 
-_RULE_BLOCK_ATRULES = frozenset({
-    "media",
-    "supports",
-    "container",
-    "keyframes",
-    "layer",
-    "nest",
-    "scope",
-    "starting-style",
-    "document",
-})
+_RULE_BLOCK_ATRULES = frozenset(
+    {
+        "media",
+        "supports",
+        "container",
+        "keyframes",
+        "layer",
+        "nest",
+        "scope",
+        "starting-style",
+        "document",
+    }
+)
 
 _COMBINATOR_DELIMS = frozenset({">", "+", "~"})
 
@@ -2447,48 +2450,56 @@ def remove_first_stylesheet_item(items: list) -> None:
 # DOM layer — html5lib parsing + a faithful port of the original serializer
 # ===========================================================================
 
-VOID_TAG_NAMES = frozenset({
-    "area",
-    "base",
-    "basefont",
-    "bgsound",
-    "br",
-    "col",
-    "command",
-    "embed",
-    "frame",
-    "hr",
-    "img",
-    "input",
-    "keygen",
-    "link",
-    "meta",
-    "param",
-    "source",
-    "track",
-    "wbr",
-})
-RAW_TEXT_NODE_TAG_NAMES = frozenset({
-    "style",
-    "script",
-    "xmp",
-    "iframe",
-    "noembed",
-    "noframes",
-    "plaintext",
-    "noscript",
-})
-_TEXT_ESCAPE_TABLE = str.maketrans({
-    "&": "&amp;",
-    "\u00a0": "&nbsp;",
-    "<": "&lt;",
-    ">": "&gt;",
-})
-_ATTRIBUTE_ESCAPE_TABLE = str.maketrans({
-    "&": "&amp;",
-    "\u00a0": "&nbsp;",
-    '"': "&quot;",
-})
+VOID_TAG_NAMES = frozenset(
+    {
+        "area",
+        "base",
+        "basefont",
+        "bgsound",
+        "br",
+        "col",
+        "command",
+        "embed",
+        "frame",
+        "hr",
+        "img",
+        "input",
+        "keygen",
+        "link",
+        "meta",
+        "param",
+        "source",
+        "track",
+        "wbr",
+    }
+)
+RAW_TEXT_NODE_TAG_NAMES = frozenset(
+    {
+        "style",
+        "script",
+        "xmp",
+        "iframe",
+        "noembed",
+        "noframes",
+        "plaintext",
+        "noscript",
+    }
+)
+_TEXT_ESCAPE_TABLE = str.maketrans(
+    {
+        "&": "&amp;",
+        "\u00a0": "&nbsp;",
+        "<": "&lt;",
+        ">": "&gt;",
+    }
+)
+_ATTRIBUTE_ESCAPE_TABLE = str.maketrans(
+    {
+        "&": "&amp;",
+        "\u00a0": "&nbsp;",
+        '"': "&quot;",
+    }
+)
 INVALID_TAG_NAME_REGEXP = re.compile(r"""["'>/=]""")
 JAVASCRIPT_MIME_TYPE = "text/javascript"
 
@@ -3745,22 +3756,26 @@ def _convert_impl(data: dict, config: "ConvertConfig"):
                                 resource_ref.content_type, resource_ref.transfer_encoding, str(resource_ref.data)
                             )
                             _set_attribute(child, "href", resource_uri)
-                            favicons.append({
-                                "href": resource_uri,
-                                "media": media,
-                                "type": type_attr,
-                                "sizes": sizes,
-                                "originalHref": href,
-                            })
+                            favicons.append(
+                                {
+                                    "href": resource_uri,
+                                    "media": media,
+                                    "type": type_attr,
+                                    "sizes": sizes,
+                                    "originalHref": href,
+                                }
+                            )
 
                         def not_found_icon() -> None:
                             _set_attribute(child, "href", href)
-                            favicons.append({
-                                "href": href,
-                                "media": media,
-                                "type": type_attr,
-                                "sizes": sizes,
-                            })
+                            favicons.append(
+                                {
+                                    "href": href,
+                                    "media": media,
+                                    "type": type_attr,
+                                    "sizes": sizes,
+                                }
+                            )
 
                         _resolve_reference(
                             resources,

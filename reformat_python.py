@@ -74,7 +74,6 @@ from typing import TYPE_CHECKING, Annotated, Sequence
 
 import typer
 
-
 if TYPE_CHECKING:
     from pathlib import Path
 

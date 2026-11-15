@@ -30,7 +30,6 @@ from rich.console import Console
 from rich.progress import BarColumn, Progress, TaskID, TextColumn, TimeElapsedColumn, TransferSpeedColumn
 import typer
 
-
 __version__ = "2.0.0-onefile"
 
 EXIT_OK = 0
@@ -265,10 +264,12 @@ class Logger:
                 "level": _LEVEL_LABEL.get(level, "info"),
                 "message": redact_text(message),
             }
-            payload.update({
-                key: value if isinstance(value, (int, float, bool)) or value is None else redact_text(str(value))
-                for key, value in fields.items()
-            })
+            payload.update(
+                {
+                    key: value if isinstance(value, (int, float, bool)) or value is None else redact_text(str(value))
+                    for key, value in fields.items()
+                }
+            )
             return json.dumps(payload, default=str)
         parts = [time.strftime("%H:%M:%S"), _LEVEL_LABEL.get(level, "info").ljust(7), message]
         parts.extend(f"{key}={redact_text(str(value))}" for key, value in fields.items())

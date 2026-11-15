@@ -89,7 +89,6 @@ from libcst.helpers import get_full_name_for_node
 from libcst.metadata import ClassScope, MetadataWrapper, ScopeProvider
 import typer
 
-
 __all__ = ["shorten_names"]
 
 RESERVED = set(dir(builtins)) | set(keyword.kwlist)

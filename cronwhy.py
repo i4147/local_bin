@@ -14,7 +14,6 @@ from zoneinfo import ZoneInfo
 import click
 import typer
 
-
 _STATE: dict[str, object] = {}
 
 
@@ -375,11 +374,13 @@ def detect_overlaps(specs: Sequence[CronSpec], tz: ZoneInfo, horizon_days: int =
         for j in range(i + 1, len(specs)):
             match_times = occurrences_by_spec[i] & occurrences_by_spec[j]
             if match_times:
-                results.append({
-                    "spec_a": specs[i].raw,
-                    "spec_b": specs[j].raw,
-                    "shared_runs": sorted(dt.strftime("%Y-%m-%d %H:%M %Z") for dt in match_times),
-                })
+                results.append(
+                    {
+                        "spec_a": specs[i].raw,
+                        "spec_b": specs[j].raw,
+                        "shared_runs": sorted(dt.strftime("%Y-%m-%d %H:%M %Z") for dt in match_times),
+                    }
+                )
     return results
 
 

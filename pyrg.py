@@ -36,7 +36,6 @@ from dh import MAX_WORKERS, SKIP_DIRS, is_binary
 from loguru import logger
 import typer
 
-
 if TYPE_CHECKING:
     from collections.abc import Iterator
 

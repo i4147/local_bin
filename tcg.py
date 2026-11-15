@@ -7,7 +7,6 @@ import shutil
 import subprocess
 import sys
 
-
 TERMUX_SHEBANGS = {
     "python": "#!/data/data/com.termux/files/usr/bin/env python",
     "bash": "#!/data/data/com.termux/files/usr/bin/bash",

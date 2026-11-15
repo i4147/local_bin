@@ -19,7 +19,6 @@ import click
 from dh import SKIP_DIRS
 import typer
 
-
 _STATE: dict[str, object] = {}
 
 
