@@ -74,8 +74,8 @@ _GRAMMAR_FACTORIES: Final[dict[str, tuple[str, str]]] = {
     "zsh": ("tree_sitter_zsh", "language"),
 }
 _SHEBANG_PATTERNS: Final[tuple[tuple[re.Pattern[bytes], str], ...]] = (
-    (re.compile(rb"(?:^|[/ ])(?:ba|da|k|mk|pdk|a)?sh(?:[\s-]|$)", re.I), "bash"),
-    (re.compile(rb"(?:^|[/ ])zsh(?:[\s-]|$)", re.I), "zsh"),
+    (re.compile(rb"(?:^|[/ ])(?:ba|da|k|mk|pdk|a)?sh(?:[\s-]|$)", re.IGNORECASE), "bash"),
+    (re.compile(rb"(?:^|[/ ])zsh(?:[\s-]|$)", re.IGNORECASE), "zsh"),
 )
 _COMMENT_NODE_TYPES: Final[frozenset[str]] = frozenset({"comment", "line_comment", "block_comment"})
 _PARSERS: dict[str, Parser] = {}
@@ -97,7 +97,8 @@ def _make_parser(language_key: str) -> Parser:
     try:
         module_name, factory_name = _GRAMMAR_FACTORIES[language_key]
     except KeyError as exc:
-        raise ValueError(f"Unsupported language: {language_key}") from exc
+        msg = f"Unsupported language: {language_key}"
+        raise ValueError(msg) from exc
     grammar_module = importlib.import_module(module_name)
     language = Language(getattr(grammar_module, factory_name)())
     try:
@@ -341,7 +342,7 @@ def main(
     console = Console()
     if not files:
         console.print("[yellow]No supported files found.[/]")
-        return
+        return None
     results: list[ProcessResult] = []
     total_freed = 0
     with Live(build_table(results, len(files), console.width), console=console, refresh_per_second=12) as live:

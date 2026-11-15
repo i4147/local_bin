@@ -2,7 +2,6 @@
 
 "download subtitles easily"
 
-import argparse
 from collections import OrderedDict
 from contextlib import closing, suppress
 import copy
@@ -17,7 +16,7 @@ import sys
 import tempfile
 from traceback import format_exc
 from types import SimpleNamespace
-from typing import Annotated, Any, Optional
+from typing import TYPE_CHECKING, Annotated, Any, Optional
 from urllib.parse import urljoin
 import zipfile
 
@@ -29,6 +28,10 @@ import requests
 from requests import exceptions
 from requests.utils import quote
 import typer
+
+
+if TYPE_CHECKING:
+    import argparse
 
 
 _STATE: dict[str, object] = {}

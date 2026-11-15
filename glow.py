@@ -448,7 +448,8 @@ def configure_logging(opts: Options) -> None:
                 format=("{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | {name}:{function}:{line} | {message}"),
             )
         except OSError as exc:
-            raise InputError(f"cannot open log file {opts.log_file}: {exc}") from exc
+            msg = f"cannot open log file {opts.log_file}: {exc}"
+            raise InputError(msg) from exc
     logger.debug("glow.py {} on Python {}", VERSION, platform.python_version())
 
 
@@ -718,7 +719,7 @@ def parse_inline(
             title = m.group("imgtitle")
             if src is None:
                 ref = refs.get(normalise_label(m.group("imgref") or alt))
-                src, title = ref if ref else (alt, None)
+                src, title = ref or (alt, None)
             nodes.append(Image(alt, src, title))
         elif m.group("link") is not None:
             text = m.group("ltext")
@@ -759,8 +760,7 @@ def _list_kind(m: re.Match[str]) -> Literal["ordered", "unordered"]:
 
 def _split_table_row(line: str) -> list[str]:
     s = line.strip()
-    if s.startswith("|"):
-        s = s[1:]
+    s = s.removeprefix("|")
     if s.endswith("|") and not s.endswith("\\|"):
         s = s[:-1]
     return [cell.strip().replace("\\|", "|") for cell in re.split(r"(?<!\\)\|", s)]
@@ -1563,7 +1563,8 @@ def markdown_to_html(text: str, opts: Options) -> str:
     try:
         return markdown_to_html_builtin(text, opts)
     except Exception as exc:
-        raise ConversionError(f"Markdown -> HTML conversion failed: {exc}") from exc
+        msg = f"Markdown -> HTML conversion failed: {exc}"
+        raise ConversionError(msg) from exc
 
 
 _SKIP_TAGS: Final = frozenset({"script", "style", "head", "noscript", "iframe", "svg", "canvas", "template"})
@@ -1888,7 +1889,8 @@ def html_to_markdown(text: str, opts: Options) -> str:
         try:
             result = html_to_markdown_plain(cleaned)
         except Exception as inner:
-            raise ConversionError(f"HTML -> Markdown conversion failed: {inner}") from inner
+            msg = f"HTML -> Markdown conversion failed: {inner}"
+            raise ConversionError(msg) from inner
     else:
         logger.debug("HTML -> Markdown backend: {}", backend)
     return normalise_markdown(result)
@@ -2021,7 +2023,8 @@ def expand_sources(patterns: Sequence[str]) -> list[Source]:
         if any(ch in pattern for ch in "*?["):
             matches = sorted(p for p in glob.glob(pattern, recursive=True) if Path(p).is_file())
             if not matches:
-                raise InputError(f"no files match pattern: {pattern}")
+                msg = f"no files match pattern: {pattern}"
+                raise InputError(msg)
             for match in matches:
                 add(Source(match, "file", path=Path(match)))
             continue
@@ -2029,15 +2032,18 @@ def expand_sources(patterns: Sequence[str]) -> list[Source]:
         if path.is_dir():
             files = sorted(p for p in path.iterdir() if p.is_file() and p.suffix.lower() in DOC_EXTS)
             if not files:
-                raise InputError(f"no Markdown/HTML files in directory: {path}")
+                msg = f"no Markdown/HTML files in directory: {path}"
+                raise InputError(msg)
             for file in files:
                 add(Source(str(file), "file", path=file))
             continue
         if not path.is_file():
-            raise InputError(f"input not found: {path}")
+            msg = f"input not found: {path}"
+            raise InputError(msg)
         add(Source(str(path), "file", path=path))
     if not found:
-        raise InputError("no input sources")
+        msg = "no input sources"
+        raise InputError(msg)
     return found
 
 
@@ -2063,9 +2069,11 @@ def read_source(src: Source, opts: Options, stdin_cache: dict[str, str]) -> tupl
         try:
             data = sys.stdin.buffer.read(opts.max_bytes + 1)
         except OSError as exc:
-            raise InputError(f"cannot read stdin: {exc}") from exc
+            msg = f"cannot read stdin: {exc}"
+            raise InputError(msg) from exc
         if len(data) > opts.max_bytes:
-            raise InputError(f"stdin exceeds --max-bytes ({opts.max_bytes}); increase the limit")
+            msg = f"stdin exceeds --max-bytes ({opts.max_bytes}); increase the limit"
+            raise InputError(msg)
         text = decode_bytes(data, opts.encoding, "<stdin>")
         stdin_cache["<stdin>"] = text
         return text, None
@@ -2079,11 +2087,14 @@ def read_source(src: Source, opts: Options, stdin_cache: dict[str, str]) -> tupl
                 content_type = response.headers.get_content_type()
                 charset = response.headers.get_content_charset()
         except urllib.error.HTTPError as exc:
-            raise InputError(f"HTTP {exc.code} for {url}: {exc.reason}") from exc
+            msg = f"HTTP {exc.code} for {url}: {exc.reason}"
+            raise InputError(msg) from exc
         except (urllib.error.URLError, TimeoutError, OSError, ValueError) as exc:
-            raise InputError(f"cannot fetch {url}: {exc}") from exc
+            msg = f"cannot fetch {url}: {exc}"
+            raise InputError(msg) from exc
         if len(raw) > opts.max_bytes:
-            raise InputError(f"{url} exceeds --max-bytes ({opts.max_bytes}); increase the limit")
+            msg = f"{url} exceeds --max-bytes ({opts.max_bytes}); increase the limit"
+            raise InputError(msg)
         text = decode_bytes(raw, charset or opts.encoding, url)
         return text, content_type
 
@@ -2091,9 +2102,11 @@ def read_source(src: Source, opts: Options, stdin_cache: dict[str, str]) -> tupl
     try:
         raw = src.path.read_bytes()
     except OSError as exc:
-        raise InputError(f"cannot read {src.path}: {exc}") from exc
+        msg = f"cannot read {src.path}: {exc}"
+        raise InputError(msg) from exc
     if len(raw) > opts.max_bytes:
-        raise InputError(f"{src.path} exceeds --max-bytes ({opts.max_bytes}); increase the limit")
+        msg = f"{src.path} exceeds --max-bytes ({opts.max_bytes}); increase the limit"
+        raise InputError(msg)
     return decode_bytes(raw, opts.encoding, str(src.path)), None
 
 
@@ -2106,7 +2119,7 @@ def detect_format(src: Source, text: str, declared: str | None, opts: Options) -
     if src.path and src.path.suffix.lower() in HTML_EXTS:
         return "html"
     head = text.lstrip()[:1024].lower()
-    if head.startswith("<!doctype html") or head.startswith("<html"):
+    if head.startswith(("<!doctype html", "<html")):
         return "html"
     if re.match(r"<(?:head|body|div|p|h[1-6]|table|ul|ol|blockquote|pre|section|article)\b", head):
         return "html"
@@ -2126,7 +2139,7 @@ def extract_title(text: str, fmt: DocFormat, fallback: str) -> str:
         _, found = clean_html(text)
         if found:
             return found
-    stem = Path(fallback).stem if fallback not in {"<stdin>"} else "stdin"
+    stem = Path(fallback).stem if fallback != "<stdin>" else "stdin"
     return stem or APP_NAME
 
 
@@ -2463,7 +2476,8 @@ def write_output(text: str, opts: Options) -> None:
         opts.output.parent.mkdir(parents=True, exist_ok=True)
         opts.output.write_text(payload, encoding="utf-8")
     except OSError as exc:
-        raise InputError(f"cannot write {opts.output}: {exc}") from exc
+        msg = f"cannot write {opts.output}: {exc}"
+        raise InputError(msg) from exc
     logger.info("wrote {}", opts.output)
 
 
@@ -2662,15 +2676,19 @@ def parse_args(argv: Sequence[str]) -> Options:
         convert = "to-markdown"
 
     if ns.standalone and convert != "to-html":
-        raise UsageError("--standalone requires --to-html")
+        msg = "--standalone requires --to-html"
+        raise UsageError(msg)
     if ns.title and convert != "to-html":
         logger.warning("--title is only used with --to-html --standalone")
     if ns.width and not (MIN_WIDTH <= ns.width <= MAX_WIDTH):
-        raise UsageError(f"--width must be between {MIN_WIDTH} and {MAX_WIDTH}")
+        msg = f"--width must be between {MIN_WIDTH} and {MAX_WIDTH}"
+        raise UsageError(msg)
     if ns.timeout <= 0:
-        raise UsageError("--timeout must be positive")
+        msg = "--timeout must be positive"
+        raise UsageError(msg)
     if ns.max_bytes <= 0:
-        raise UsageError("--max-bytes must be positive")
+        msg = "--max-bytes must be positive"
+        raise UsageError(msg)
 
     opts = Options(
         sources=tuple(ns.sources),

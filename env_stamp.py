@@ -134,8 +134,6 @@ Limitations
 """
 
 from __future__ import annotations
-import argparse
-from collections.abc import Iterable, Iterator, Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timezone
@@ -157,17 +155,22 @@ import tempfile
 import threading
 import time
 from types import SimpleNamespace
-from typing import Annotated, Any, ClassVar, TypeVar
+from typing import TYPE_CHECKING, Annotated, Any, ClassVar, TypeVar
 from venv import create as _venv_create
 
 import click
 import typer
 
 
+if TYPE_CHECKING:
+    import argparse
+    from collections.abc import Iterable, Iterator, Mapping, Sequence
+
+
 def _version_callback(value: bool) -> None:
     if value:
         typer.echo(f"%(prog)s {__version__}")
-        raise typer.Exit()
+        raise typer.Exit
 
 
 class Format(StrEnum):
@@ -210,44 +213,45 @@ class _ParserShim:
 
 
 if sys.version_info < (3, 12):  # pragma: no cover - exercised only on old pythons
-    raise SystemExit("env-stamp requires Python 3.12 or newer")
+    msg = "env-stamp requires Python 3.12 or newer"
+    raise SystemExit(msg)
 
 __version__ = "1.0.0"
 
 __all__ = [
-    "SCHEMA_VERSION",
-    "SAFE_VALUE_KEYS",
-    "SENSITIVE_NAME_RE",
-    "URL_CREDENTIALS_RE",
-    "TOKEN_PREFIX_RE",
     "BINARY_PACKAGES",
-    "TOOL_PROBES",
-    "ENTROPY_LIMIT",
-    "ENTROPY_MIN_LENGTH",
     "DEFAULT_MAX_DIFF_LINES",
     "DEFAULT_MAX_RUNS",
-    "Change",
-    "PythonInfo",
-    "OSInfo",
-    "PackageInfo",
-    "Stamp",
-    "Pin",
-    "EnvProfile",
-    "Candidate",
+    "ENTROPY_LIMIT",
+    "ENTROPY_MIN_LENGTH",
+    "SAFE_VALUE_KEYS",
+    "SCHEMA_VERSION",
+    "SENSITIVE_NAME_RE",
+    "TOKEN_PREFIX_RE",
+    "TOOL_PROBES",
+    "URL_CREDENTIALS_RE",
     "BisectReport",
     "Bisector",
+    "Candidate",
+    "Change",
+    "EnvProfile",
+    "OSInfo",
+    "PackageInfo",
+    "Pin",
+    "PythonInfo",
+    "Stamp",
+    "build_parser",
     "canonicalize_name",
-    "shannon_entropy",
+    "capture",
+    "diff_stamps",
+    "main",
     "mask_url_credentials",
     "redact_env",
-    "capture",
-    "stamp_digest",
-    "diff_stamps",
-    "render_terminal",
-    "render_markdown",
     "render_json",
-    "build_parser",
-    "main",
+    "render_markdown",
+    "render_terminal",
+    "shannon_entropy",
+    "stamp_digest",
 ]
 
 # --------------------------------------------------------------------------
@@ -640,9 +644,11 @@ class Stamp:
             py_raw = data["python"]  # type: ignore[index]
             os_raw = data["os"]  # type: ignore[index]
         except (KeyError, TypeError) as exc:
-            raise ValueError(f"stamp is missing required key: {exc}") from None
+            msg = f"stamp is missing required key: {exc}"
+            raise ValueError(msg) from None
         if schema != SCHEMA_VERSION:
-            raise ValueError(f"unsupported stamp schema {schema} (expected {SCHEMA_VERSION})")
+            msg = f"unsupported stamp schema {schema} (expected {SCHEMA_VERSION})"
+            raise ValueError(msg)
         try:
             python = PythonInfo(
                 version=str(py_raw["version"]),
@@ -684,9 +690,11 @@ class Stamp:
                 hash=str(data.get("hash", "")),
             )
         except (KeyError, TypeError) as exc:
-            raise ValueError(f"malformed stamp section: {exc}") from None
+            msg = f"malformed stamp section: {exc}"
+            raise ValueError(msg) from None
         if verify and stamp_digest(data) != stamp.hash:
-            raise ValueError("stamp hash mismatch -- the file is corrupted or was tampered with")
+            msg = "stamp hash mismatch -- the file is corrupted or was tampered with"
+            raise ValueError(msg)
         return stamp
 
 
@@ -925,7 +933,8 @@ def _iter_dists(venv_dir: Path | None) -> Iterator[Distribution]:
         return
     sp = _site_packages(venv_dir)
     if not sp:
-        raise ValueError(f"no site-packages directory found under {venv_dir}")
+        msg = f"no site-packages directory found under {venv_dir}"
+        raise ValueError(msg)
     yield from distributions(path=[str(p) for p in sp])
 
 
@@ -1585,11 +1594,10 @@ def _changes_from_items(items: Sequence[_Atomic]) -> list[Change]:
                 rank, kind, detail = 2, "removed", f"{item.name} {item.payload} present only in baseline"
             else:
                 rank, kind, detail = 3, "changed", f"{item.name} -> {item.payload}"
+        elif item.kind == "set-env":
+            rank, kind, detail = 4, "value", f"{item.name}={item.payload} (safe value from suspect)"
         else:
-            if item.kind == "set-env":
-                rank, kind, detail = 4, "value", f"{item.name}={item.payload} (safe value from suspect)"
-            else:
-                rank, kind, detail = 5, "names", f"unsetting {item.name} (absent in suspect)"
+            rank, kind, detail = 5, "names", f"unsetting {item.name} (absent in suspect)"
         out.append(Change(item.axis, rank, kind, item.name, detail))
     return sorted(out, key=lambda c: (c.rank, c.name))
 
@@ -1717,9 +1725,11 @@ class Bisector:
             quiet: suppress progress logging to stderr.
         """
         if not test_cmd.strip():
-            raise ValueError("test_cmd must be a non-empty shell command")
+            msg = "test_cmd must be a non-empty shell command"
+            raise ValueError(msg)
         if max_runs < 2:
-            raise ValueError("max_runs must be >= 2 (baseline verify + at least one probe)")
+            msg = "max_runs must be >= 2 (baseline verify + at least one probe)"
+            raise ValueError(msg)
         self.test_cmd = test_cmd
         self.baseline = baseline
         self.suspect = suspect
@@ -1765,7 +1775,8 @@ class Bisector:
         Cleans up throwaway venvs afterwards unless ``keep=True``.
         """
         if self._ran:
-            raise RuntimeError("Bisector.run() may only be called once")
+            msg = "Bisector.run() may only be called once"
+            raise RuntimeError(msg)
         self._ran = True
         try:
             return self._run_inner()
@@ -1927,7 +1938,8 @@ class Bisector:
                 self._log(f"[cache hit #{self._cache_hits}] pins={len(cand.packages)} env={cand.env.mode}")
                 return cached
         if self._runs >= self.max_runs:
-            raise _BudgetExhausted(f"run budget of {self.max_runs} test executions exhausted before a verdict")
+            msg = f"run budget of {self.max_runs} test executions exhausted before a verdict"
+            raise _BudgetExhausted(msg)
         venv_dir = self._venv_for(cand.interpreter, cand.channel)
         self._sync(venv_dir, cand.packages)
         env = self._child_env(cand.env, venv_dir)
@@ -2035,10 +2047,12 @@ class Bisector:
         try:
             proc = subprocess.run(cmd, capture_output=True, text=True, timeout=600, check=False)
         except (OSError, subprocess.SubprocessError) as exc:
-            raise RuntimeError(f"package manager failed to launch: {exc}") from None
+            msg = f"package manager failed to launch: {exc}"
+            raise RuntimeError(msg) from None
         if proc.returncode != 0:
             tail = (proc.stderr or proc.stdout or "")[-1500:]
-            raise RuntimeError(f"package operation failed ({' '.join(args[:2])} ...):\n{tail}")
+            msg = f"package operation failed ({' '.join(args[:2])} ...):\n{tail}"
+            raise RuntimeError(msg)
 
     def _child_env(self, profile: EnvProfile, venv_dir: Path) -> dict[str, str]:
         """Build the environment for a candidate test run.
@@ -2116,7 +2130,8 @@ class Bisector:
                     break
                 granularity = min(len(work), granularity * 2)
             except _BudgetExhausted:
-                raise _BudgetExhausted("run budget exhausted during minimisation", partial=work) from None
+                msg = "run budget exhausted during minimisation"
+                raise _BudgetExhausted(msg, partial=work) from None
         return work
 
     def _run_subset(
@@ -2151,7 +2166,8 @@ def _load_stamp(source: str | os.PathLike[str] | None, *, stdin: bool = False) -
         data = json.load(sys.stdin)
     else:
         if source is None:
-            raise ValueError("missing stamp file argument")
+            msg = "missing stamp file argument"
+            raise ValueError(msg)
         data = json.loads(Path(source).read_text(encoding="utf-8"))
     return Stamp.from_dict(data, verify=True)
 

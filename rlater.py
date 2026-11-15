@@ -26,7 +26,6 @@ Data lives in $RLATER_DB, or $XDG_DATA_HOME/rlater/rlater.db
 from __future__ import annotations
 import argparse
 import codecs
-from collections.abc import Callable, Iterator, Sequence
 from concurrent.futures import ThreadPoolExecutor
 import contextlib
 from dataclasses import dataclass, field
@@ -43,12 +42,16 @@ import sqlite3
 import subprocess
 import sys
 import textwrap
-from typing import Final, NoReturn
+from typing import TYPE_CHECKING, Final, NoReturn
 from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit, urlunsplit
 from urllib.request import Request, urlopen
 import webbrowser
 import zlib
+
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Iterator, Sequence
 
 
 __version__ = "1.0.0"
@@ -143,10 +146,8 @@ def page(text: str, enabled: bool) -> None:
     env = os.environ.copy()
     env.setdefault("LESSCHARSET", "utf-8")
     proc = subprocess.Popen(argv, stdin=subprocess.PIPE, text=True, encoding="utf-8", env=env)
-    try:
+    with contextlib.suppress(KeyboardInterrupt):
         proc.communicate(text)
-    except KeyboardInterrupt:
-        pass
     while True:  # let the pager finish even if Ctrl-C hit us first
         try:
             proc.wait()
@@ -171,12 +172,14 @@ def normalize_url(raw: str) -> str:
     """Canonicalise a URL: add scheme, lowercase host, drop fragment + trackers."""
     raw = raw.strip()
     if not raw:
-        raise ValueError("empty URL")
+        msg = "empty URL"
+        raise ValueError(msg)
     if "://" not in raw:
         raw = "https://" + raw
     parts = urlsplit(raw)
     if parts.scheme.lower() not in ("http", "https") or not parts.netloc:
-        raise ValueError(f"not an http(s) URL: {raw!r}")
+        msg = f"not an http(s) URL: {raw!r}"
+        raise ValueError(msg)
     query = [(k, v) for k, v in parse_qsl(parts.query, keep_blank_values=True) if not TRACKING_PARAM.match(k)]
     return urlunsplit((parts.scheme.lower(), parts.netloc.lower(), parts.path or "/", urlencode(query), ""))
 
@@ -275,37 +278,74 @@ def fetch(url: str, opts: FetchOptions) -> Page:
         with urlopen(request, timeout=opts.timeout) as resp:
             content_type = resp.headers.get_content_type()
             if not (content_type.startswith("text/") or "xml" in content_type):
-                raise FetchError(f"unsupported content type: {content_type}")
+                msg = f"unsupported content type: {content_type}"
+                raise FetchError(msg)
             raw = resp.read(opts.max_bytes + 1)
             if len(raw) > opts.max_bytes:
-                raise FetchError(f"page larger than {opts.max_bytes // (1024 * 1024)} MB")
+                msg = f"page larger than {opts.max_bytes // (1024 * 1024)} MB"
+                raise FetchError(msg)
             encoding = (resp.headers.get("Content-Encoding") or "").lower()
             if encoding in ("gzip", "x-gzip", "deflate"):
                 wbits = zlib.MAX_WBITS | 16 if "gzip" in encoding else zlib.MAX_WBITS
                 try:
                     raw = zlib.decompressobj(wbits).decompress(raw, opts.max_bytes)
                 except zlib.error as exc:
-                    raise FetchError(f"bad compressed response: {exc}") from exc
+                    msg = f"bad compressed response: {exc}"
+                    raise FetchError(msg) from exc
             return Page(resp.geturl(), decode_html(raw, resp.headers.get_content_charset()), content_type)
     except HTTPError as exc:
-        raise FetchError(f"HTTP {exc.code} {exc.reason}") from exc
+        msg = f"HTTP {exc.code} {exc.reason}"
+        raise FetchError(msg) from exc
     except URLError as exc:
-        raise FetchError(f"{exc.reason}") from exc
+        msg = f"{exc.reason}"
+        raise FetchError(msg) from exc
     except (TimeoutError, OSError) as exc:
-        raise FetchError(f"{type(exc).__name__}: {exc}") from exc
+        msg = f"{type(exc).__name__}: {exc}"
+        raise FetchError(msg) from exc
 
 
 # =============================================================================
 # Tiny, forgiving HTML tree
 # =============================================================================
 
-VOID: Final = frozenset("area base br col embed hr img input link meta param source track wbr".split())
+VOID: Final = frozenset([
+    "area",
+    "base",
+    "br",
+    "col",
+    "embed",
+    "hr",
+    "img",
+    "input",
+    "link",
+    "meta",
+    "param",
+    "source",
+    "track",
+    "wbr",
+])
 HEADINGS: Final = frozenset({"h1", "h2", "h3", "h4", "h5", "h6"})
 P_CLOSERS: Final = (
-    frozenset("div ul ol table blockquote pre section article aside header footer nav figure form hr".split())
+    frozenset([
+        "div",
+        "ul",
+        "ol",
+        "table",
+        "blockquote",
+        "pre",
+        "section",
+        "article",
+        "aside",
+        "header",
+        "footer",
+        "nav",
+        "figure",
+        "form",
+        "hr",
+    ])
     | HEADINGS
 )
-AUTO_CLOSE: Final = frozenset("p li dt dd tr td th option thead tbody".split())
+AUTO_CLOSE: Final = frozenset(["p", "li", "dt", "dd", "tr", "td", "th", "option", "thead", "tbody"])
 MAX_DEPTH: Final = 120
 
 
@@ -332,7 +372,7 @@ class TreeBuilder(HTMLParser):
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         "Handle starttag."
         top = self.stack[-1]
-        if len(self.stack) > 1 and (tag in AUTO_CLOSE and top.tag == tag or tag in P_CLOSERS and top.tag == "p"):
+        if len(self.stack) > 1 and ((tag in AUTO_CLOSE and top.tag == tag) or (tag in P_CLOSERS and top.tag == "p")):
             self.stack.pop()
         node = Node(tag, {k: v or "" for k, v in attrs}, parent=self.stack[-1])
         self.stack[-1].children.append(node)
@@ -398,17 +438,81 @@ def raw_text(node: Node) -> str:
 # Clutter removal + main-content detection
 # =============================================================================
 
-DROP_TAGS: Final = frozenset(
-    "script style noscript template svg canvas iframe object embed button select textarea input "
-    "nav footer aside dialog audio video map datalist head title meta link base".split()
-)
+DROP_TAGS: Final = frozenset([
+    "script",
+    "style",
+    "noscript",
+    "template",
+    "svg",
+    "canvas",
+    "iframe",
+    "object",
+    "embed",
+    "button",
+    "select",
+    "textarea",
+    "input",
+    "nav",
+    "footer",
+    "aside",
+    "dialog",
+    "audio",
+    "video",
+    "map",
+    "datalist",
+    "head",
+    "title",
+    "meta",
+    "link",
+    "base",
+])
 NOISE_ROLES: Final = frozenset({"navigation", "banner", "contentinfo", "complementary", "search", "dialog"})
-NEG_TOKENS: Final = frozenset(
-    "comment comments sidebar footer nav navbar navigation menu ad ads advert advertisement promo "
-    "share sharing social cookie cookies popup modal newsletter subscribe subscription related "
-    "breadcrumb breadcrumbs toolbar banner outbrain taboola sponsored recommended".split()
-)
-POS_TOKENS: Final = frozenset("article content post entry story body main text hentry prose".split())
+NEG_TOKENS: Final = frozenset([
+    "comment",
+    "comments",
+    "sidebar",
+    "footer",
+    "nav",
+    "navbar",
+    "navigation",
+    "menu",
+    "ad",
+    "ads",
+    "advert",
+    "advertisement",
+    "promo",
+    "share",
+    "sharing",
+    "social",
+    "cookie",
+    "cookies",
+    "popup",
+    "modal",
+    "newsletter",
+    "subscribe",
+    "subscription",
+    "related",
+    "breadcrumb",
+    "breadcrumbs",
+    "toolbar",
+    "banner",
+    "outbrain",
+    "taboola",
+    "sponsored",
+    "recommended",
+])
+POS_TOKENS: Final = frozenset([
+    "article",
+    "content",
+    "post",
+    "entry",
+    "story",
+    "body",
+    "main",
+    "text",
+    "hentry",
+    "prose",
+])
 TOKEN_SPLIT: Final = re.compile(r"[^a-z0-9]+")
 HIDDEN_STYLE: Final = re.compile(r"display\s*:\s*none|visibility\s*:\s*hidden", re.IGNORECASE)
 SCORE_TAGS: Final = frozenset({"p", "pre", "td", "blockquote"})
@@ -518,11 +622,41 @@ def find_main(body: Node) -> Node:
 # Node tree -> light Markdown
 # =============================================================================
 
-BLOCK_TAGS: Final = frozenset(
-    "address article aside blockquote body center dd details div dl dt fieldset figcaption figure "
-    "footer form header hgroup html main nav section summary tbody thead tfoot caption p "
-    "table tr td th #root".split()
-)
+BLOCK_TAGS: Final = frozenset([
+    "address",
+    "article",
+    "aside",
+    "blockquote",
+    "body",
+    "center",
+    "dd",
+    "details",
+    "div",
+    "dl",
+    "dt",
+    "fieldset",
+    "figcaption",
+    "figure",
+    "footer",
+    "form",
+    "header",
+    "hgroup",
+    "html",
+    "main",
+    "nav",
+    "section",
+    "summary",
+    "tbody",
+    "thead",
+    "tfoot",
+    "caption",
+    "p",
+    "table",
+    "tr",
+    "td",
+    "th",
+    "#root",
+])
 BLOCKISH: Final = BLOCK_TAGS | HEADINGS | {"ul", "ol", "li", "pre", "hr"}
 MD_START: Final = re.compile(r"^(#{1,6} |[-*+] |\d+[.)] |>|\||`{3})")
 HEADING_MARK: Final = re.compile(r"^#{1,6} ")
@@ -1259,12 +1393,11 @@ def add_urls(
         if title:
             result.title = title
         article_id = known_id
-        if article_id is None and result.final_url != url:
-            if dup := lib.find(result.final_url):
-                print(f"= #{dup['id']}  already saved (redirects there): {truncate(dup['title'], 60)}")
-                lib.add_tags(dup["id"], tags)
-                ids.append(dup["id"])
-                continue
+        if article_id is None and result.final_url != url and (dup := lib.find(result.final_url)):
+            print(f"= #{dup['id']}  already saved (redirects there): {truncate(dup['title'], 60)}")
+            lib.add_tags(dup["id"], tags)
+            ids.append(dup["id"])
+            continue
         article_id = lib.save(result, article_id)
         lib.add_tags(article_id, tags)
         if star:
@@ -1312,7 +1445,7 @@ def cmd_import(lib: Library, args: argparse.Namespace) -> int:
     source = sys.stdin.buffer.read() if args.file == "-" else Path(args.file).read_bytes()
     text = decode_html(source)
     if re.search(r"<a\s", text, re.IGNORECASE):  # bookmarks/Pocket HTML export
-        urls = [u.replace("&amp;", "&") for u in re.findall(r"""href=["'](https?://[^"']+)""", text, re.I)]
+        urls = [u.replace("&amp;", "&") for u in re.findall(r"""href=["'](https?://[^"']+)""", text, re.IGNORECASE)]
     else:
         urls = extract_urls(text)
     urls = dedupe(urls)
@@ -1367,7 +1500,7 @@ def cmd_list(lib: Library, args: argparse.Namespace) -> int:
     if args.json:
         payload = [
             {
-                **{k: r[k] for k in r.keys() if k != "tags"},
+                **{k: r[k] for k in r if k != "tags"},
                 "tags": sorted((r["tags"] or "").split(",")) if r["tags"] else [],
             }
             for r in rows

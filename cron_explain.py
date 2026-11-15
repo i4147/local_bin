@@ -98,7 +98,8 @@ def parse_field(field: str, min_val: int, max_val: int, name_map: dict[str, int]
             try:
                 step = int(step_str)
             except ValueError as e:
-                raise ValueError(f"Invalid step value '{step_str}' in field '{field}'") from e
+                msg = f"Invalid step value '{step_str}' in field '{field}'"
+                raise ValueError(msg) from e
 
         if part == "*":
             sub_range = range(min_val, max_val + 1)
@@ -132,11 +133,13 @@ def resolve_token(token: str, min_val: int, max_val: int, name_map: dict[str, in
             # Special handling for Sunday as 7 -> 0
             if max_val == 6 and min_val == 0 and val == 7:
                 return 0
-            raise ValueError(f"Value {val} out of range [{min_val}, {max_val}]")
+            msg = f"Value {val} out of range [{min_val}, {max_val}]"
+            raise ValueError(msg)
         return val
     except ValueError as e:
         if name_map:
-            raise ValueError(f"Invalid token '{token}'") from e
+            msg = f"Invalid token '{token}'"
+            raise ValueError(msg) from e
         raise
 
 
@@ -177,11 +180,13 @@ def parse_cron_line(line: str, source_file: str = "stdin", line_number: int = 1)
             line = MACRO_MAP[macro] + (" " + parts[1] if len(parts) > 1 else "")
             macro_name = macro
         else:
-            raise ValueError(f"Unknown cron macro: {macro}")
+            msg = f"Unknown cron macro: {macro}"
+            raise ValueError(msg)
 
     tokens = line.split(None, 5)
     if len(tokens) < 5:
-        raise ValueError(f"Malformed cron line (less than 5 fields): '{line}'")
+        msg = f"Malformed cron line (less than 5 fields): '{line}'"
+        raise ValueError(msg)
 
     min_s, hour_s, dom_s, mon_s, dow_s = tokens[:5]
     command = tokens[5] if len(tokens) > 5 else ""
@@ -404,7 +409,8 @@ def discover_sources(file_path: str | None) -> list[tuple[str, int, str]]:
     lines = []
     if file_path:
         if not Path(file_path).exists():
-            raise FileNotFoundError(f"File not found: {file_path}")
+            msg = f"File not found: {file_path}"
+            raise FileNotFoundError(msg)
         # Permission check for /etc/cron.d/ files
         if "cron.d" in file_path:
             stat = os.stat(file_path)

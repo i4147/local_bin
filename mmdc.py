@@ -39,7 +39,9 @@ from __future__ import annotations
 import argparse
 import ast
 from concurrent.futures import ThreadPoolExecutor
+import contextlib
 from dataclasses import dataclass, field, replace
+import itertools
 import json
 import math
 import os
@@ -1749,10 +1751,10 @@ def _pil_color(color: str | None) -> Any:
     if rgba is None:
         return None
     return (
-        int(round(rgba[0] * 255)),
-        int(round(rgba[1] * 255)),
-        int(round(rgba[2] * 255)),
-        int(round(rgba[3] * 255)),
+        round(rgba[0] * 255),
+        round(rgba[1] * 255),
+        round(rgba[2] * 255),
+        round(rgba[3] * 255),
     )
 
 
@@ -1762,7 +1764,7 @@ def _dashed_segments(pts: Sequence[Pt], dash: Sequence[float]) -> list[tuple[Pt,
     segs: list[tuple[Pt, Pt]] = []
     di = 0
     remaining = dash[0] if dash else 0.0
-    for (x1, y1), (x2, y2) in zip(pts, pts[1:]):
+    for (x1, y1), (x2, y2) in itertools.pairwise(pts):
         length = math.hypot(x2 - x1, y2 - y1)
         if length == 0:
             continue
@@ -1797,17 +1799,18 @@ def canvas_to_png(
     try:
         from PIL import Image, ImageDraw
     except ImportError as exc:  # pragma: no cover - depends on environment
-        raise MermaidError(
+        msg = (
             "PNG output requires the optional Pillow library. "
             "Install it with 'pip install pillow' (on Termux: "
             "'pkg install python-pillow'). SVG and PDF output work without "
             "any extra libraries."
-        ) from exc
+        )
+        raise MermaidError(msg) from exc
 
     eff = min(1.0, size / max(canvas.w, canvas.h)) if size else 1.0
     final = max(0.05, float(scale)) * eff
-    px_w = max(1, int(round(canvas.w * final)))
-    px_h = max(1, int(round(canvas.h * final)))
+    px_w = max(1, round(canvas.w * final))
+    px_h = max(1, round(canvas.h * final))
     ss = 2  # supersampling factor for smoother output
     big_w, big_h = px_w * ss, px_h * ss
     k = final * ss
@@ -1823,7 +1826,7 @@ def canvas_to_png(
     fonts: dict[tuple[int, bool], Any] = {}
 
     def font_for(size: float, bold: bool) -> Any:
-        key = (int(round(size * k)), bold)
+        key = (round(size * k), bold)
         if key not in fonts:
             fonts[key] = _find_pil_font(key[0], bold)
         return fonts[key]
@@ -1835,7 +1838,7 @@ def canvas_to_png(
         base = _pil_color(color)
         if base is None:
             return None
-        return (base[0], base[1], base[2], int(round(base[3] * opacity)))
+        return (base[0], base[1], base[2], round(base[3] * opacity))
 
     def draw_prim(p: Prim, d: Any) -> None:
         opacity = max(0.0, min(1.0, p.opacity))
@@ -1855,7 +1858,7 @@ def canvas_to_png(
             r = p.rx * k
             fill, stroke = fill_c(), stroke_c()
             if fill or stroke:
-                width = max(1, int(round(p.stroke_width * k))) if stroke else 0
+                width = max(1, round(p.stroke_width * k)) if stroke else 0
                 if r > 0.5 and hasattr(d, "rounded_rectangle"):
                     d.rounded_rectangle((x0, y0, x1, y1), radius=r, fill=fill, outline=stroke, width=width)
                 else:
@@ -1867,7 +1870,7 @@ def canvas_to_png(
                     ((p.x - p.rx) * k, (p.y - p.ry) * k, (p.x + p.rx) * k, (p.y + p.ry) * k),
                     fill=fill,
                     outline=stroke,
-                    width=max(1, int(round(p.stroke_width * k))) if stroke else 0,
+                    width=max(1, round(p.stroke_width * k)) if stroke else 0,
                 )
         elif p.kind == "polygon":
             if not p.pts:
@@ -1877,14 +1880,14 @@ def canvas_to_png(
             if fill:
                 d.polygon(pts, fill=fill)
             if stroke:
-                d.line(pts + [pts[0]], fill=stroke, width=max(1, int(round(p.stroke_width * k))), joint="curve")
+                d.line(pts + [pts[0]], fill=stroke, width=max(1, round(p.stroke_width * k)), joint="curve")
         elif p.kind == "polyline":
             if len(p.pts) < 2:
                 return
             color = stroke_c()
             if color is None:
                 return
-            width = max(1, int(round(p.stroke_width * k)))
+            width = max(1, round(p.stroke_width * k))
             if p.dash:
                 for a, b in _dashed_segments(p.pts, p.dash):
                     d.line([pt(a), pt(b)], fill=color, width=width)
@@ -2301,20 +2304,20 @@ def _split_amp(s: str) -> list[str]:
 
 
 _SHAPE_RES: list[tuple[re.Pattern[str], str]] = [
-    (re.compile(r"^\(\(\((.*)\)\)\)$", re.S), "double_circle"),
-    (re.compile(r"^\(\[(.*)\]\)$", re.S), "stadium"),
-    (re.compile(r"^\(\((.*)\)\)$", re.S), "circle"),
-    (re.compile(r"^\[\[(.*)\]\]$", re.S), "subroutine"),
-    (re.compile(r"^\[\((.*)\)\]$", re.S), "cylinder"),
-    (re.compile(r"^\{\{(.*)\}\}$", re.S), "hexagon"),
-    (re.compile(r"^\{(.*)\}$", re.S), "rhombus"),
-    (re.compile(r"^\[/(.*)\\\]$", re.S), "trapezoid"),
-    (re.compile(r"^\[\\(.*)/\]$", re.S), "trapezoid_alt"),
-    (re.compile(r"^\[/(.*)/\]$", re.S), "para"),
-    (re.compile(r"^\[\\(.*)\\\]$", re.S), "para_alt"),
-    (re.compile(r"^\[(.*)\]$", re.S), "rect"),
-    (re.compile(r"^\((.*)\)$", re.S), "rounded"),
-    (re.compile(r"^>(.*)\]$", re.S), "asym"),
+    (re.compile(r"^\(\(\((.*)\)\)\)$", re.DOTALL), "double_circle"),
+    (re.compile(r"^\(\[(.*)\]\)$", re.DOTALL), "stadium"),
+    (re.compile(r"^\(\((.*)\)\)$", re.DOTALL), "circle"),
+    (re.compile(r"^\[\[(.*)\]\]$", re.DOTALL), "subroutine"),
+    (re.compile(r"^\[\((.*)\)\]$", re.DOTALL), "cylinder"),
+    (re.compile(r"^\{\{(.*)\}\}$", re.DOTALL), "hexagon"),
+    (re.compile(r"^\{(.*)\}$", re.DOTALL), "rhombus"),
+    (re.compile(r"^\[/(.*)\\\]$", re.DOTALL), "trapezoid"),
+    (re.compile(r"^\[\\(.*)/\]$", re.DOTALL), "trapezoid_alt"),
+    (re.compile(r"^\[/(.*)/\]$", re.DOTALL), "para"),
+    (re.compile(r"^\[\\(.*)\\\]$", re.DOTALL), "para_alt"),
+    (re.compile(r"^\[(.*)\]$", re.DOTALL), "rect"),
+    (re.compile(r"^\((.*)\)$", re.DOTALL), "rounded"),
+    (re.compile(r"^>(.*)\]$", re.DOTALL), "asym"),
 ]
 
 
@@ -2348,7 +2351,7 @@ def _parse_node_ref(text: str, counter: dict[str, int]) -> tuple[str, str | None
     if not text:
         return None
 
-    m = re.match(r"^(\w+)\s*(.*)$", text, re.S)
+    m = re.match(r"^(\w+)\s*(.*)$", text, re.DOTALL)
     if m and m.group(1):
         nid = m.group(1)
         rest = m.group(2).strip()
@@ -2489,9 +2492,8 @@ def parse_flowchart(statements: Sequence[str]) -> FlowIR:
             m2 = re.match(r"^class\s+(.*)\s+(\S+)$", stmt, re.IGNORECASE)
             if m2:
                 for nid in re.split(r"[,\s]+", m2.group(1).strip()):
-                    if nid and nid in ir.nodes:
-                        if m2.group(2) not in ir.nodes[nid].classes:
-                            ir.nodes[nid].classes.append(m2.group(2))
+                    if nid and nid in ir.nodes and m2.group(2) not in ir.nodes[nid].classes:
+                        ir.nodes[nid].classes.append(m2.group(2))
             continue
 
         if low.startswith("style "):
@@ -2603,12 +2605,12 @@ def layered_layout(
                 stack.pop()
 
     # --- ranking (longest path over non-back edges) ----------------------
-    indeg = {i: 0 for i in ids}
+    indeg = dict.fromkeys(ids, 0)
     for a, b in edges:
         if a in sizes and b in sizes and a != b and (a, b) not in back:
             indeg[b] += 1
     queue = [i for i in ids if indeg[i] == 0]
-    rank: dict[str, int] = {i: 0 for i in ids}
+    rank: dict[str, int] = dict.fromkeys(ids, 0)
     processed: set[str] = set()
     qi = 0
     while qi < len(queue):
@@ -2618,8 +2620,7 @@ def layered_layout(
         for v in succ[u]:
             if (u, v) in back:
                 continue
-            if rank[v] < rank[u] + 1:
-                rank[v] = rank[u] + 1
+            rank[v] = max(rank[v], rank[u] + 1)
             indeg[v] -= 1
             if indeg[v] == 0:
                 queue.append(v)
@@ -2738,10 +2739,8 @@ def _apply_style_dict(
         elif lk in ("stroke-width", "strokewidth"):
             sw = _css_float(v, sw)
         elif lk in ("stroke-dasharray", "strokedasharray", "dasharray"):
-            try:
+            with contextlib.suppress(ValueError):
                 dash = tuple(float(x) for x in re.split(r"[\s,]+", v) if x)
-            except ValueError:
-                pass
     return fill, stroke, text, sw, dash
 
 
@@ -2954,7 +2953,7 @@ def render_flowchart(statements: Sequence[str], theme: Theme, config: dict[str, 
             d += 1
         return d
 
-    for gid in sorted(ir.groups, key=lambda g: depth_of(g)):
+    for gid in sorted(ir.groups, key=depth_of):
         gx, gy, gw, gh = boxes[gid]
         if gw <= 0:
             continue
@@ -3152,16 +3151,16 @@ class SeqIR:
     title: str | None = None
 
 
-_SEQ_CREATE_RE = re.compile(r"^create\s+(participant|actor)\s+([\w-]+)(?:\s+as\s+(.+))?$", re.I)
-_SEQ_PART_RE = re.compile(r"^(participant|actor)\s+([\w-]+)(?:\s+as\s+(.+))?$", re.I)
-_SEQ_MSG_RE = re.compile(r"^([\w-]+)\s*(-->>|-->|->>|->|--x|-x|--\)|-\))\s*([+-]*[\w-]+)\s*:\s*(.*)$", re.S)
-_SEQ_NOTE_RE = re.compile(r"^note\s+(left of|right of|over)\s+([\w\s,-]+?)\s*:\s*(.*)$", re.I | re.S)
-_SEQ_BLOCK_RE = re.compile(r"^(loop|alt|opt|par|and|critical|option|break|rect|box)\s*(.*)$", re.I)
-_SEQ_ELSE_RE = re.compile(r"^else\s*(.*)$", re.I)
-_SEQ_END_RE = re.compile(r"^end$", re.I)
-_SEQ_ACT_RE = re.compile(r"^(activate|deactivate)\s+([\w-]+)$", re.I)
-_SEQ_AUTO_RE = re.compile(r"^autonumber\s*(off)?\s*(\d+)?\s*$", re.I)
-_SEQ_TITLE_RE = re.compile(r"^title\s+(.*)$", re.I)
+_SEQ_CREATE_RE = re.compile(r"^create\s+(participant|actor)\s+([\w-]+)(?:\s+as\s+(.+))?$", re.IGNORECASE)
+_SEQ_PART_RE = re.compile(r"^(participant|actor)\s+([\w-]+)(?:\s+as\s+(.+))?$", re.IGNORECASE)
+_SEQ_MSG_RE = re.compile(r"^([\w-]+)\s*(-->>|-->|->>|->|--x|-x|--\)|-\))\s*([+-]*[\w-]+)\s*:\s*(.*)$", re.DOTALL)
+_SEQ_NOTE_RE = re.compile(r"^note\s+(left of|right of|over)\s+([\w\s,-]+?)\s*:\s*(.*)$", re.IGNORECASE | re.DOTALL)
+_SEQ_BLOCK_RE = re.compile(r"^(loop|alt|opt|par|and|critical|option|break|rect|box)\s*(.*)$", re.IGNORECASE)
+_SEQ_ELSE_RE = re.compile(r"^else\s*(.*)$", re.IGNORECASE)
+_SEQ_END_RE = re.compile(r"^end$", re.IGNORECASE)
+_SEQ_ACT_RE = re.compile(r"^(activate|deactivate)\s+([\w-]+)$", re.IGNORECASE)
+_SEQ_AUTO_RE = re.compile(r"^autonumber\s*(off)?\s*(\d+)?\s*$", re.IGNORECASE)
+_SEQ_TITLE_RE = re.compile(r"^title\s+(.*)$", re.IGNORECASE)
 
 
 def _seq_flags(tok: str) -> tuple[str, str]:
@@ -3720,7 +3719,7 @@ def _seq_message(st: _SeqState, msg: SeqMessage) -> None:
     src_x, dst_x = _seq_endpoints(st, msg)
     lsize = st.size - 1
     lines = fit_label(label, lsize, 260)
-    lw, lh = lines_size(lines, lsize)
+    _lw, lh = lines_size(lines, lsize)
     arrow_y = st.y + lh + 4
     st.messages.append(
         Prim(
@@ -3885,7 +3884,7 @@ _CLS_REL_RE = re.compile(
     + "|".join(re.escape(op) for op in _CLS_OPS)
     + r')\s*(?:"([^"]*)")?\s*([\w~$]+)\s*(?:"([^"]*)")?\s*(?::\s*(.*))?$'
 )
-_CLS_NOTE_RE = re.compile(r'^note\s+for\s+([\w~$]+)\s+"(.*)"$', re.I)
+_CLS_NOTE_RE = re.compile(r'^note\s+for\s+([\w~$]+)\s+"(.*)"$', re.IGNORECASE)
 
 
 def _clean_cls_name(name: str) -> str:
@@ -3911,7 +3910,7 @@ def parse_class(statements: Sequence[str]) -> ClassIR:
             continue
         low = stmt.lower()
 
-        m = re.match(r"^classDiagram(-v2)?$", stmt, re.I)
+        m = re.match(r"^classDiagram(-v2)?$", stmt, re.IGNORECASE)
         if m and not ir.classes:
             continue
 
@@ -3998,7 +3997,7 @@ def _cls_node_size(cls: ClsClass, theme: Theme) -> tuple[float, float]:
     tsize = theme.font_size - 2
     msize = theme.font_size - 3
     title_w = text_width(cls.name, tsize, bold=True)
-    anno_lines = [a for a in cls.annotations]
+    anno_lines = list(cls.annotations)
     anno_w = max((text_width(f"\u00ab{a}\u00bb", msize) for a in anno_lines), default=0.0)
     member_w = max((text_width(mm, msize) for mm in cls.members), default=0.0)
     w = max(title_w, anno_w, member_w) + 20
@@ -4292,7 +4291,7 @@ def parse_er(statements: Sequence[str]) -> ErIR:
         stmt = raw.strip()
         if not stmt:
             continue
-        if re.match(r"^erDiagram$", stmt, re.I):
+        if re.match(r"^erDiagram$", stmt, re.IGNORECASE):
             continue
 
         if open_entity is not None:
@@ -4561,8 +4560,8 @@ _ST_TRANS_RE = re.compile(r"^(\S+?)\s*(?:-+>|->)\s*(\[?\S+?\]?)\s*(?::\s*(.*))?$
 _ST_STATE_AS_RE = re.compile(r'^state\s+"(.*)"\s+as\s+(\w+)$')
 _ST_STATE_DESC_RE = re.compile(r"^state\s+(\w+)\s*:\s*(.*)$")
 _ST_STATE_PLAIN_RE = re.compile(r"^state\s+(\w+)(?:\s+<<(choice|fork|join)>>)?\s*$")
-_ST_NOTE_RE = re.compile(r"^note\s+(left of|right of|over)\s+(\w+)\s*:\s*(.*)$", re.I)
-_ST_DIR_RE = re.compile(r"^direction\s+(TB|TD|BT|RL|LR)$", re.I)
+_ST_NOTE_RE = re.compile(r"^note\s+(left of|right of|over)\s+(\w+)\s*:\s*(.*)$", re.IGNORECASE)
+_ST_DIR_RE = re.compile(r"^direction\s+(TB|TD|BT|RL|LR)$", re.IGNORECASE)
 
 
 def parse_state(statements: Sequence[str]) -> StateIR:
@@ -4591,7 +4590,7 @@ def parse_state(statements: Sequence[str]) -> StateIR:
         if not stmt:
             continue
 
-        if re.match(r"^stateDiagram(-v2)?$", stmt, re.I):
+        if re.match(r"^stateDiagram(-v2)?$", stmt, re.IGNORECASE):
             continue
 
         m = _ST_DIR_RE.match(stmt)
@@ -4599,7 +4598,7 @@ def parse_state(statements: Sequence[str]) -> StateIR:
             ir.direction = m.group(1).upper()
             continue
 
-        if re.match(r"^end$", stmt, re.I):
+        if re.match(r"^end$", stmt, re.IGNORECASE):
             if group_stack:
                 group_stack.pop()
             continue
@@ -4707,7 +4706,7 @@ def render_state(statements: Sequence[str], theme: Theme, config: dict[str, Any]
 
     # composite boxes behind everything
     boxes = _group_boxes(
-        {gid: g for gid, g in ir.groups.items()},
+        dict(ir.groups.items()),
         node_rects,
         lambda sid: ir.states[sid].group,
     )
@@ -4939,17 +4938,17 @@ def parse_pie(statements: Sequence[str]) -> PieIR:
         stmt = raw.strip()
         if not stmt:
             continue
-        if re.match(r"^pie$", stmt, re.I):
+        if re.match(r"^pie$", stmt, re.IGNORECASE):
             continue
-        m = re.match(r"^pie\s+title\s+(.*)$", stmt, re.I)
+        m = re.match(r"^pie\s+title\s+(.*)$", stmt, re.IGNORECASE)
         if m:
             ir.title = m.group(1).strip()
             continue
-        m = re.match(r"^title\s+(.*)$", stmt, re.I)
+        m = re.match(r"^title\s+(.*)$", stmt, re.IGNORECASE)
         if m and not ir.rows:
             ir.title = m.group(1).strip()
             continue
-        if re.match(r"^showData$", stmt, re.I):
+        if re.match(r"^showData$", stmt, re.IGNORECASE):
             ir.show_data = True
             continue
         m = re.match(r'^"(.*)"\s*:\s*([\d.]+)\s*$', stmt)
@@ -5064,10 +5063,8 @@ def render_diagram(
     if merged.get("fontFamily"):
         theme.font_family = str(merged["fontFamily"])
     if merged.get("fontSize"):
-        try:
+        with contextlib.suppress(TypeError, ValueError):
             theme.font_size = float(merged["fontSize"])
-        except (TypeError, ValueError):
-            pass
 
     dtype = detect_diagram_type(statements).lower()
     if dtype in ("flowchart", "graph"):
@@ -5083,7 +5080,8 @@ def render_diagram(
     elif dtype == "pie":
         canvas = render_pie(statements, theme, merged)
     elif not dtype:
-        raise MermaidParseError("Empty diagram definition")
+        msg = "Empty diagram definition"
+        raise MermaidParseError(msg)
     else:
         raise UnsupportedDiagramError(detect_diagram_type(statements))
 
@@ -5106,7 +5104,8 @@ def renderMermaid(browser, definition, outputFormat, opt=None) -> dict[str, Any]
     ``title``, ``desc`` and ``data`` (the output file as bytes).
     """
     if outputFormat not in ("svg", "png", "pdf"):
-        raise MermaidError('Output format must be one of "svg", "png" or "pdf"')
+        msg = 'Output format must be one of "svg", "png" or "pdf"'
+        raise MermaidError(msg)
     opt = opt or {}
     mermaid_config = dict(opt.get("mermaidConfig") or {})
     canvas, title, desc, theme = render_diagram(definition, mermaid_config)
@@ -5155,7 +5154,7 @@ def markdownImage(params: dict[str, Any]) -> str:
 
 
 #: Mirrors upstream's markdown code-block finder (supports ``` and ::: fences).
-MERMAID_MD_RE = re.compile(r"^[^\S\n]*[`:]{3}mermaid([^\S\n]*\r?\n([\s\S]*?))[`:]{3}[^\S\n]*$", re.M)
+MERMAID_MD_RE = re.compile(r"^[^\S\n]*[`:]{3}mermaid([^\S\n]*\r?\n([\s\S]*?))[`:]{3}[^\S\n]*$", re.MULTILINE)
 
 
 def _render_to_file(
@@ -5192,7 +5191,8 @@ def run(input: str | None, output: str, opts: dict[str, Any] | None = None) -> N
         ext = Path(output).suffix.lstrip(".").lower()
         outputFormat = "svg" if ext in ("md", "markdown") else ext
     if outputFormat not in ("svg", "png", "pdf"):
-        raise MermaidError('Output format must be one of "svg", "png" or "pdf"')
+        msg = 'Output format must be one of "svg", "png" or "pdf"'
+        raise MermaidError(msg)
 
     if input is None:
         definition = sys.stdin.read()
@@ -5210,7 +5210,8 @@ def run(input: str | None, output: str, opts: dict[str, Any] | None = None) -> N
         is_markdown = input is not None and Path(input).suffix.lower() in (".md", ".markdown")
         if is_markdown:
             if output == "/dev/stdout":
-                raise MermaidError("Cannot use `stdout` with markdown input")
+                msg = "Cannot use `stdout` with markdown input"
+                raise MermaidError(msg)
 
             matches = list(MERMAID_MD_RE.finditer(definition))
             futures: list[tuple[Any, str]] = []
@@ -5283,9 +5284,11 @@ def _positive_int(value: str) -> int:
     try:
         v = int(value)
     except ValueError:
-        raise argparse.ArgumentTypeError("Not a positive integer.") from None
+        msg = "Not a positive integer."
+        raise argparse.ArgumentTypeError(msg) from None
     if v < 1:
-        raise argparse.ArgumentTypeError("Not a positive integer.")
+        msg = "Not a positive integer."
+        raise argparse.ArgumentTypeError(msg)
     return v
 
 
@@ -5293,9 +5296,11 @@ def _positive_float(value: str) -> float:
     try:
         v = float(value)
     except ValueError:
-        raise argparse.ArgumentTypeError("Not a positive number.") from None
+        msg = "Not a positive number."
+        raise argparse.ArgumentTypeError(msg) from None
     if v <= 0:
-        raise argparse.ArgumentTypeError("Not a positive number.")
+        msg = "Not a positive number."
+        raise argparse.ArgumentTypeError(msg)
     return v
 
 
@@ -5304,7 +5309,8 @@ def _output_value(value: str) -> str:
         return "/dev/stdout"
     if re.search(r"\.(?:svg|png|pdf|md|markdown)$", value):
         return value
-    raise argparse.ArgumentTypeError("Output file must be either md, svg, png, or pdf.")
+    msg = "Output file must be either md, svg, png, or pdf."
+    raise argparse.ArgumentTypeError(msg)
 
 
 class _CommanderParser(argparse.ArgumentParser):
@@ -5514,23 +5520,23 @@ def _validate_icon_packs(args: argparse.Namespace) -> dict[str, str]:
         specifier = f"{val}/icons.json"
         path = Path(specifier)
         if not path.is_file():
-            raise MermaidError(
-                f"Could not find icon pack \"{specifier}\". Have you installed them with 'npm install {val}'?"
-            )
+            msg = f"Could not find icon pack \"{specifier}\". Have you installed them with 'npm install {val}'?"
+            raise MermaidError(msg)
         try:
             content = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
-            raise MermaidError(f'Failed to parse icon pack JSON from "{specifier}".') from None
+            msg = f'Failed to parse icon pack JSON from "{specifier}".'
+            raise MermaidError(msg) from None
         if not isinstance(content, dict) or not isinstance(content.get("prefix"), str):
-            raise MermaidError(f'Invalid icon pack JSON from "{specifier}". Missing or invalid "prefix" property.')
+            msg = f'Invalid icon pack JSON from "{specifier}". Missing or invalid "prefix" property.'
+            raise MermaidError(msg)
         packs[content["prefix"]] = str(path.resolve())
     for val in args.iconPacksNamesAndUrls or []:
         name, *url_parts = val.split("#")
         url = "#".join(url_parts)
         if not url.startswith(("http://", "https://", "file://")):
-            raise MermaidError(
-                "Failed to parse a valid URL. The format should be iconPackName#https://my-example-url.example"
-            )
+            msg = "Failed to parse a valid URL. The format should be iconPackName#https://my-example-url.example"
+            raise MermaidError(msg)
         packs[name] = url
     return packs
 

@@ -62,7 +62,7 @@ class ASTStripper:
         r"nosec|bandit|isort|yapf|autopep8|flake8|black|pyre|pytype|"
         r"pragma|coverage|doctest|pytest|cython|distutils|numba|"
         r"region|endregion|uv)\b|^#\s*(?:%%|</?editor-fold\b)",
-        re.I,
+        re.IGNORECASE,
     )
     _COOKIE_RE = re.compile(rb"coding[:=]\s*[-\w.]+")
 
@@ -139,7 +139,8 @@ class ASTStripper:
             ):
                 continue
             start = offsets[first.lineno - 1] + first.col_offset
-            assert first.end_lineno is not None and first.end_col_offset is not None
+            assert first.end_lineno is not None
+            assert first.end_col_offset is not None
             end = offsets[first.end_lineno - 1] + first.end_col_offset
             line_start = self._line_start(src, start)
             line_end = self._line_end(src, end)
@@ -191,7 +192,8 @@ class ASTStripper:
         cursor = 0
         for start, end, replacement in sorted(edits):
             if start < cursor:
-                raise ValueError("Overlapping source edits")
+                msg = "Overlapping source edits"
+                raise ValueError(msg)
             out.extend(src[cursor:start])
             out.extend(replacement)
             cursor = end
@@ -210,7 +212,8 @@ class ASTStripper:
                 os.fsync(stream.fileno())
             temp.chmod(mode)
             if path.is_symlink() or path.read_bytes() != original:
-                raise RuntimeError("File changed while processing; not replaced")
+                msg = "File changed while processing; not replaced"
+                raise RuntimeError(msg)
             temp.replace(path)
         finally:
             temp.unlink(missing_ok=True)
@@ -223,7 +226,8 @@ class ASTStripper:
         result = StripFileResult(path)
         try:
             if path.is_symlink():
-                raise ValueError("Refusing to replace a symbolic link")
+                msg = "Refusing to replace a symbolic link"
+                raise ValueError(msg)
             original = path.read_bytes()
             encoding, _ = tokenize.detect_encoding(io.BytesIO(original).readline)
             source = original.decode(encoding)
@@ -239,7 +243,8 @@ class ASTStripper:
                     result.diff = make_diff(source, stripped, path.name)
                 if not dryrun:
                     if path.is_symlink() or path.read_bytes() != original:
-                        raise RuntimeError("File changed while processing; not replaced")
+                        msg = "File changed while processing; not replaced"
+                        raise RuntimeError(msg)
                     if backup:
                         result.backup = create_backup(path, original)
                     self._atomic_write(path, data, original)
@@ -301,7 +306,8 @@ def remove_blank_lines(source: str) -> str:
     before = ast.dump(ast.parse(source), include_attributes=False)
     after = ast.dump(ast.parse(result), include_attributes=False)
     if before != after:
-        raise ValueError("Blank-line removal would change the AST; not written")
+        msg = "Blank-line removal would change the AST; not written"
+        raise ValueError(msg)
     return result
 
 
@@ -638,17 +644,19 @@ def iter_python_files(root_dir: Path, *, use_fastwalk: bool = False) -> Iterator
     if has_symlink_component(root_dir):
         return
     if not root_dir.exists():
-        raise FileNotFoundError(f"Input does not exist: {root_dir}")
+        msg = f"Input does not exist: {root_dir}"
+        raise FileNotFoundError(msg)
     if root_dir.is_file():
         if not should_skip(root_dir, root_dir.parent) and is_python_file(root_dir):
             yield root_dir
         return
     if not root_dir.is_dir():
-        raise ValueError(f"Input is not a regular file or directory: {root_dir}")
+        msg = f"Input is not a regular file or directory: {root_dir}"
+        raise ValueError(msg)
     if is_skip_dir(root_dir):
         return
     if use_fastwalk:
-        walk_files = cast(WalkFiles, importlib.import_module("fastwalk").walk_files)
+        walk_files = cast("WalkFiles", importlib.import_module("fastwalk").walk_files)
         candidates: Iterable[Path] = walk_files(root_dir)
     else:
         candidates = pathlib_walk_files(root_dir)
@@ -723,14 +731,16 @@ def run_tasks(tasks: list[Task], method: str, workers: int) -> Iterator[StripFil
         }[method]
         executor_type = getattr(cf, name, None)
         if executor_type is None:
-            raise RuntimeError(f"{name} requires Python 3.14+")
+            msg = f"{name} requires Python 3.14+"
+            raise RuntimeError(msg)
         with executor_type(max_workers=workers) as executor:
             yield from executor.map(process_file, tasks)
     else:
         try:
             from joblib import Parallel, delayed
         except ImportError as exc:
-            raise RuntimeError("Install joblib: python -m pip install joblib") from exc
+            msg = "Install joblib: python -m pip install joblib"
+            raise RuntimeError(msg) from exc
         yield from Parallel(n_jobs=workers, backend="loky", return_as="generator")(
             delayed(process_file)(task) for task in tasks
         )

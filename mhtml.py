@@ -251,27 +251,37 @@ class ConverterConfig:
     def validate(self) -> None:
         """Raise ``ValueError`` when a setting is invalid or unsafe."""
         if self.output_format not in {"html5", "xhtml"}:
-            raise ValueError("output_format must be 'html5' or 'xhtml'")
+            msg = "output_format must be 'html5' or 'xhtml'"
+            raise ValueError(msg)
         if self.resource_handling not in {"inline", "external", "mixed"}:
-            raise ValueError("resource_handling must be 'inline', 'external', or 'mixed'")
+            msg = "resource_handling must be 'inline', 'external', or 'mixed'"
+            raise ValueError(msg)
         try:
             codecs.lookup(self.encoding)
         except LookupError as error:
-            raise ValueError(f"Unknown output encoding: {self.encoding}") from error
+            msg = f"Unknown output encoding: {self.encoding}"
+            raise ValueError(msg) from error
         if self.max_resource_size <= 0 or self.max_input_size <= 0:
-            raise ValueError("max_resource_size and max_input_size must be positive")
+            msg = "max_resource_size and max_input_size must be positive"
+            raise ValueError(msg)
         if self.fetch_timeout <= 0:
-            raise ValueError("fetch_timeout must be positive")
+            msg = "fetch_timeout must be positive"
+            raise ValueError(msg)
         if self.max_fetch_retries < 0:
-            raise ValueError("max_fetch_retries cannot be negative")
+            msg = "max_fetch_retries cannot be negative"
+            raise ValueError(msg)
         if self.max_workers < 1:
-            raise ValueError("max_workers must be at least 1")
+            msg = "max_workers must be at least 1"
+            raise ValueError(msg)
         if self.chunk_size < 1:
-            raise ValueError("chunk_size must be at least 1")
+            msg = "chunk_size must be at least 1"
+            raise ValueError(msg)
         if self.max_import_depth < 0:
-            raise ValueError("max_import_depth cannot be negative")
+            msg = "max_import_depth cannot be negative"
+            raise ValueError(msg)
         if self.cache_size < 0:
-            raise ValueError("cache_size cannot be negative")
+            msg = "cache_size cannot be negative"
+            raise ValueError(msg)
         if self.log_level.upper() not in {
             "TRACE",
             "DEBUG",
@@ -281,7 +291,8 @@ class ConverterConfig:
             "ERROR",
             "CRITICAL",
         }:
-            raise ValueError(f"Unsupported log level: {self.log_level}")
+            msg = f"Unsupported log level: {self.log_level}"
+            raise ValueError(msg)
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-friendly snapshot of configuration settings."""
@@ -362,7 +373,7 @@ class ConverterLogger:
     def exception(self, message: str, *args: object) -> None:
         """Log an error with the active exception traceback."""
         if self._minimum_level <= logger.level("ERROR").no:
-            self._logger.exception(message, *args)
+            self._logger.error(message, *args)
 
     def close(self) -> None:
         """Remove this instance's optional Loguru file sink."""
@@ -564,9 +575,11 @@ class MHTMLParser:
             ValueError: If the input is empty or has no MIME content-type header.
         """
         if not raw_data.strip() or b"content-type:" not in raw_data.lower():
-            raise ValueError("Invalid MHTML data: missing MIME Content-Type header")
+            msg = "Invalid MHTML data: missing MIME Content-Type header"
+            raise ValueError(msg)
         if len(raw_data) > self.config.max_input_size:
-            raise ValueError(f"MHTML input exceeds the {self.config.max_input_size}-byte limit")
+            msg = f"MHTML input exceeds the {self.config.max_input_size}-byte limit"
+            raise ValueError(msg)
 
         message = self.parser.parsebytes(raw_data)
         main_part = self._find_main_part(message)
@@ -1158,7 +1171,7 @@ class CSSProcessor:
             skip_whitespace=False,
         )
         self._rewrite_tokens(rules, base_url, resource_map, depth)
-        result = cast(str, tinycss2.serialize(rules))
+        result = cast("str", tinycss2.serialize(rules))
         if self.config.minify_css:
             result = self._conservative_minify(result)
         return result
@@ -1174,7 +1187,7 @@ class CSSProcessor:
     def parse_css(content: str) -> list[Any]:
         """Parse a stylesheet and expose tinycss2 error tokens for validation."""
         return cast(
-            list[Any],
+            "list[Any]",
             tinycss2.parse_stylesheet(content, skip_comments=False, skip_whitespace=False),
         )
 
@@ -1273,7 +1286,7 @@ class CSSProcessor:
         """Extract the unquoted URL from a parsed ``url(...)`` function token."""
         if len(token.arguments) == 1 and hasattr(token.arguments[0], "value"):
             return str(token.arguments[0].value)
-        serialized = cast(str, tinycss2.serialize(token.arguments))
+        serialized = cast("str", tinycss2.serialize(token.arguments))
         return serialized.strip().strip("\"'")
 
     @staticmethod
@@ -1633,7 +1646,7 @@ class HTMLProcessor:
     def to_string(self, element: Any) -> str:
         """Serialize an lxml element using the configured HTML/XHTML method."""
         method = "xml" if self.config.output_format == "xhtml" else "html"
-        return cast(str, lxml_html.tostring(element, encoding="unicode", method=method))
+        return cast("str", lxml_html.tostring(element, encoding="unicode", method=method))
 
     def extract_resource_urls(self, content: str) -> set[str]:
         """Find fetchable assets in HTML, excluding ordinary anchor navigation."""
@@ -1719,7 +1732,7 @@ class HTMLProcessor:
         except (ValueError, etree.LxmlError):
             return content
         method = "xml" if self.config.output_format == "xhtml" else "html"
-        return cast(str, lxml_html.tostring(tree, encoding="unicode", method=method))
+        return cast("str", lxml_html.tostring(tree, encoding="unicode", method=method))
 
     def _extend_safe_attributes(self, tree: Any) -> None:
         """Preserve data-/ARIA attributes while dropping event-handler attributes."""
@@ -1920,7 +1933,8 @@ class MHTMLConverter:
     ) -> tuple[bytes, dict[str, Any]]:
         raw_data = mhtml_data.encode(self.config.encoding) if isinstance(mhtml_data, str) else mhtml_data
         if len(raw_data) > self.config.max_input_size:
-            raise ValueError(f"MHTML input exceeds the {self.config.max_input_size}-byte limit")
+            msg = f"MHTML input exceeds the {self.config.max_input_size}-byte limit"
+            raise ValueError(msg)
 
         self.logger.info("Starting MHTML conversion")
         self.logger.debug(f"Configuration: {self.config.to_dict()}")
@@ -2020,12 +2034,15 @@ class MHTMLConverter:
         """Convert a file, writing ``<input-stem>.html`` beside it by default."""
         source = Path(input_path)
         if not source.is_file():
-            raise FileNotFoundError(f"Input MHTML file does not exist: {source}")
+            msg = f"Input MHTML file does not exist: {source}"
+            raise FileNotFoundError(msg)
         if source.stat().st_size > self.config.max_input_size:
-            raise ValueError(f"MHTML input exceeds the {self.config.max_input_size}-byte limit")
+            msg = f"MHTML input exceeds the {self.config.max_input_size}-byte limit"
+            raise ValueError(msg)
         destination = Path(output_path) if output_path is not None else source.with_suffix(".html")
         if source.resolve() == destination.resolve():
-            raise ValueError("Output path must not overwrite the input MHTML file")
+            msg = "Output path must not overwrite the input MHTML file"
+            raise ValueError(msg)
 
         with source.open("rb") as input_file:
             result, metadata = self.convert(
@@ -2060,7 +2077,8 @@ class MHTMLConverter:
                 break
             input_buffer.extend(next_chunk)
             if len(input_buffer) > self.config.max_input_size:
-                raise ValueError(f"MHTML input exceeds the {self.config.max_input_size}-byte limit")
+                msg = f"MHTML input exceeds the {self.config.max_input_size}-byte limit"
+                raise ValueError(msg)
         result, metadata = self.convert(
             bytes(input_buffer),
             base_url=base_url,
@@ -2087,7 +2105,8 @@ class MHTMLConverter:
         for plugin in self.config.plugins:
             data = plugin.before_parse(data, self.config)
             if not isinstance(data, bytes):
-                raise TypeError("plugin before_parse hooks must return bytes")
+                msg = "plugin before_parse hooks must return bytes"
+                raise TypeError(msg)
         return data
 
     def _run_after_convert_plugins(
@@ -2099,7 +2118,8 @@ class MHTMLConverter:
         for plugin in self.config.plugins:
             output = plugin.after_convert(output, metadata)
             if not isinstance(output, bytes):
-                raise TypeError("plugin after_convert hooks must return bytes")
+                msg = "plugin after_convert hooks must return bytes"
+                raise TypeError(msg)
         return output
 
     def _normalize_resource_map(
@@ -2215,7 +2235,8 @@ class MHTMLConverter:
                 for plugin in self.config.plugins:
                     replacement = plugin.process_resource(replacement)
                     if not isinstance(replacement, Resource):
-                        raise TypeError("plugin process_resource hooks must return Resource")
+                        msg = "plugin process_resource hooks must return Resource"
+                        raise TypeError(msg)
                 transformed[id(resource)] = replacement
             resource_map[key] = replacement
 
@@ -2435,9 +2456,8 @@ def cli(
     progress: Annotated[bool, typer.Option("--progress", help="Print conversion progress to standard error")] = False,
 ) -> None:
     if profile is not None and profile not in [profile.value for profile in ConversionProfile]:
-        raise typer.BadParameter(
-            f"invalid choice: {profile!r} (choose from {[profile.value for profile in ConversionProfile]})"
-        )
+        msg = f"invalid choice: {profile!r} (choose from {[profile.value for profile in ConversionProfile]})"
+        raise typer.BadParameter(msg)
     _STATE.update(
         input=input,
         output=output,

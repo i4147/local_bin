@@ -2,18 +2,22 @@
 "Minify HTML files in the current directory in place."
 
 from __future__ import annotations
-import argparse
 from concurrent.futures import ProcessPoolExecutor
+import contextlib
 import os
 from pathlib import Path
 import sys
 import tempfile
 from types import SimpleNamespace
-from typing import Annotated, NamedTuple
+from typing import TYPE_CHECKING, Annotated, NamedTuple
 
 import click
 from dh import get_files, runcmd
 import typer
+
+
+if TYPE_CHECKING:
+    import argparse
 
 
 _STATE: dict[str, object] = {}
@@ -99,10 +103,8 @@ def minify_file(job: tuple[str, str]) -> FileResult:
                 os.fsync(tmp_file.fileno())
             os.replace(tmp_name, path)
         except BaseException:
-            try:
+            with contextlib.suppress(OSError):
                 os.unlink(tmp_name)
-            except OSError:
-                pass
             raise
     except OSError as error:
         return FileResult(path, before, None, 1, str(error))

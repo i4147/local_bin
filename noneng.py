@@ -58,38 +58,44 @@ class LanguageDetector:
             try:
                 from langdetect import DetectorFactory, detect_langs
             except ImportError as exc:
-                raise RuntimeError("Install the default backend with: python -m pip install langdetect") from exc
+                msg = "Install the default backend with: python -m pip install langdetect"
+                raise RuntimeError(msg) from exc
             DetectorFactory.seed = 0
             self._detector = detect_langs
         elif backend == "lingua":
             try:
                 from lingua import LanguageDetectorBuilder
             except ImportError as exc:
-                raise RuntimeError("Install this backend with: python -m pip install lingua-language-detector") from exc
+                msg = "Install this backend with: python -m pip install lingua-language-detector"
+                raise RuntimeError(msg) from exc
             self._detector = LanguageDetectorBuilder.from_all_languages().build()
         elif backend == "pycld2":
             try:
                 import pycld2
             except ImportError as exc:
-                raise RuntimeError("Install this backend with: python -m pip install pycld2") from exc
+                msg = "Install this backend with: python -m pip install pycld2"
+                raise RuntimeError(msg) from exc
             self._detector = pycld2
         elif backend == "gcld3":
             try:
                 import gcld3
             except ImportError as exc:
-                raise RuntimeError("Install this backend with: python -m pip install gcld3") from exc
+                msg = "Install this backend with: python -m pip install gcld3"
+                raise RuntimeError(msg) from exc
             self._detector = gcld3.NNetLanguageIdentifier(min_num_bytes=0, max_num_bytes=1000)
         elif backend == "py3langid":
             try:
                 import py3langid
             except ImportError as exc:
-                raise RuntimeError("Install this backend with: python -m pip install py3langid") from exc
+                msg = "Install this backend with: python -m pip install py3langid"
+                raise RuntimeError(msg) from exc
             self._detector = py3langid
         else:
             try:
                 import langid
             except ImportError as exc:
-                raise RuntimeError("Install this additional backend with: python -m pip install langid") from exc
+                msg = "Install this additional backend with: python -m pip install langid"
+                raise RuntimeError(msg) from exc
             self._detector = langid
 
     @staticmethod

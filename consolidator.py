@@ -29,7 +29,7 @@ import typer
 def _version_callback(value: bool) -> None:
     if value:
         typer.echo(f"consolidator {__version__}")
-        raise typer.Exit()
+        raise typer.Exit
 
 
 _STATE: dict[str, object] = {}
@@ -66,15 +66,15 @@ class _ParserShim:
 __version__ = "1.4.7"
 
 __all__ = [
-    "ConsolidatorError",
-    "PlanWarning",
     "BundledModule",
     "ConsolidationPlan",
+    "ConsolidatorError",
+    "PlanWarning",
     "analyze",
-    "render",
+    "build_parser",
     "consolidate",
     "main",
-    "build_parser",
+    "render",
 ]
 
 log = logger
@@ -196,15 +196,13 @@ class ConsolidationPlan:
 
 
 def _is_excluded(name: str, patterns: Sequence[str]) -> bool:
-    for pattern in patterns:
-        if fnmatch.fnmatchcase(name, pattern) or name.startswith(pattern + "."):
-            return True
-    return False
+    return any(fnmatch.fnmatchcase(name, pattern) or name.startswith(pattern + ".") for pattern in patterns)
 
 
 def _validate_dotted(name: str, what: str) -> str:
     if not name or not all(part.isidentifier() for part in name.split(".")):
-        raise ConsolidatorError(f"invalid dotted name for {what}: {name!r}")
+        msg = f"invalid dotted name for {what}: {name!r}"
+        raise ConsolidatorError(msg)
     return name
 
 
@@ -311,7 +309,8 @@ def _read_bytes(path: Path) -> bytes:
     try:
         return path.read_bytes()
     except OSError as exc:
-        raise ConsolidatorError(f"cannot read {path}: {exc}") from exc
+        msg = f"cannot read {path}: {exc}"
+        raise ConsolidatorError(msg) from exc
 
 
 def _human_size(size: float) -> str:
@@ -540,7 +539,8 @@ def _resolve_thirdparty(requests: Sequence[str | Path], site_paths: Sequence[Pat
                 break
         if found is None:
             searched = ", ".join(str(d) for d in dirs) or "<no site directories>"
-            raise ConsolidatorError(f"--include-package {name!r}: package not found in: {searched}")
+            msg = f"--include-package {name!r}: package not found in: {searched}"
+            raise ConsolidatorError(msg)
         resolved[name] = found
     return resolved
 
@@ -561,9 +561,11 @@ def _find_package_dir(directory: Path) -> Path:
     if len(candidates) == 1:
         return candidates[0]
     if not candidates:
-        raise ConsolidatorError(f"{directory} is not a package and contains no package")
+        msg = f"{directory} is not a package and contains no package"
+        raise ConsolidatorError(msg)
     names = ", ".join(child.name for child in candidates)
-    raise ConsolidatorError(f"{directory} contains multiple packages ({names}); pass one explicitly")
+    msg = f"{directory} contains multiple packages ({names}); pass one explicitly"
+    raise ConsolidatorError(msg)
 
 
 def _has_main_function(init_path: Path) -> bool:
@@ -593,10 +595,11 @@ def _synthesize_main(pkg_name: str, pkg_dir: Path, override: str | None) -> tupl
         module_file = pkg_dir / "/".join(parts) + ".py"
         package_init = pkg_dir / "/".join(parts) / "__init__.py"
         if not module_file.is_file() and not package_init.is_file():
-            raise ConsolidatorError(
+            msg = (
                 f"--main-module {override!r}: not found in package {pkg_name!r} "
                 f"(tried {module_file} and {package_init})"
             )
+            raise ConsolidatorError(msg)
         target = f"{pkg_name}.{override}"
         source = f"import runpy as _runpy\n_runpy.run_module({target!r}, run_name='__main__', alter_sys=True)\n"
         return source, [target]
@@ -620,11 +623,12 @@ def _synthesize_main(pkg_name: str, pkg_dir: Path, override: str | None) -> tupl
         return source, [pkg_name]
 
     tried = ", ".join(f"{candidate}.py" for candidate in _ENTRY_CANDIDATES)
-    raise ConsolidatorError(
+    msg = (
         f"package {pkg_name!r} has no __main__.py and no obvious entry point "
         f"(tried {tried}, and {pkg_name}.main()); add a __main__.py, define "
         "a main() in __init__.py, or pass --main-module"
     )
+    raise ConsolidatorError(msg)
 
 
 def analyze(
@@ -662,7 +666,8 @@ def analyze(
             roots = [Path.cwd(), *extra_roots]
     else:
         if not entry_path.is_file():
-            raise ConsolidatorError(f"entry script not found: {entry}")
+            msg = f"entry script not found: {entry}"
+            raise ConsolidatorError(msg)
         entry_file = Path(entry_path).resolve()
         entry_archive = entry_file.name
         data_roots = [entry_file.parent, *extra_roots]
@@ -728,12 +733,13 @@ def analyze(
         package_dirs[top_name] = tuple(dict.fromkeys(merged))
         if offenders:
             listing = ", ".join(str(p) for p in offenders[:5])
-            raise ConsolidatorError(
+            msg = (
                 f"package {top_name!r} contains compiled extension(s): "
                 f"{listing}. condolidator bundles pure-Python packages only; "
                 "exclude the offending subtree with --exclude-module if it "
                 "is unused."
             )
+            raise ConsolidatorError(msg)
 
     def embed_thirdparty(top_name: str, package: _ThirdPartyPackage) -> None:
         if top_name in embedded_thirdparty:
@@ -745,7 +751,7 @@ def analyze(
             embed_module(top_name, package.path, False)
 
     def embed_located(located: _Located, name: str) -> None:
-        top = name.split(".")[0]
+        top = name.split(".", maxsplit=1)[0]
         if whole_package and located.namespace_dirs:
             embed_tree(top, located.namespace_dirs)
         elif whole_package and located.top_package_dir is not None:
@@ -755,7 +761,7 @@ def analyze(
 
     def handle_import(name: str, strict: bool, importer: str) -> None:
         "Handle import."
-        top = name.split(".")[0]
+        top = name.split(".", maxsplit=1)[0]
         if name in modules:
             return
         if strict and _is_excluded(name, exclude_modules):
@@ -836,19 +842,19 @@ def analyze(
         else:
             located = _locate(entry_module, search_paths)
             if located is None:
-                raise ConsolidatorError(
-                    f"module {entry_module!r} not found in: {', '.join(str(p) for p in search_paths)}"
-                )
+                msg = f"module {entry_module!r} not found in: {', '.join(str(p) for p in search_paths)}"
+                raise ConsolidatorError(msg)
             embed_located(located, entry_module)
             if located.is_package:
                 if located.file is not None:
                     ensure_main_module(located.file.parent, entry_module)
                 elif f"{entry_module}.__main__" not in modules:
-                    raise ConsolidatorError(
+                    msg = (
                         f"namespace package {entry_module!r} has no "
                         "__main__.py; cannot synthesize one for namespace "
                         "packages — add a __main__.py to one of its portions"
                     )
+                    raise ConsolidatorError(msg)
     else:
         assert entry_file is not None
         stem = entry_file.stem if entry_file.stem.isidentifier() else "entry"
@@ -893,7 +899,8 @@ def analyze(
         failures = [w for w in warnings if w.kind in _STRICT_WARNING_KINDS]
         if failures:
             detail = "\n  ".join(str(w) for w in failures)
-            raise ConsolidatorError(f"strict mode: {len(failures)} unresolved import(s):\n  {detail}")
+            msg = f"strict mode: {len(failures)} unresolved import(s):\n  {detail}"
+            raise ConsolidatorError(msg)
 
     return ConsolidationPlan(
         entry=entry_file or entry_pkg_dir or Path(str(entry)).resolve(),
@@ -1166,9 +1173,8 @@ def _archive_members(plan: ConsolidationPlan) -> dict[str, Path | bytes]:
         archive = module.archive_path
         existing = members.get(archive)
         if existing is not None and existing != module.source:
-            raise ConsolidatorError(
-                f"internal error: archive path {archive!r} maps to both {existing} and {module.source}"
-            )
+            msg = f"internal error: archive path {archive!r} maps to both {existing} and {module.source}"
+            raise ConsolidatorError(msg)
         members[archive] = module.source
     for archive, source in sorted(plan.synthetic_files.items()):
         members[archive] = source
@@ -1216,7 +1222,8 @@ def render(
     deterministic: bool = True,
 ) -> str:
     if compression not in _COMPRESSIONS:
-        raise ConsolidatorError(f"unknown compression {compression!r}; expected one of {sorted(_COMPRESSIONS)}")
+        msg = f"unknown compression {compression!r}; expected one of {sorted(_COMPRESSIONS)}"
+        raise ConsolidatorError(msg)
     interpreter = python or sys.executable or "python3"
     members = _archive_members(plan)
     timestamp = _zip_timestamp(deterministic)
@@ -1291,7 +1298,8 @@ def consolidate(
 ) -> Path | None:
     unknown = set(options) - _ANALYZE_KEYS - _RENDER_KEYS
     if unknown:
-        raise TypeError(f"unknown consolidate() arguments: {sorted(unknown)}")
+        msg = f"unknown consolidate() arguments: {sorted(unknown)}"
+        raise TypeError(msg)
     analyze_options = {k: v for k, v in options.items() if k in _ANALYZE_KEYS}
     render_options = {k: v for k, v in options.items() if k in _RENDER_KEYS}
 
@@ -1385,7 +1393,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 0
         consolidate(
             args.entry,
-            output=(args.output if args.output else _default_output_name(args.entry)),
+            output=(args.output or _default_output_name(args.entry)),
             add_python_path=args.add_python_path,
             module_mode=args.module,
             include_packages=args.include_package,
@@ -1520,7 +1528,8 @@ def cli(
     ] = False,
 ) -> None:
     if compression is not None and compression not in sorted(_COMPRESSIONS):
-        raise typer.BadParameter(f"invalid choice: {compression!r} (choose from {sorted(_COMPRESSIONS)})")
+        msg = f"invalid choice: {compression!r} (choose from {sorted(_COMPRESSIONS)})"
+        raise typer.BadParameter(msg)
     _STATE.update(
         entry=entry,
         output=output,

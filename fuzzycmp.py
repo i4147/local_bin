@@ -22,7 +22,7 @@ import typer
 def _version_callback(value: bool) -> None:
     if value:
         typer.echo("fuzzycmp 1.0.0")
-        raise typer.Exit()
+        raise typer.Exit
 
 
 _STATE: dict[str, object] = {}
@@ -122,7 +122,8 @@ def normalize_text(
 
 def ngrams(text: str, n: int) -> list[str]:
     if n <= 0:
-        raise ValueError("n must be >= 1")
+        msg = "n must be >= 1"
+        raise ValueError(msg)
     if len(text) < n:
         return [text] if text else []
     return [text[i : i + n] for i in range(len(text) - n + 1)]
@@ -213,7 +214,8 @@ class Hamming(EditDistanceMetric):
 
     def edit_distance(self, a: str, b: str) -> int:
         if self.strict and len(a) != len(b):
-            raise ValueError("Hamming distance requires equal-length strings")
+            msg = "Hamming distance requires equal-length strings"
+            raise ValueError(msg)
         common = min(len(a), len(b))
         mismatches = sum(1 for i in range(common) if a[i] != b[i])
         return mismatches + abs(len(a) - len(b))
@@ -229,8 +231,7 @@ class Jaro(SimilarityMetric):
         if la == 0 or lb == 0:
             return 0.0
         window = max(la, lb) // 2 - 1
-        if window < 0:
-            window = 0
+        window = max(window, 0)
         a_flags = [False] * la
         b_flags = [False] * lb
         matches = 0
@@ -238,7 +239,7 @@ class Jaro(SimilarityMetric):
             lo = max(0, i - window)
             hi = min(i + window + 1, lb)
             for j in range(lo, hi):
-                if b_flags[j] or a[i] != b[j]:
+                if b_flags[j] or ca != b[j]:
                     continue
                 a_flags[i] = b_flags[j] = True
                 matches += 1
@@ -378,7 +379,8 @@ class NGram(SimilarityMetric):
     def __init__(self, n: int = 2) -> None:
         "Initialize the instance state from the supplied arguments."
         if n < 1:
-            raise ValueError("n must be >= 1")
+            msg = "n must be >= 1"
+            raise ValueError(msg)
         self.n = n
 
     def similarity(self, a: str, b: str) -> float:
@@ -488,8 +490,7 @@ def nysiis(name: str) -> str:
     result = "".join(key)
     if result.endswith("AY"):
         result = result[:-2] + "Y"
-    if result.endswith("A"):
-        result = result[:-1]
+    result = result.removesuffix("A")
     if len(result) >= 2 and result[-1] == result[-2]:
         result = result[:-1]
     return result
@@ -658,7 +659,8 @@ class MinHash(SimilarityMetric):
     ) -> None:
         "Initialize the instance state from the supplied arguments."
         if num_perm < 1:
-            raise ValueError("num_perm must be >= 1")
+            msg = "num_perm must be >= 1"
+            raise ValueError(msg)
         self.num_perm = num_perm
         self.shingle_size = shingle_size
         self.seed = seed
@@ -732,7 +734,7 @@ class SimHash(SimilarityMetric):
         fa, fb = self.fingerprint(a), self.fingerprint(b)
         if fa == 0 and fb == 0:
             return 1.0
-        return 1.0 - bin(fa ^ fb).count("1") / self.bits
+        return 1.0 - (fa ^ fb).bit_count() / self.bits
 
     def __repr__(self) -> str:
         "Return the object's developer-facing representation."
@@ -851,7 +853,8 @@ class FuzzyComparator:
         try:
             factory = DEFAULT_METRICS[metric]
         except KeyError as exc:
-            raise KeyError(f"Unknown metric {metric!r}. Available: {sorted(DEFAULT_METRICS)}") from exc
+            msg = f"Unknown metric {metric!r}. Available: {sorted(DEFAULT_METRICS)}"
+            raise KeyError(msg) from exc
         return factory(**kwargs)
 
     def _prep(self, text: str) -> str:
@@ -1278,7 +1281,8 @@ def cmd_similarity(
     normalize: Annotated[bool, typer.Option("--normalize")] = False,
 ) -> None:
     if metric is not None and metric not in sorted(DEFAULT_METRICS):
-        raise typer.BadParameter(f"invalid choice: {metric!r} (choose from {sorted(DEFAULT_METRICS)})")
+        msg = f"invalid choice: {metric!r} (choose from {sorted(DEFAULT_METRICS)})"
+        raise typer.BadParameter(msg)
     _STATE.update(metric=metric, a=a, b=b, normalize=normalize, command="similarity")
     _run()
 
@@ -1303,7 +1307,8 @@ def cmd_best_match(
     rank: Annotated[bool, typer.Option("--rank")] = False,
 ) -> None:
     if metric is not None and metric not in sorted(DEFAULT_METRICS):
-        raise typer.BadParameter(f"invalid choice: {metric!r} (choose from {sorted(DEFAULT_METRICS)})")
+        msg = f"invalid choice: {metric!r} (choose from {sorted(DEFAULT_METRICS)})"
+        raise typer.BadParameter(msg)
     _STATE.update(
         metric=metric,
         query=query,
@@ -1330,7 +1335,8 @@ def cmd_files(
     json: Annotated[bool, typer.Option("--json")] = False,
 ) -> None:
     if metric is not None and metric not in sorted(DEFAULT_METRICS):
-        raise typer.BadParameter(f"invalid choice: {metric!r} (choose from {sorted(DEFAULT_METRICS)})")
+        msg = f"invalid choice: {metric!r} (choose from {sorted(DEFAULT_METRICS)})"
+        raise typer.BadParameter(msg)
     _STATE.update(
         metric=metric,
         a=a,
@@ -1357,7 +1363,8 @@ def cmd_grep(
     normalize: Annotated[bool, typer.Option("--normalize")] = False,
 ) -> None:
     if metric is not None and metric not in sorted(DEFAULT_METRICS):
-        raise typer.BadParameter(f"invalid choice: {metric!r} (choose from {sorted(DEFAULT_METRICS)})")
+        msg = f"invalid choice: {metric!r} (choose from {sorted(DEFAULT_METRICS)})"
+        raise typer.BadParameter(msg)
     _STATE.update(
         metric=metric,
         file=file,

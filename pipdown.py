@@ -15,7 +15,7 @@ import subprocess
 import sys
 import tarfile
 from types import SimpleNamespace
-from typing import Annotated, Any
+from typing import Annotated, Any, Self
 from urllib.parse import parse_qs, unquote, urljoin, urlparse
 import zipfile
 
@@ -109,11 +109,9 @@ SOURCE_SUFFIXES: tuple[str, ...] = (
 CHUNK: int = 1024 * 1024
 PARALLEL_THRESHOLD: int = 5 * 1024 * 1024
 WORKERS: int = min(8, max(4, os.cpu_count() or 4))
-ACCEPT_HEADER: str = ", ".join((
-    "application/vnd.pypi.simple.v1+json",
-    "application/vnd.pypi.simple.v1+html; q=0.1",
-    "text/html; q=0.01",
-))
+ACCEPT_HEADER: str = (
+    "application/vnd.pypi.simple.v1+json, application/vnd.pypi.simple.v1+html; q=0.1, text/html; q=0.01"
+)
 JSON_TYPES: frozenset[str] = frozenset({"application/vnd.pypi.simple.v1+json"})
 HTML_TYPES: frozenset[str] = frozenset({"text/html", "application/vnd.pypi.simple.v1+html"})
 
@@ -170,7 +168,8 @@ class Link:
     @property
     def file_path(self) -> Path:
         if not self.is_file:
-            raise ValueError(f"not a file URL: {self.url}")
+            msg = f"not a file URL: {self.url}"
+            raise ValueError(msg)
         return Path(unquote(self.parsed.path))
 
     def __repr__(self) -> str:
@@ -295,7 +294,8 @@ def fetch_page(client: httpx.Client, url: str) -> list[Link]:
         return list(parse_json(response))
     if ctype in HTML_TYPES:
         return list(parse_html(response))
-    raise ValueError(f"unsupported content-type: {ctype!r}")
+    msg = f"unsupported content-type: {ctype!r}"
+    raise ValueError(msg)
 
 
 def strip_source_ext(filename: str) -> str:
@@ -417,11 +417,11 @@ class Finder:
             self._client.close()
             self._client = None
 
-    def __enter__(self) -> "Finder":
+    def __enter__(self) -> Self:
         "Enter the managed context and return its resource."
         return self
 
-    def __exit__(self, *args: Any) -> None:
+    def __exit__(self, *args: object) -> None:
         "Release resources acquired by the managed context."
         self.close()
 
@@ -595,22 +595,26 @@ def download_parallel(url: str, dest: Path, size: int, workers: int = WORKERS) -
     def fetch_range(start: int, end: int, part: Path) -> None:
         "Fetch range."
         headers = {"Range": f"bytes={start}-{end}"}
-        with httpx.Client(
-            follow_redirects=True,
-            timeout=httpx.Timeout(90.0, connect=15.0),
-        ) as c:
-            with c.stream("GET", url, headers=headers) as r:
-                if r.status_code != 206:
-                    raise httpx.HTTPStatusError(
-                        f"server ignored range {start}-{end}",
-                        request=r.request,
-                        response=r,
-                    )
-                with part.open("wb") as f:
-                    for chunk in r.iter_bytes(CHUNK):
-                        f.write(chunk)
+        with (
+            httpx.Client(
+                follow_redirects=True,
+                timeout=httpx.Timeout(90.0, connect=15.0),
+            ) as c,
+            c.stream("GET", url, headers=headers) as r,
+        ):
+            if r.status_code != 206:
+                msg_0 = f"server ignored range {start}-{end}"
+                raise httpx.HTTPStatusError(
+                    msg_0,
+                    request=r.request,
+                    response=r,
+                )
+            with part.open("wb") as f:
+                for chunk in r.iter_bytes(CHUNK):
+                    f.write(chunk)
         if part.stat().st_size != end - start + 1:
-            raise OSError(f"incomplete range {start}-{end}")
+            msg = f"incomplete range {start}-{end}"
+            raise OSError(msg)
 
     try:
         with ThreadPoolExecutor(max_workers=len(ranges)) as pool:
@@ -622,7 +626,8 @@ def download_parallel(url: str, dest: Path, size: int, workers: int = WORKERS) -
                 with part.open("rb") as p:
                     shutil.copyfileobj(p, out, length=CHUNK)
         if dest.stat().st_size != size:
-            raise OSError(f"size mismatch: expected {size}, got {dest.stat().st_size}")
+            msg = f"size mismatch: expected {size}, got {dest.stat().st_size}"
+            raise OSError(msg)
     finally:
         shutil.rmtree(part_dir, ignore_errors=True)
 
@@ -632,7 +637,8 @@ def download_requests(url: str, dest: Path) -> None:
     try:
         import requests
     except ImportError as exc:
-        raise RuntimeError("requests backend requires: pip install requests") from exc
+        msg = "requests backend requires: pip install requests"
+        raise RuntimeError(msg) from exc
     with requests.get(url, stream=True, timeout=(15, 90)) as r:
         r.raise_for_status()
         with dest.open("wb") as f:
@@ -646,7 +652,8 @@ def download_pycurl(url: str, dest: Path) -> None:
     try:
         import pycurl
     except ImportError as exc:
-        raise RuntimeError("pycurl backend requires: pip install pycurl") from exc
+        msg = "pycurl backend requires: pip install pycurl"
+        raise RuntimeError(msg) from exc
     curl = pycurl.Curl()
     try:
         with dest.open("wb") as f:
@@ -657,7 +664,8 @@ def download_pycurl(url: str, dest: Path) -> None:
             curl.setopt(curl.WRITEDATA, f)
             curl.perform()
             if curl.getinfo(curl.RESPONSE_CODE) >= 400:
-                raise OSError(f"HTTP {curl.getinfo(curl.RESPONSE_CODE)} for {url}")
+                msg = f"HTTP {curl.getinfo(curl.RESPONSE_CODE)} for {url}"
+                raise OSError(msg)
     finally:
         curl.close()
 
@@ -666,7 +674,8 @@ def download_aria2c(url: str, dest: Path) -> None:
     "Download aria2c."
     aria = shutil.which("aria2c")
     if aria is None:
-        raise RuntimeError("aria2c not found in PATH")
+        msg = "aria2c not found in PATH"
+        raise RuntimeError(msg)
     cmd = [
         aria,
         "--allow-overwrite=true",
@@ -699,9 +708,11 @@ def download(
         if not src.is_file():
             raise FileNotFoundError(src)
         if not verify_hash(src, link.hashes):
-            raise ValueError(f"hash mismatch for local artifact: {src}")
+            msg = f"hash mismatch for local artifact: {src}"
+            raise ValueError(msg)
         if not verify_archive(src):
-            raise ValueError(f"invalid archive: {src}")
+            msg = f"invalid archive: {src}"
+            raise ValueError(msg)
         return src
     filename = link.filename or "download.bin"
     dest = dest_dir / filename
@@ -739,14 +750,17 @@ def download(
         elif backend == "aria2c":
             download_aria2c(link.clean_url, tmp)
         else:
-            raise ValueError(f"unsupported backend: {backend}")
+            msg = f"unsupported backend: {backend}"
+            raise ValueError(msg)
         tmp.replace(dest)
         if not verify_hash(dest, link.hashes):
             dest.unlink(missing_ok=True)
-            raise ValueError(f"hash mismatch for {link.clean_url}")
+            msg = f"hash mismatch for {link.clean_url}"
+            raise ValueError(msg)
         if not verify_archive(dest):
             dest.unlink(missing_ok=True)
-            raise ValueError(f"archive integrity failed: {dest}")
+            msg = f"archive integrity failed: {dest}"
+            raise ValueError(msg)
         logger.success("downloaded {}", dest)
         return dest
     except Exception:
@@ -758,7 +772,8 @@ def parse_version_arg(value: str) -> tuple[int, ...]:
     "Parse version arg."
     parts = value.split(".")
     if not parts or any(not p.isdigit() for p in parts):
-        raise argparse.ArgumentTypeError(f"invalid Python version: {value!r}")
+        msg = f"invalid Python version: {value!r}"
+        raise argparse.ArgumentTypeError(msg)
     return tuple(int(p) for p in parts)
 
 
@@ -767,7 +782,8 @@ def parse_requirements_file(path: Path) -> list[str]:
     try:
         content = path.expanduser().read_text(encoding="utf-8")
     except OSError as exc:
-        raise RuntimeError(f"cannot read requirements file {path}: {exc}") from exc
+        msg = f"cannot read requirements file {path}: {exc}"
+        raise RuntimeError(msg) from exc
     result: list[str] = []
     for line in content.splitlines():
         line = line.split("#", 1)[0].strip()
@@ -899,9 +915,7 @@ def cli(
         list[str],
         typer.Option("-L", "--find-link", help="additional find-links source, repeatable", metavar="DIR_OR_URL"),
     ] = [],
-    dest: Annotated[Path, typer.Option("-d", "--dest", help="download destination directory", metavar="DIR")] = Path(
-        "."
-    ),
+    dest: Annotated[Path, typer.Option("-d", "--dest", help="download destination directory", metavar="DIR")] = Path(),
     backend: Annotated[Backend, typer.Option("-b", "--backend", help="download backend")] = Backend.httpx,
     py_version: Annotated[
         str | None,
@@ -927,7 +941,8 @@ def cli(
         ))
         > 1
     ):
-        raise typer.BadParameter("--no-binary, --only-binary are mutually exclusive")
+        msg = "--no-binary, --only-binary are mutually exclusive"
+        raise typer.BadParameter(msg)
     requirement = requirement or []
     _STATE.update(
         requirement=requirement,

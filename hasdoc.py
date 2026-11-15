@@ -114,7 +114,7 @@ def scan(path: Path) -> tuple:
 
 def main(argv) -> int:
     "Run the command-line interface."
-    root = Path(argv[1]) if len(argv) > 1 else Path(".")
+    root = Path(argv[1]) if len(argv) > 1 else Path()
     if not root.is_dir():
         print(f"error: not a directory: {root}", file=sys.stderr)
         return 2

@@ -177,7 +177,7 @@ class UsageVisitor(ast.NodeVisitor):
 
         self.usages.append(
             UsageRecord(
-                key=key if key else "<dynamic>",
+                key=key or "<dynamic>",
                 source_file=self.filepath,
                 line=getattr(node, "lineno", 0),
                 is_read=is_read,
@@ -199,7 +199,7 @@ class UsageVisitor(ast.NodeVisitor):
 
         self.usages.append(
             UsageRecord(
-                key=key if key else "<dynamic>",
+                key=key or "<dynamic>",
                 source_file=self.filepath,
                 line=getattr(node, "lineno", 0),
                 is_read=True,
@@ -281,7 +281,7 @@ def _extract_keys_from_dockerfile(content: str) -> set[str]:
     keys: set[str] = set()
     for line in content.splitlines():
         line = line.strip()
-        if line.startswith("ENV ") or line.startswith("ARG "):
+        if line.startswith(("ENV ", "ARG ")):
             parts = line.split()[1:]
             for p in parts:
                 key = p.split("=")[0]
@@ -454,7 +454,7 @@ def main() -> None:
     parser = _ParserShim()
 
     args = parser.parse_args()
-    root = pathlib.Path(".")
+    root = pathlib.Path()
 
     if args.command == "scan":
         source_dir = root / args.source

@@ -36,7 +36,7 @@ import typer
 def _version_callback(value: bool) -> None:
     if value:
         typer.echo(f"{MYNAME} ver. {VERSION}\n    (c) WhoisXML API Inc.")
-        raise typer.Exit()
+        raise typer.Exit
 
 
 class Rawtext(StrEnum):
@@ -169,7 +169,8 @@ def valid_date(s: str) -> str:
     try:
         dt.date.fromisoformat(s)
     except ValueError:
-        raise argparse.ArgumentTypeError(f"invalid date: {s} (expected YYYY-MM-DD)")
+        msg = f"invalid date: {s} (expected YYYY-MM-DD)"
+        raise argparse.ArgumentTypeError(msg)
     return s
 
 
@@ -394,7 +395,8 @@ def build_url_for_target(target: str, mode: str, api_key: str, args: argparse.Na
     "Build url for target."
     if mode == "reverse":
         if ":" not in target:
-            raise ValueError(f"--reverse expects TYPE:VALUE, got {target!r}")
+            msg = f"--reverse expects TYPE:VALUE, got {target!r}"
+            raise ValueError(msg)
         type_, value = target.split(":", 1)
         params: dict[str, Any] = {
             "apiKey": api_key,
@@ -474,7 +476,7 @@ def fetch(
                 time.sleep(backoff * (2**attempt))
                 continue
             raise
-    raise last_exc if last_exc else RuntimeError("fetch failed")
+    raise last_exc or RuntimeError("fetch failed")
 
 
 def postprocess_record(record: dict[str, Any], args: argparse.Namespace) -> dict[str, Any]:
@@ -585,7 +587,8 @@ def query_one(
     try:
         data = r.json()
     except ValueError as exc:
-        raise RuntimeError(f"invalid JSON response from API: {exc}") from exc
+        msg = f"invalid JSON response from API: {exc}"
+        raise RuntimeError(msg) from exc
     if cache_dir is not None and cache_ttl > 0:
         cache_put(cache_dir, url, data)
     return parse_response(target, data, mode, is_history, args)
@@ -661,11 +664,13 @@ def render_record(record: dict[str, Any], args: argparse.Namespace, color_on: bo
         s = format_text(record)
     elif args.yaml:
         if yaml is None:
-            raise RuntimeError("PyYAML is not installed; install with `pip install pyyaml`")
+            msg = "PyYAML is not installed; install with `pip install pyyaml`"
+            raise RuntimeError(msg)
         s = yaml.safe_dump(record, sort_keys=args.sort_keys, allow_unicode=True)
     elif args.jsonpath:
         if jsonpath_parse is None:
-            raise RuntimeError("jsonpath-ng is not installed; install with `pip install jsonpath-ng`")
+            msg = "jsonpath-ng is not installed; install with `pip install jsonpath-ng`"
+            raise RuntimeError(msg)
         matches = [m.value for m in jsonpath_parse(args.jsonpath).find(record)]
         payload: Any = matches[0] if len(matches) == 1 else matches
         s = json.dumps(payload, indent=1, ensure_ascii=False, sort_keys=args.sort_keys)
@@ -872,7 +877,7 @@ def execute_targets(
 def run_check_key(api_key: str, args: argparse.Namespace) -> int:
     "Run check key."
     url = f"{ACCOUNT_BASE}/service/account-balance?apiKey={api_key}"
-    verify: bool | str = False if args.no_verify else (args.ca_bundle if args.ca_bundle else True)
+    verify: bool | str = False if args.no_verify else (args.ca_bundle or True)
     try:
         r = requests.get(url, timeout=args.timeout or 30, verify=verify)
         r.raise_for_status()
@@ -1383,7 +1388,8 @@ def cli(
         ))
         > 1
     ):
-        raise typer.BadParameter("--rawtext, --fullrawtext, --strippedrawtext are mutually exclusive")
+        msg = "--rawtext, --fullrawtext, --strippedrawtext are mutually exclusive"
+        raise typer.BadParameter(msg)
     _STATE.update(
         domainName=domainName,
         version_full=version_full,

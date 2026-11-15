@@ -61,7 +61,7 @@ class Bar:
     def format(self, pos: str) -> str:
         if self.header:
             return " " * self.width
-        size = int(round(self.percentage * (self.width - 2)))
+        size = round(self.percentage * (self.width - 2))
         return "[" + manglestring(size * barchar, self.width - 2, pos, bar_fillchar) + "]"
 
 
@@ -120,7 +120,7 @@ def get_terminal_width() -> int:
 def find_mountpoint(path: str) -> Optional[str]:
     "Find mountpoint."
     if not Path(path).exists():
-        sys.stderr.write(f"pydf: {repr(path)}: No such file or directory\n")
+        sys.stderr.write(f"pydf: {path!r}: No such file or directory\n")
         return None
     while not Path(path).is_mount():
         path = str(Path(path).parent)
@@ -160,27 +160,26 @@ def hfnum(size: int, base: int) -> str:
     units = [""] if inodes else ["B"]
     units += ["k", "M", "G", "T", "P", "Z", "Y"]
     power = int(log(size) / log(base))
-    if power < 0:
-        power = 0
+    power = max(power, 0)
     if power >= len(units):
         power = len(units) - 1
-    nsize = int(round(1.0 * size / (base**power)))
+    nsize = round(1.0 * size / (base**power))
     if nsize < 10 and power >= 1:
         power -= 1
-        nsize = int(round(1.0 * size / (base**power)))
+        nsize = round(1.0 * size / (base**power))
     return str(nsize) + units[power]
 
 
-def myformat(number: int | float, sizeformat: str, fs_blocksize: int) -> str:
+def myformat(number: float, sizeformat: str, fs_blocksize: int) -> str:
     size = int(number) * fs_blocksize
     if blocksize:
-        return str(int(round(1.0 * size / blocksize)))
+        return str(round(1.0 * size / blocksize))
     if sizeformat == "-k":
-        return str(int(round(size / 1024.0)))
+        return str(round(size / 1024.0))
     elif sizeformat == "-m":
-        return str(int(round(size / (1024.0 * 1024))))
+        return str(round(size / (1024.0 * 1024)))
     elif sizeformat == "-g":
-        return str(int(round(size / (1024.0 * 1024 * 1024))))
+        return str(round(size / (1024.0 * 1024 * 1024)))
     elif sizeformat == "-h":
         return hfnum(size, 1024)
     elif sizeformat == "-H":
@@ -188,7 +187,8 @@ def myformat(number: int | float, sizeformat: str, fs_blocksize: int) -> str:
     elif sizeformat == "--blocks":
         return str(number)
     else:
-        raise ValueError(f"Impossible error, sizeformat={repr(sizeformat)}")
+        msg = f"Impossible error, sizeformat={sizeformat!r}"
+        raise ValueError(msg)
 
 
 def manglestring(s: str, l: int, pos: str, fillchar: str = " ") -> str:
@@ -199,7 +199,8 @@ def manglestring(s: str, l: int, pos: str, fillchar: str = " ") -> str:
     elif pos == "c":
         ns = s.center(l, fillchar)
     else:
-        raise ValueError("Error in manglestring")
+        msg = "Error in manglestring"
+        raise ValueError(msg)
     if len(ns) > l:
         ns = ns[: int(l / 2)] + "~" + ns[-int(l / 2) + 1 :]
     return ns
@@ -243,7 +244,7 @@ def get_all_mountpoints() -> dict[str, tuple[str, str, list[str]]]:
             on = onparts[0]
             opts = onparts[-1][1:-1].split(",")
             r[on] = (device, "", opts)
-        return r if r else dummy_result
+        return r or dummy_result
 
     mountlines = f.readlines()
     f.close()
@@ -426,9 +427,8 @@ def squeeze_table(table: list[list[tuple[str, Any]]], desired_width: int) -> Non
             new_maxrow[i] -= to_reduce
             to_reduce = 0
             break
-        else:
-            new_maxrow[i] -= delta
-            to_reduce -= delta
+        new_maxrow[i] -= delta
+        to_reduce -= delta
 
     if to_reduce > 0:
         new_maxrow = maxrow

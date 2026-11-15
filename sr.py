@@ -248,9 +248,7 @@ def should_process_file(fname: str, cfg: Config) -> bool:
     ext = Path(fname).suffix
     if ext in cfg.disallow_exts:
         return False
-    if cfg.allow_exts and ext not in cfg.allow_exts:
-        return False
-    return True
+    return not (cfg.allow_exts and ext not in cfg.allow_exts)
 
 
 def should_enter_dir(dirname: str, cfg: Config) -> bool:
@@ -262,9 +260,7 @@ def should_enter_dir(dirname: str, cfg: Config) -> bool:
         return False
     if any(p.search(dirname) for p in cfg.exclude_patterns):
         return False
-    if matches_glob(dirname + "/", cfg.ignore_file_patterns):
-        return False
-    return True
+    return not matches_glob(dirname + "/", cfg.ignore_file_patterns)
 
 
 def iter_files(cfg: Config):
@@ -431,9 +427,8 @@ def replace_file(path: Path, cfg: Config, console: Console) -> int:
     if cfg.explain:
         return count
 
-    if cfg.interactive:
-        if not typer.confirm(f"Replace {count} occurrence(s) in {path}?", default=True):
-            return 0
+    if cfg.interactive and not typer.confirm(f"Replace {count} occurrence(s) in {path}?", default=True):
+        return 0
 
     new_data = cfg.search.sub(cfg.replace, data, count=cfg.max_count or 0)
 
@@ -475,7 +470,7 @@ def _next_backup_path(path: Path) -> Optional[Path]:
 def _version_callback(value: bool) -> None:
     if value:
         typer.echo(f"sr {__version__}")
-        raise typer.Exit()
+        raise typer.Exit
 
 
 def _preprocess_legacy_flags(argv: list[str]) -> list[str]:
@@ -557,7 +552,7 @@ def main(
     "Run the command-line interface."
     if help_types:
         _display_file_types()
-        raise typer.Exit()
+        raise typer.Exit
 
     color = color.lower()
     if color not in ("auto", "always", "never"):

@@ -18,13 +18,17 @@ Backend = tuple[str, RemoveFn]
 
 def _validate(total: int, start: int, end: int) -> None:
     if start < 0 or end < 0:
-        raise ValueError("page indices must be >= 0")
+        msg = "page indices must be >= 0"
+        raise ValueError(msg)
     if start > end:
-        raise ValueError("start must be <= end")
+        msg = "start must be <= end"
+        raise ValueError(msg)
     if end >= total:
-        raise ValueError(f"end page index {end} >= total pages {total}")
+        msg = f"end page index {end} >= total pages {total}"
+        raise ValueError(msg)
     if end - start + 1 >= total:
-        raise ValueError("cannot remove all pages from document")
+        msg = "cannot remove all pages from document"
+        raise ValueError(msg)
 
 
 def _try_pypdf() -> Backend | None:
@@ -97,7 +101,8 @@ def _pick_backend() -> Backend:
         b = factory()
         if b is not None:
             return b
-    raise RuntimeError("No PDF backend available; install one of: pypdf, PyPDF2, pikepdf, pymupdf")
+    msg = "No PDF backend available; install one of: pypdf, PyPDF2, pikepdf, pymupdf"
+    raise RuntimeError(msg)
 
 
 app = typer.Typer(add_completion=False, pretty_exceptions_enable=False)
@@ -111,7 +116,8 @@ def main(
 ) -> None:
     "Run the command-line interface."
     if start > end:
-        raise typer.BadParameter("start must be <= end")
+        msg = "start must be <= end"
+        raise typer.BadParameter(msg)
 
     name, remove = _pick_backend()
 

@@ -2,9 +2,7 @@
 "Strip comments (and optionally docstrings/blank lines) from Python sources."
 
 from __future__ import annotations
-import argparse
 import ast
-from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 import io
 import multiprocessing as mp
@@ -14,16 +12,21 @@ import re
 import sys
 import tokenize
 from types import SimpleNamespace
-from typing import Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any
 
 import click
 import typer
 
 
+if TYPE_CHECKING:
+    import argparse
+    from collections.abc import Iterable, Sequence
+
+
 def _version_callback(value: bool) -> None:
     if value:
         typer.echo(f"{PROG} {__version__}")
-        raise typer.Exit()
+        raise typer.Exit
 
 
 _STATE: dict[str, object] = {}
@@ -272,7 +275,8 @@ def _transform(source: str, opts: TransformOptions) -> str:
     try:
         module = cst.parse_module(source)
     except cst.ParserSyntaxError as e:
-        raise ValueError(f"syntax error: {e}") from e
+        msg = f"syntax error: {e}"
+        raise ValueError(msg) from e
     wrapped = module.visit(_Transformer(opts))
     result = wrapped.code
     if opts.collapse_blanks:
@@ -280,7 +284,8 @@ def _transform(source: str, opts: TransformOptions) -> str:
     try:
         ast.parse(result)
     except SyntaxError as e:
-        raise ValueError(f"transformed source failed to parse: {e}") from e
+        msg = f"transformed source failed to parse: {e}"
+        raise ValueError(msg) from e
     return result
 
 

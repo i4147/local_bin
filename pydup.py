@@ -78,7 +78,7 @@ class Log_format(StrEnum):
 def _version_callback(value: bool) -> None:
     if value:
         typer.echo(f"pydup {__version__}")
-        raise typer.Exit()
+        raise typer.Exit
 
 
 _STATE: dict[str, object] = {}
@@ -404,7 +404,7 @@ class SourceNormalizer(ast.NodeTransformer):
 
     def _clear_type_params(self, node: ast.AST) -> None:
         if self.strip_type_nodes and hasattr(node, "type_params"):
-            setattr(node, "type_params", [])
+            node.type_params = []
 
     def visit_Module(self, node: ast.Module) -> ast.Module:
         self.generic_visit(node)
@@ -792,7 +792,8 @@ def _normalize_tree(tree: ast.Module, mode: str, ignore_imports: bool) -> ast.Mo
     strip_type_nodes = mode in ("default", "loose", "structural")
     result = SourceNormalizer(strip_annotations, strip_type_nodes).visit(tree)
     if not isinstance(result, ast.Module):
-        raise TypeError("normalization produced a non-module AST")
+        msg = "normalization produced a non-module AST"
+        raise TypeError(msg)
     if ignore_imports:
         result = _filter_imports(result)
     return result
@@ -946,7 +947,7 @@ def process_file(path_text: str, cfg: WorkerConfig) -> WorkerResult:
     if cfg.need_tlsh:
         result.tlsh_hash = _hash_tlsh(raw)
     if cfg.need_minhash or cfg.need_simhash:
-        source, decode_error = _decode_source(path, raw)
+        source, _decode_error = _decode_source(path, raw)
         if source is not None:
             shingles = _shingle_values(significant_tokens(source))
             if cfg.need_minhash:
@@ -1033,11 +1034,13 @@ def _run_serial(
 def _executor_class(method: str) -> type:
     if method == "cf.ThreadPoolExecutor":
         if _ThreadPoolExecutor is None:
-            raise RuntimeError("ThreadPoolExecutor is unavailable")
+            msg = "ThreadPoolExecutor is unavailable"
+            raise RuntimeError(msg)
         return _ThreadPoolExecutor
     if method == "cf.InterpreterPoolExecutor":
         if _InterpreterPoolExecutor is None:
-            raise RuntimeError("--mp-method cf.InterpreterPoolExecutor requires Python 3.14+")
+            msg = "--mp-method cf.InterpreterPoolExecutor requires Python 3.14+"
+            raise RuntimeError(msg)
         return _InterpreterPoolExecutor
     return ProcessPoolExecutor
 
@@ -1107,7 +1110,8 @@ def _run_mp_pool(
                 results.append(async_result.get())
                 _notify(on_complete)
         else:
-            raise ValueError(f"unknown mp.pool operation: {operation}")
+            msg = f"unknown mp.pool operation: {operation}"
+            raise ValueError(msg)
     except BaseException:
         pool.terminate()
         raise
@@ -1127,7 +1131,8 @@ def _run_joblib(
     try:
         from joblib import Parallel, delayed
     except ImportError as error:
-        raise RuntimeError("--mp-method joblib requires the joblib package (pip install joblib)") from error
+        msg = "--mp-method joblib requires the joblib package (pip install joblib)"
+        raise RuntimeError(msg) from error
     absolute_paths = [Path(path_text).absolute() for path_text in paths]
     results = list(
         Parallel(n_jobs=workers, prefer="processes")(
@@ -1737,9 +1742,11 @@ def _nonneg_int(value: str) -> int:
     try:
         number = int(value)
     except ValueError as error:
-        raise argparse.ArgumentTypeError("must be a non-negative integer") from error
+        msg = "must be a non-negative integer"
+        raise argparse.ArgumentTypeError(msg) from error
     if number < 0:
-        raise argparse.ArgumentTypeError("must be a non-negative integer")
+        msg = "must be a non-negative integer"
+        raise argparse.ArgumentTypeError(msg)
     return number
 
 
@@ -1786,9 +1793,11 @@ def _similarity_value(value: str) -> float:
     try:
         number = float(value)
     except ValueError as error:
-        raise argparse.ArgumentTypeError("must be a float in (0, 1]") from error
+        msg = "must be a float in (0, 1]"
+        raise argparse.ArgumentTypeError(msg) from error
     if not 0.0 < number <= 1.0:
-        raise argparse.ArgumentTypeError("must be a float in (0, 1]")
+        msg = "must be a float in (0, 1]"
+        raise argparse.ArgumentTypeError(msg)
     return number
 
 
@@ -1890,7 +1899,8 @@ def _load_baseline(path: Path) -> set[tuple[str, ...]]:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except Exception as error:
-        raise ValueError(f"cannot read baseline {path}: {error}") from error
+        msg = f"cannot read baseline {path}: {error}"
+        raise ValueError(msg) from error
     groups = data.get("groups", [])
     known: set[tuple[str, ...]] = set()
     for group in groups:
@@ -2054,7 +2064,8 @@ def _collect_entries(
     if args.changed_since:
         changed = _changed_since_paths(roots, args.changed_since)
         if changed is None:
-            raise RuntimeError("cannot resolve --changed-since file list")
+            msg = "cannot resolve --changed-since file list"
+            raise RuntimeError(msg)
         candidates.extend(Path(path_text) for path_text in sorted(changed))
         enforce_suffix = True
     else:
@@ -2675,9 +2686,8 @@ def _scan(args: argparse.Namespace) -> ScanOutcome | None:
         elif result.skipped is not None:
             stats.skipped += 1
             LOGGER.debug("skipped {} ({})", result.path, result.skipped)
-        elif result.digest is not None:
-            if not result.from_cache:
-                stats.parsed += 1
+        elif result.digest is not None and not result.from_cache:
+            stats.parsed += 1
     if not args.no_cache and entries:
         _save_cache(cache_path, mode_key, cache, {str(e.path): e for e in entries}, results)
     entries_map = {str(entry.path): entry for entry in entries}
@@ -3055,7 +3065,8 @@ def cli(
         ))
         > 1
     ):
-        raise typer.BadParameter("--to-trash, --quarantine are mutually exclusive")
+        msg = "--to-trash, --quarantine are mutually exclusive"
+        raise typer.BadParameter(msg)
     paths = paths or []
     _STATE.update(
         paths=paths,

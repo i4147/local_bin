@@ -49,10 +49,10 @@ License: MIT (same as the original).
 """
 
 from __future__ import annotations
-import argparse
 import base64
 import binascii
 from concurrent.futures import ThreadPoolExecutor
+import contextlib
 from dataclasses import dataclass, field
 import ipaddress
 import json
@@ -62,7 +62,7 @@ import socket
 import threading
 import time
 from types import SimpleNamespace
-from typing import Annotated, Any, Callable, Iterable, Optional, Sequence
+from typing import TYPE_CHECKING, Annotated, Any, Callable, Iterable, Optional, Sequence
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -72,10 +72,14 @@ from loguru import logger
 import typer
 
 
+if TYPE_CHECKING:
+    import argparse
+
+
 def _version_callback(value: bool) -> None:
     if value:
         typer.echo(f"%(prog)s {__version__}")
-        raise typer.Exit()
+        raise typer.Exit
 
 
 _STATE: dict[str, object] = {}
@@ -385,8 +389,7 @@ def decode_string(data: bytes, charset: Optional[str] = None) -> str:
     """
     result = _decode_inner(data, charset)
     # JS TextDecoder removes a leading byte order mark from the output
-    if result.startswith("\ufeff"):
-        result = result[1:]
+    result = result.removeprefix("\ufeff")
     return result
 
 
@@ -648,7 +651,8 @@ def _normalize_absolute(url: str) -> str:
     parts = urllib.parse.urlsplit(url)
     scheme = parts.scheme.lower()
     if not scheme:
-        raise UrlError(f"no scheme in {url!r}")
+        msg = f"no scheme in {url!r}"
+        raise UrlError(msg)
     netloc = parts.netloc
     if scheme in _SPECIAL_SCHEMES and not netloc:
         # e.g. "http:example.com" — special schemes coerce to authority form
@@ -670,7 +674,8 @@ def _normalize_absolute(url: str) -> str:
         if authority.startswith("["):  # IPv6 literal
             close = authority.find("]")
             if close == -1:
-                raise UrlError("unterminated IPv6 address")
+                msg = "unterminated IPv6 address"
+                raise UrlError(msg)
             host = authority[: close + 1]
             tail = authority[close + 1 :]
         else:
@@ -684,14 +689,16 @@ def _normalize_absolute(url: str) -> str:
         if tail.startswith(":"):
             port = tail[1:]
             if port and not port.isdigit():
-                raise UrlError(f"invalid port {port!r}")
+                msg = f"invalid port {port!r}"
+                raise UrlError(msg)
             if port and scheme in _SPECIAL_SCHEMES and int(port) == _SPECIAL_SCHEMES[scheme]:
                 port = ""  # default ports are removed
         host = host.lower()
 
     if scheme in _SPECIAL_SCHEMES:
         if not netloc and scheme != "file":
-            raise UrlError(f"special scheme {scheme} requires a host")
+            msg = f"special scheme {scheme} requires a host"
+            raise UrlError(msg)
         path = _pct_encode(parts.path, _PATH_UNSAFE)
         path = _remove_dot_segments(path)
         if not path and scheme != "file":
@@ -1331,7 +1338,7 @@ def tokenize_css(src: str) -> list[CssToken]:
             tokens.append(CssToken(T_NUMBER, src[i:j]))
             i = j
             continue
-        if ch == '"' or ch == "'":
+        if ch in {'"', "'"}:
             kind, end = _consume_string(src, i)
             tokens.append(CssToken(kind, src[i:end]))
             i = end
@@ -1614,7 +1621,7 @@ class CssUrl(CssNode):
 
 
 class CssFunc(CssNode):
-    __slots__ = ("name", "children")
+    __slots__ = ("children", "name")
 
     def __init__(self, name: str, children: list) -> None:
         "Initialize the instance state from the supplied arguments."
@@ -1642,7 +1649,7 @@ class CssOpPM(CssNode):
     """A standalone ``+``/``-`` operator; surrounding whitespace is
     normalized to single spaces exactly the way csstree emits it."""
 
-    __slots__ = ("text", "lead", "trail")
+    __slots__ = ("lead", "text", "trail")
 
     def __init__(self, text: str, lead: bool, trail: bool) -> None:
         "Initialize the instance state from the supplied arguments."
@@ -1666,7 +1673,7 @@ class CssRaw(CssNode):
 
 
 class CssDecl(CssNode):
-    __slots__ = ("property", "value", "important")
+    __slots__ = ("important", "property", "value")
 
     def __init__(self, property_name: str, value, important: bool) -> None:
         "Initialize the instance state from the supplied arguments."
@@ -1676,7 +1683,7 @@ class CssDecl(CssNode):
 
 
 class CssAtrule(CssNode):
-    __slots__ = ("name", "prelude", "block")
+    __slots__ = ("block", "name", "prelude")
 
     def __init__(self, name: str, prelude: list, block) -> None:
         "Initialize the instance state from the supplied arguments."
@@ -1686,7 +1693,7 @@ class CssAtrule(CssNode):
 
 
 class CssRule(CssNode):
-    __slots__ = ("prelude", "block")
+    __slots__ = ("block", "prelude")
 
     def __init__(self, prelude: list, block) -> None:
         "Initialize the instance state from the supplied arguments."
@@ -1728,14 +1735,14 @@ class _Toks:
 def parse_stylesheet(css: str) -> list:
     """Parse a whole stylesheet into a list of block-level items."""
     tk = _Toks(tokenize_css(css))
-    items, i = _parse_block_items(tk, 0, "rules", top_level=True)
+    items, _i = _parse_block_items(tk, 0, "rules", top_level=True)
     return items
 
 
 def parse_declaration_list(css: str) -> list:
     """Parse the content of a ``style`` attribute."""
     tk = _Toks(tokenize_css(css))
-    items, i = _parse_block_items(tk, 0, "declarations", top_level=True)
+    items, _i = _parse_block_items(tk, 0, "declarations", top_level=True)
     return items
 
 
@@ -1804,9 +1811,8 @@ def _parse_atrule(tk: _Toks, i: int, mode: str) -> tuple[CssNode, int]:
             break
         if kind in (T_FUNCTION, T_LEFT_PAREN, T_LEFT_SQUARE):
             depth += 1
-        elif kind in (T_RIGHT_PAREN, T_RIGHT_SQUARE):
-            if depth > 0:
-                depth -= 1
+        elif kind in (T_RIGHT_PAREN, T_RIGHT_SQUARE) and depth > 0:
+            depth -= 1
         j += 1
     prelude_end = j
     if name.lower() == "import" and _span_has_depth0_comma(tk, prelude_start, prelude_end):
@@ -1876,9 +1882,8 @@ def _parse_rule(tk: _Toks, i: int) -> tuple[CssNode, int]:
             return CssRaw(tk.text(start, raw_end[0])), raw_end[1]
         if kind in (T_FUNCTION, T_LEFT_PAREN, T_LEFT_SQUARE):
             depth += 1
-        elif kind in (T_RIGHT_PAREN, T_RIGHT_SQUARE):
-            if depth > 0:
-                depth -= 1
+        elif kind in (T_RIGHT_PAREN, T_RIGHT_SQUARE) and depth > 0:
+            depth -= 1
         j += 1
     prelude = _parse_selector_prelude(tk, prelude_start, j)
     if j < n and tk.tokens[j].kind == T_LEFT_CURLY:
@@ -1994,9 +1999,8 @@ def _raw_span_end(tk: _Toks, start: int) -> tuple[int, int]:
             return last_nonspace, j
         if kind in (T_FUNCTION, T_LEFT_PAREN, T_LEFT_SQUARE, T_LEFT_CURLY):
             depth += 1
-        elif kind in (T_RIGHT_PAREN, T_RIGHT_SQUARE, T_RIGHT_CURLY):
-            if depth > 0:
-                depth -= 1
+        elif kind in (T_RIGHT_PAREN, T_RIGHT_SQUARE, T_RIGHT_CURLY) and depth > 0:
+            depth -= 1
         last_nonspace = j + 1
         j += 1
     return last_nonspace, n
@@ -2099,9 +2103,8 @@ def _custom_property_end(tk: _Toks, start: int) -> tuple[int, int, bool]:
             return _strip_trailing_ws(tk, start, j), j, False
         if kind in (T_FUNCTION, T_LEFT_PAREN, T_LEFT_SQUARE, T_LEFT_CURLY):
             depth += 1
-        elif kind in (T_RIGHT_PAREN, T_RIGHT_SQUARE, T_RIGHT_CURLY):
-            if depth > 0:
-                depth -= 1
+        elif kind in (T_RIGHT_PAREN, T_RIGHT_SQUARE, T_RIGHT_CURLY) and depth > 0:
+            depth -= 1
         j += 1
     return _strip_trailing_ws(tk, start, n), n, False
 
@@ -2157,7 +2160,8 @@ def _parse_components(tk: _Toks, start: int, end: int, lenient: bool) -> list:
         kind = t.kind
         if kind in (T_IDENT, T_HASH, T_NUMBER, T_PERCENTAGE, T_DIMENSION, T_ATKEYWORD, T_CDO, T_CDC):
             if kind in (T_ATKEYWORD, T_CDO, T_CDC) and not lenient:
-                raise CssParseError(f"unexpected token {t.text!r}")
+                msg = f"unexpected token {t.text!r}"
+                raise CssParseError(msg)
             comps.append(CssTok(kind, t.text))
             i += 1
         elif kind == T_STRING:
@@ -2181,7 +2185,8 @@ def _parse_components(tk: _Toks, start: int, end: int, lenient: bool) -> list:
                     comps.append(CssTok(T_FUNCTION, t.text))
                     i += 1
                     continue
-                raise CssParseError("url( must be followed by a string")
+                msg = "url( must be followed by a string"
+                raise CssParseError(msg)
             children, i = _parse_nested(tk, i, end, T_RIGHT_PAREN, lenient)
             comps.append(CssFunc(t.text, children))
         elif kind == T_LEFT_PAREN:
@@ -2207,18 +2212,21 @@ def _parse_components(tk: _Toks, start: int, end: int, lenient: bool) -> list:
                 comps.append(CssTok(T_DELIM, t.text))
                 i += 1
             else:
-                raise CssParseError(f"unexpected delimiter {t.text!r}")
-        elif kind == T_BADSTRING or kind == T_BADURL:
+                msg = f"unexpected delimiter {t.text!r}"
+                raise CssParseError(msg)
+        elif kind in (T_BADSTRING, T_BADURL):
             if lenient:
                 comps.append(CssTok(kind, t.text))
                 i += 1
             else:
-                raise CssParseError("bad string/url token in value")
+                msg = "bad string/url token in value"
+                raise CssParseError(msg)
         elif lenient:
             comps.append(CssTok(kind, t.text))
             i += 1
         else:
-            raise CssParseError(f"unexpected token kind {kind}")
+            msg = f"unexpected token kind {kind}"
+            raise CssParseError(msg)
         pending_ws = False
     return comps
 
@@ -2246,7 +2254,8 @@ def _parse_nested(tk: _Toks, i: int, end: int, closer: int, lenient: bool) -> tu
         j += 1
     if lenient:
         return _parse_components(tk, i, end, True), end
-    raise CssParseError("unbalanced function/parentheses")
+    msg = "unbalanced function/parentheses"
+    raise CssParseError(msg)
 
 
 # ---------------------------------------------------------------------------
@@ -2411,9 +2420,8 @@ def walk_css_nodes(items: Iterable, visit: Callable[[CssNode], None]) -> None:
             walk_list(item.prelude)
             if item.block is not None:
                 walk_css_nodes(item.block, visit)
-        elif isinstance(item, CssDecl):
-            if not isinstance(item.value, CssRaw):
-                walk_list(item.value)
+        elif isinstance(item, CssDecl) and not isinstance(item.value, CssRaw):
+            walk_list(item.value)
 
 
 def first_stylesheet_item_is_charset(items: Sequence) -> Optional[tuple[str, str]]:
@@ -2550,7 +2558,8 @@ def _tag_name(node) -> Optional[str]:
 def parse_dom(asset: str, content_type: str = "text/html") -> DomDocument:
     "Parse dom."
     if html5lib is None:
-        raise ConversionError("html5lib is required for HTML parsing: pip install html5lib")
+        msg = "html5lib is required for HTML parsing: pip install html5lib"
+        raise ConversionError(msg)
     document = html5lib.parse(asset, treebuilder="dom")
     return DomDocument(document)
 
@@ -2595,7 +2604,7 @@ def _should_escape_raw_text(parent) -> bool:
     if parent_tag == "script":
         attrs = getattr(parent, "attributes", None)
         type_value = None
-        if attrs is not None and "type" in attrs.keys():
+        if attrs is not None and "type" in attrs:
             type_value = attrs["type"].value
         return not type_value or type_value == JAVASCRIPT_MIME_TYPE
     return False
@@ -2645,7 +2654,7 @@ def _serialize_attributes(element) -> str:
     if attrs is None:
         return ""
     out: list[str] = []
-    for name in attrs.keys():
+    for name in attrs:
         if INVALID_TAG_NAME_REGEXP.search(name):
             continue  # an attribute whose name cannot be written is dropped
         value = attrs[name].value
@@ -2661,10 +2670,10 @@ def element_get_attribute(element, name: str) -> Optional[str]:
     attrs = getattr(element, "attributes", None)
     if attrs is None:
         return None
-    if name in attrs.keys():
+    if name in attrs:
         return attrs[name].value
     lowered = name.lower()
-    for key in attrs.keys():
+    for key in attrs:
         if key.lower() == lowered:
             return attrs[key].value
     return None
@@ -2699,10 +2708,8 @@ def element_append_child(parent, child) -> None:
 def element_remove(node) -> None:
     parent = getattr(node, "parentNode", None)
     if parent is not None:
-        try:
+        with contextlib.suppress(ValueError):
             parent.childNodes.remove(node)
-        except ValueError:
-            pass
         node.parentNode = None
 
 
@@ -3179,7 +3186,7 @@ def parse_mhtml(mhtml: str | bytes | bytearray, config: Optional[dict] = None, c
             found = first_stylesheet_item_is_charset(items)
             if found is not None:
                 css_charset = found[0].lower()
-                if bom_charset is None and css_charset != UTF8_CHARSET and css_charset != charset:
+                if bom_charset is None and css_charset not in (UTF8_CHARSET, charset):
                     resource.data = decode_string(resource.raw_data, css_charset)
                     items = parse_stylesheet(resource.data)
                 remove_first_stylesheet_item(items)
@@ -3200,7 +3207,7 @@ def parse_mhtml(mhtml: str | bytes | bytearray, config: Optional[dict] = None, c
             html_charset = element_get_attribute(charset_meta_elements[0], "charset")
             if html_charset:
                 html_charset = html_charset.lower()
-                if bom_charset is None and html_charset != UTF8_CHARSET and html_charset != charset:
+                if bom_charset is None and html_charset not in (UTF8_CHARSET, charset):
                     resource.data = decode_string(resource.raw_data, html_charset)
                     document_charset = html_charset
                     dom = parse_dom(resource.data, content_type)
@@ -3212,12 +3219,7 @@ def parse_mhtml(mhtml: str | bytes | bytearray, config: Optional[dict] = None, c
         if meta_elements:
             content_attr = element_get_attribute(meta_elements[0], "content")
             html_charset = get_charset(content_attr)
-            if (
-                bom_charset is None
-                and html_charset
-                and html_charset != UTF8_CHARSET
-                and html_charset != document_charset
-            ):
+            if bom_charset is None and html_charset and html_charset not in (UTF8_CHARSET, document_charset):
                 resource.data = decode_string(resource.raw_data, html_charset)
                 document_charset = html_charset
                 dom = parse_dom(resource.data, content_type)
@@ -3378,9 +3380,8 @@ def _get_resource(resources: dict[str, Resource], id_value: Optional[str], raw_i
 
 
 def _add_missing_resource(missing_resources: list, id_value: str, transfer_encoding: Optional[str]) -> None:
-    if id_value.startswith("http:") or id_value.startswith("https:") or id_value.startswith("urn:"):
-        if not any(r["id"] == id_value for r in missing_resources):
-            missing_resources.append({"id": id_value, "transferEncoding": transfer_encoding})
+    if id_value.startswith(("http:", "https:", "urn:")) and not any(r["id"] == id_value for r in missing_resources):
+        missing_resources.append({"id": id_value, "transferEncoding": transfer_encoding})
 
 
 def _resolve_reference(resources: dict[str, Resource], missing_resources, unfound: dict, reference: dict) -> None:
@@ -3478,50 +3479,47 @@ def _replace_stylesheet_urls(
                         "notFound": not_found,
                     },
                 )
-        elif isinstance(node, CssAtrule) and node.name.lower() == "import":
-            if node.prelude:
-                import_node = node.prelude[0]
-                if isinstance(import_node, (CssStr, CssUrl)):
-                    path = import_node.value
-                    if path and not path.startswith(DATA_PROTOCOL) and not path.startswith(ORIGINAL_URL_FUNCTION_NAME):
-                        id_value = resolve_path(path, base)
+        elif isinstance(node, CssAtrule) and node.name.lower() == "import" and node.prelude:
+            import_node = node.prelude[0]
+            if isinstance(import_node, (CssStr, CssUrl)):
+                path = import_node.value
+                if path and not path.startswith(DATA_PROTOCOL) and not path.startswith(ORIGINAL_URL_FUNCTION_NAME):
+                    id_value = resolve_path(path, base)
 
-                        def descend(resource: Resource) -> None:
-                            resource.data = _replace_stylesheet_urls(
-                                resources,
-                                resource.id,
-                                {"id": resource.id, "data": resource.data},
-                                "stylesheet",
-                                stylesheets,
-                                missing_resources,
-                                unfound,
-                            )
-
-                        def found(resource: Resource) -> None:
-                            node.prelude[0] = CssUrl(
-                                _get_original_url_function(
-                                    id_value,
-                                    get_resource_uri(
-                                        resource.content_type, resource.transfer_encoding, str(resource.data)
-                                    ),
-                                )
-                            )
-
-                        def not_found() -> None:
-                            node.prelude[0] = CssUrl(_get_original_url_function(id_value))
-
-                        _resolve_reference(
+                    def descend(resource: Resource) -> None:
+                        resource.data = _replace_stylesheet_urls(
                             resources,
+                            resource.id,
+                            {"id": resource.id, "data": resource.data},
+                            "stylesheet",
+                            stylesheets,
                             missing_resources,
                             unfound,
-                            {
-                                "id": id_value,
-                                "rawId": path,
-                                "descend": descend,
-                                "found": found,
-                                "notFound": not_found,
-                            },
                         )
+
+                    def found(resource: Resource) -> None:
+                        node.prelude[0] = CssUrl(
+                            _get_original_url_function(
+                                id_value,
+                                get_resource_uri(resource.content_type, resource.transfer_encoding, str(resource.data)),
+                            )
+                        )
+
+                    def not_found() -> None:
+                        node.prelude[0] = CssUrl(_get_original_url_function(id_value))
+
+                    _resolve_reference(
+                        resources,
+                        missing_resources,
+                        unfound,
+                        {
+                            "id": id_value,
+                            "rawId": path,
+                            "descend": descend,
+                            "found": found,
+                            "notFound": not_found,
+                        },
+                    )
 
     walk_css_nodes(items, visit)
     try:
@@ -4122,23 +4120,27 @@ def _validate_url_for_fetch(url: str, fetch_config: FetchConfig) -> None:
     parts = urllib.parse.urlsplit(url)
     scheme = parts.scheme.lower()
     if scheme not in fetch_config.allowed_schemes:
-        raise MhtmlError(f"scheme not allowed for fetching: {scheme!r}")
+        msg = f"scheme not allowed for fetching: {scheme!r}"
+        raise MhtmlError(msg)
     host = parts.hostname
     if not host:
-        raise MhtmlError("URL has no host")
+        msg = "URL has no host"
+        raise MhtmlError(msg)
     if fetch_config.allow_private_hosts:
         return
     try:
         addrinfos = socket.getaddrinfo(host, parts.port or (443 if scheme == "https" else 80), proto=socket.IPPROTO_TCP)
     except OSError as exc:
-        raise MhtmlError(f"cannot resolve {host!r}: {exc}") from exc
+        msg = f"cannot resolve {host!r}: {exc}"
+        raise MhtmlError(msg) from exc
     for addrinfo in addrinfos:
         ip = ipaddress.ip_address(addrinfo[4][0])
         if _is_blocked_address(ip):
-            raise MhtmlError(
+            msg = (
                 f"refusing to fetch from non-public address {ip} (use "
                 "allow_private_hosts/FetchConfig or --allow-private-network to override)"
             )
+            raise MhtmlError(msg)
 
 
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -4159,7 +4161,8 @@ def _read_capped(response, limit: int) -> bytes:
         chunks.append(chunk)
         remaining -= len(chunk)
     else:
-        raise MhtmlError(f"response exceeds the size limit ({limit} bytes)")
+        msg = f"response exceeds the size limit ({limit} bytes)"
+        raise MhtmlError(msg)
     return b"".join(chunks)
 
 
@@ -4176,10 +4179,8 @@ def _fetch_once(url: str, fetch_config: FetchConfig) -> tuple[int, Any, bytes]:
         response = _OPENER.open(request, timeout=timeout)
     except urllib.error.HTTPError as exc:
         # read the (small) error body so the connection is reused cleanly
-        try:
+        with contextlib.suppress(Exception):
             exc.read(1024)
-        except Exception:
-            pass
         headers = exc.headers
         return exc.code, headers, b""
     except (urllib.error.URLError, OSError, ValueError) as exc:
@@ -4275,7 +4276,8 @@ def _fetch_with_redirects(url: str, fetch_config: FetchConfig) -> tuple[int, Any
             _validate_url_for_fetch(current, fetch_config)
             continue
         return status, headers, payload
-    raise MhtmlError(f"too many redirects fetching {url}")
+    msg = f"too many redirects fetching {url}"
+    raise MhtmlError(msg)
 
 
 def _fetch_resources(
@@ -4536,9 +4538,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             output_path = _default_output_path(input_path)
         try:
             if output_path.resolve() == input_path.resolve():
-                raise MhtmlError(f"output path would overwrite the input archive: {output_path}")
+                msg = f"output path would overwrite the input archive: {output_path}"
+                raise MhtmlError(msg)
             if args.no_clobber and output_path.exists():
-                raise MhtmlError(f"output file already exists: {output_path}")
+                msg = f"output file already exists: {output_path}"
+                raise MhtmlError(msg)
             _convert_file(input_path, output_path, config)
         except Exception as exc:
             failures += 1

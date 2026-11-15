@@ -5,6 +5,7 @@
 import argparse
 import ast
 from collections import defaultdict
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
 import difflib
 import io
@@ -23,8 +24,6 @@ import zipfile
 from dh import MAX_WORKERS, SKIP_DIRS
 
 
-if TYPE_CHECKING:
-    from collections.abc import Iterable, Iterator
 try:
     import zstandard as zstd
 

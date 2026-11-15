@@ -878,7 +878,7 @@ def is_import_block(node: ast.stmt) -> bool:
 
 def is_stdlib(module: str) -> bool:
     "Return whether stdlib."
-    return module.split(".")[0] in STDLIB_MODULES
+    return module.split(".", maxsplit=1)[0] in STDLIB_MODULES
 
 
 def unique_nodes(body: list[ast.stmt]) -> list[ast.stmt]:
@@ -1079,7 +1079,8 @@ def main(
     "Run the command-line interface."
     args = SimpleNamespace(input=input, merged_file=merged_file, output=output, log_file=log_file)
     if args.merged_file is not None and args.input is not None:
-        raise typer.BadParameter("Provide either a positional INPUT or -f/--merged-file, not both")
+        msg = "Provide either a positional INPUT or -f/--merged-file, not both"
+        raise typer.BadParameter(msg)
     cwd = Path.cwd()
     requested: Path = args.output if args.output is not None else cwd / f"{cwd.name or 'merged'}.py"
     output = unique_path(requested)

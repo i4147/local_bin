@@ -1,7 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/env python
 "Extract supported archives; originals are removed after successful extraction."
 
-import argparse
 from collections.abc import Iterator
 from contextlib import contextmanager
 import gzip
@@ -13,7 +12,7 @@ import shutil
 import sys
 import tarfile
 from types import SimpleNamespace
-from typing import Annotated, BinaryIO
+from typing import TYPE_CHECKING, Annotated, BinaryIO
 import zipfile
 
 import click
@@ -22,6 +21,10 @@ import lz4.frame
 import py7zr
 import typer
 import zstandard
+
+
+if TYPE_CHECKING:
+    import argparse
 
 
 _STATE: dict[str, object] = {}
@@ -139,7 +142,8 @@ class BrotliStreamReader(io.RawIOBase):
         chunk: bytes = self._source.read(CHUNK_SIZE)
         if not chunk:
             if not self._decompressor.is_finished():
-                raise brotli.error("Truncated brotli stream")
+                msg = "Truncated brotli stream"
+                raise brotli.error(msg)
             self._finished = True
             return
         self._buffer += self._decompressor.process(chunk)
@@ -170,7 +174,8 @@ def zstd_reader(source: BinaryIO) -> BinaryIO:
 def decompression_stream(path: Path, compression_type: str) -> Iterator[BinaryIO]:
     backend: str | None = STREAM_BACKENDS.get(compression_type)
     if backend is None:
-        raise ValueError(f"Unsupported stream compression: {compression_type}")
+        msg = f"Unsupported stream compression: {compression_type}"
+        raise ValueError(msg)
     if backend == "lz4":
         with lz4.frame.open(str(path), "rb") as source:
             yield source
@@ -197,9 +202,8 @@ def open_tar(path: Path, compression_type: str) -> Iterator[tarfile.TarFile]:
         with tarfile.open(path, mode) as tar:
             yield tar
         return
-    with decompression_stream(path, compression_type) as reader:
-        with tarfile.open(fileobj=reader, mode="r|") as tar:
-            yield tar
+    with decompression_stream(path, compression_type) as reader, tarfile.open(fileobj=reader, mode="r|") as tar:
+        yield tar
 
 
 def check_integrity(archive_path: Path) -> bool:
@@ -278,7 +282,8 @@ def extract_archive(archive_path: Path) -> bool:
         elif compression_type in RAW_TYPES:
             target: Path = archive_path.with_suffix("")
             if target == archive_path:
-                raise ValueError(f"Cannot derive decompressed name for {archive_path.name}")
+                msg = f"Cannot derive decompressed name for {archive_path.name}"
+                raise ValueError(msg)
             src: BinaryIO
             dst: BinaryIO
             with decompression_stream(archive_path, compression_type) as src, open(target, "wb") as dst:

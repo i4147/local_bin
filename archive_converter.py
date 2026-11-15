@@ -2,9 +2,7 @@
 "Convert archives and compressed files between formats with auto-detected input."
 
 from __future__ import annotations
-import argparse
 import bz2
-from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from enum import Enum
@@ -24,12 +22,17 @@ import tempfile
 import threading
 import time
 from types import SimpleNamespace
-from typing import IO, Annotated, Any, Literal, cast
+from typing import IO, TYPE_CHECKING, Annotated, Any, Literal, cast
 import zipfile
 
 import click
 from loguru import logger
 import typer
+
+
+if TYPE_CHECKING:
+    import argparse
+    from collections.abc import Sequence
 
 
 _STATE: dict[str, object] = {}
@@ -199,7 +202,8 @@ def require(module: str, pip: str) -> Any:
     try:
         return importlib.import_module(module)
     except ImportError as exc:
-        raise ToolError(f"missing dependency: pip install {pip}") from exc
+        msg = f"missing dependency: pip install {pip}"
+        raise ToolError(msg) from exc
 
 
 def zstd_backend() -> Any:
@@ -241,7 +245,8 @@ class BrotliReader(io.RawIOBase):
             else:
                 self._eof = True
                 if not self._decoder.is_finished():
-                    raise EOFError("truncated brotli stream")
+                    msg = "truncated brotli stream"
+                    raise EOFError(msg)
         size = min(len(buffer), len(self._pending) - self._pos)
         buffer[:size] = self._pending[self._pos : self._pos + size]
         self._pos += size
@@ -424,7 +429,8 @@ def sniff(path: Path, hint: Codec | None) -> tuple[Container, Codec | None] | No
     except Exception as exc:
         if guessed:
             return None
-        raise ToolError(f"cannot read {codec.value} stream: {exc}") from exc
+        msg = f"cannot read {codec.value} stream: {exc}"
+        raise ToolError(msg) from exc
     return (Container.TAR if is_tar_block(inner) else Container.RAW), codec
 
 
@@ -434,11 +440,13 @@ def detect(path: Path, strict: bool) -> tuple[Fmt, str]:
     sniffed = sniff(path, hint)
     if named is None:
         if sniffed is None:
-            raise ToolError("unrecognized format (unknown extension, no matching magic bytes)")
+            msg = "unrecognized format (unknown extension, no matching magic bytes)"
+            raise ToolError(msg)
         return Fmt(*sniffed), path.name
     fmt, stem = named
     if sniffed is None:
-        raise ToolError(f"extension says {fmt.label} but magic bytes do not confirm it")
+        msg = f"extension says {fmt.label} but magic bytes do not confirm it"
+        raise ToolError(msg)
     if fmt.key == sniffed:
         return fmt, stem
     actual = Fmt(*sniffed)
@@ -469,7 +477,8 @@ def parse_target(token: str, src: Fmt) -> Fmt:
     elif value in CODEC_ALIASES:
         container = Container.RAW if src.container is Container.RAW else Container.TAR
         return Fmt(container, CODEC_ALIASES[value])
-    raise ToolError(f"unsupported target format: {token!r}")
+    msg = f"unsupported target format: {token!r}"
+    raise ToolError(msg)
 
 
 def level_spec(dst: Fmt) -> tuple[int, int, int] | None:
@@ -488,7 +497,8 @@ def resolve_level(spec: tuple[int, int, int] | None, requested: int | None) -> i
     if requested is None:
         return default
     if not low <= requested <= high:
-        raise ToolError(f"level must be within {low}..{high} for this target")
+        msg = f"level must be within {low}..{high} for this target"
+        raise ToolError(msg)
     return requested
 
 
@@ -496,7 +506,8 @@ def check_name(name: str) -> PurePosixPath:
     "Check name."
     pure = PurePosixPath(name.replace("\\", "/"))
     if pure.is_absolute() or PureWindowsPath(name).drive or ".." in pure.parts:
-        raise ToolError(f"unsafe path in archive: {name!r}")
+        msg = f"unsafe path in archive: {name!r}"
+        raise ToolError(msg)
     return pure
 
 
@@ -504,7 +515,8 @@ def safe_path(root: Path, pure: PurePosixPath) -> Path:
     target = root.joinpath(*pure.parts)
     target.parent.mkdir(parents=True, exist_ok=True)
     if not target.parent.resolve().is_relative_to(root):
-        raise ToolError(f"unsafe path in archive: {pure.as_posix()!r}")
+        msg = f"unsafe path in archive: {pure.as_posix()!r}"
+        raise ToolError(msg)
     return target
 
 
@@ -538,7 +550,8 @@ def extract_zip(src: Path, root: Path) -> None:
 def extract_tar(src: Path, codec: Codec | None, root: Path) -> None:
     "Extract tar."
     if not hasattr(tarfile, "data_filter"):
-        raise ToolError("this Python lacks safe tar extraction filters; update Python")
+        msg = "this Python lacks safe tar extraction filters; update Python"
+        raise ToolError(msg)
     with open_reader(src, codec) as stream, tarfile.open(fileobj=stream, mode="r|") as archive:
         archive.extractall(root, filter="data")
 
@@ -567,7 +580,7 @@ def extract(src: Path, fmt: Fmt, stem: str, root: Path) -> None:
         case Container.TAR:
             extract_tar(src, fmt.codec, root)
         case Container.RAW:
-            extract_raw(src, cast(Codec, fmt.codec), root, stem)
+            extract_raw(src, cast("Codec", fmt.codec), root, stem)
 
 
 def entries(root: Path) -> list[Path]:
@@ -633,7 +646,8 @@ def pack(root: Path, items: list[Path], dst: Fmt, part: Path, level: int) -> Non
         case Container.SEVENZ:
             pack_7z(root, items, part, level)
         case Container.RAW:
-            raise ToolError("cannot pack multiple entries into a bare compressed file")
+            msg = "cannot pack multiple entries into a bare compressed file"
+            raise ToolError(msg)
 
 
 def recode(src: Path, src_codec: Codec | None, part: Path, dst_codec: Codec | None, level: int) -> str:
@@ -661,19 +675,22 @@ def verify_output(out: Path, dst: Fmt, digest: str | None) -> None:
             while chunk := reader.read(CHUNK):
                 check.update(chunk)
         if check.hexdigest() != digest:
-            raise ToolError("verification failed: decompressed content differs from source")
+            msg = "verification failed: decompressed content differs from source"
+            raise ToolError(msg)
         return
     match dst.container:
         case Container.ZIP:
             with zipfile.ZipFile(out) as archive:
                 bad = archive.testzip()
             if bad:
-                raise ToolError(f"verification failed: corrupt entry {bad!r}")
+                msg = f"verification failed: corrupt entry {bad!r}"
+                raise ToolError(msg)
         case Container.SEVENZ:
             with require("py7zr", "py7zr").SevenZipFile(out, "r") as archive:
                 bad = archive.testzip()
             if bad:
-                raise ToolError(f"verification failed: corrupt entry {bad!r}")
+                msg = f"verification failed: corrupt entry {bad!r}"
+                raise ToolError(msg)
         case Container.TAR:
             with open_reader(out, dst.codec) as reader, tarfile.open(fileobj=reader, mode="r|") as archive:
                 for member in archive:
@@ -693,7 +710,8 @@ def streamable(src: Fmt, dst: Fmt) -> bool:
 def convert_one(src: Path, opts: Options) -> Result:
     "Convert one."
     if not src.is_file():
-        raise ToolError("not a regular file")
+        msg = "not a regular file"
+        raise ToolError(msg)
     fmt, stem = detect(src, opts.strict)
     dst = parse_target(opts.to, fmt)
     out_dir = opts.output_dir or src.parent
@@ -888,7 +906,8 @@ def cli(
         ))
         > 1
     ):
-        raise typer.BadParameter("-v, -q are mutually exclusive")
+        msg = "-v, -q are mutually exclusive"
+        raise typer.BadParameter(msg)
     inputs = inputs or []
     _STATE.update(
         inputs=inputs,

@@ -111,9 +111,8 @@ def run_migration_batches(batch_size: int = 5) -> dict[str, tuple[str, str]]:
                             )
                             print(f"  [DONE*] {fname} ({h_err})")
                             continue
-                    raise RuntimeError(
-                        f"Converted execution failed: {h_proc.stderr.strip().splitlines()[-1] if h_proc.stderr else h_proc.returncode}"
-                    )
+                    msg = f"Converted execution failed: {h_proc.stderr.strip().splitlines()[-1] if h_proc.stderr else h_proc.returncode}"
+                    raise RuntimeError(msg)
 
                 results[fname] = ("DONE", f"Converted successfully via Typer ({len(warnings)} warnings)")
                 print(f"  [DONE] {fname}")

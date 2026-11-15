@@ -95,7 +95,7 @@ def field_summary(
     if field_name == "minute":
         if use_wildcard:
             return "every minute"
-        if ordered == list(range(0, 60)):
+        if ordered == list(range(60)):
             return "every minute"
         if len(ordered) == 1:
             return f"at minute {ordered[0]}"
@@ -103,7 +103,7 @@ def field_summary(
     if field_name == "hour":
         if use_wildcard:
             return "every hour"
-        if ordered == list(range(0, 24)):
+        if ordered == list(range(24)):
             return "every hour"
         if len(ordered) == 1:
             return f"at hour {ordered[0]}"
@@ -145,7 +145,8 @@ def parse_token(field_name: str, token: str) -> int:
         if field_name == "day_of_week":
             return normalize_dow(value)
         return value
-    raise ValueError(f"Unsupported token '{token}' in field '{field_name}'")
+    msg = f"Unsupported token '{token}' in field '{field_name}'"
+    raise ValueError(msg)
 
 
 def parse_field(field_name: str, text: str) -> set[int]:
@@ -167,9 +168,11 @@ def parse_field(field_name: str, text: str) -> set[int]:
             try:
                 step = int(step_text)
             except ValueError as exc:
-                raise ValueError(f"Bad step value '{part}' in field '{field_name}'") from exc
+                msg = f"Bad step value '{part}' in field '{field_name}'"
+                raise ValueError(msg) from exc
             if step <= 0:
-                raise ValueError(f"Step must be > 0 in field '{field_name}'")
+                msg = f"Step must be > 0 in field '{field_name}'"
+                raise ValueError(msg)
             if base == "*":
                 start, end = lo, hi
             elif "-" in base:
@@ -199,7 +202,8 @@ def parse_field(field_name: str, text: str) -> set[int]:
     # Range validate after parse
     for value in values:
         if not (lo <= value <= hi):
-            raise ValueError(f"Value {value} out of range for {field_name}")
+            msg = f"Value {value} out of range for {field_name}"
+            raise ValueError(msg)
     return values
 
 
@@ -224,17 +228,19 @@ class CronSpec:
 
     @property
     def dow_wildcard(self) -> bool:
-        return self.day_of_week == set(range(0, 7))
+        return self.day_of_week == set(range(7))
 
 
 def parse_cron(expr: str) -> CronSpec:
     "Parse cron."
     expr = expr.strip()
     if not expr or expr.startswith("#"):
-        raise ValueError("Empty expression")
+        msg = "Empty expression"
+        raise ValueError(msg)
     parts = expr.split()
     if len(parts) != 5:
-        raise ValueError(f"Expected 5 cron fields, got {len(parts)}: '{expr}'")
+        msg = f"Expected 5 cron fields, got {len(parts)}: '{expr}'"
+        raise ValueError(msg)
     minute, hour, dom, month, dow = parts
 
     spec = CronSpec(
@@ -273,8 +279,8 @@ def matches(spec: CronSpec, dt: datetime) -> bool:
 
 def explain_spec(spec: CronSpec) -> str:
     "Explain spec."
-    minute_desc = field_summary("minute", spec.minute, use_wildcard=(spec.minute == set(range(0, 60))))
-    hour_desc = field_summary("hour", spec.hour, use_wildcard=(spec.hour == set(range(0, 24))))
+    minute_desc = field_summary("minute", spec.minute, use_wildcard=(spec.minute == set(range(60))))
+    hour_desc = field_summary("hour", spec.hour, use_wildcard=(spec.hour == set(range(24))))
     dom_desc = field_summary("day_of_month", spec.day_of_month, use_wildcard=spec.dom_wildcard)
     month_desc = field_summary("month", spec.month, names=MONTH_NAMES, use_wildcard=spec.month_wildcard)
     dow_desc = field_summary(

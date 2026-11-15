@@ -10,6 +10,7 @@ from __future__ import annotations
 import ast
 import codecs
 from concurrent.futures import ProcessPoolExecutor
+import contextlib
 import dataclasses
 import difflib
 import enum
@@ -507,10 +508,8 @@ def process_file(job: Job) -> FileResult:
 
 def _init_worker() -> None:
     logger.remove()
-    try:
+    with contextlib.suppress(ValueError, OSError):
         signal.signal(signal.SIGINT, signal.SIG_IGN)
-    except (ValueError, OSError):
-        pass
 
 
 def run_jobs(jobs: Sequence[Job], workers: int) -> list[FileResult]:
@@ -736,7 +735,7 @@ def _version_callback(value: bool) -> None:
     """Print the program version and stop when --version is provided."""
     if value:
         typer.echo(f"rmc {VERSION}")
-        raise typer.Exit()
+        raise typer.Exit
 
 
 @app.command()
@@ -773,7 +772,8 @@ def main(
     """Process Python files and report per-file and total bytes removed."""
     del version  # The eager callback handles this option before command execution.
     if quiet and verbose:
-        raise typer.BadParameter("--quiet and --verbose cannot be used together")
+        msg = "--quiet and --verbose cannot be used together"
+        raise typer.BadParameter(msg)
     input_paths = tuple(paths or [Path.cwd()])
     any_mode_flag = bool(comments or docstrings or annotations or all_content)
     mode = Mode(

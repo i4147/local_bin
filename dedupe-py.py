@@ -22,7 +22,7 @@ import typer
 def _version_callback(value: bool) -> None:
     if value:
         typer.echo("dupe-refactor 1.0.0")
-        raise typer.Exit()
+        raise typer.Exit
 
 
 if TYPE_CHECKING:

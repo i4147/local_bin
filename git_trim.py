@@ -94,7 +94,7 @@ import typer
 def _version_callback(value: bool) -> None:
     if value:
         typer.echo(f"git-trim {__version__}")
-        raise typer.Exit()
+        raise typer.Exit
 
 
 _STATE: dict[str, object] = {}
@@ -165,9 +165,11 @@ def run_git_ex(repo: Path, *args: str, timeout: float = GIT_TIMEOUT) -> subproce
             timeout=timeout,
         )
     except FileNotFoundError as exc:
-        raise GitError("git executable not found on PATH") from exc
+        msg = "git executable not found on PATH"
+        raise GitError(msg) from exc
     except subprocess.TimeoutExpired as exc:
-        raise GitError(f"git {' '.join(args[:3])} ... timed out after {timeout:.0f}s") from exc
+        msg = f"git {' '.join(args[:3])} ... timed out after {timeout:.0f}s"
+        raise GitError(msg) from exc
 
 
 def run_git(repo: Path, *args: str, check: bool = True, timeout: float = GIT_TIMEOUT) -> str:
@@ -175,7 +177,8 @@ def run_git(repo: Path, *args: str, check: bool = True, timeout: float = GIT_TIM
     proc = run_git_ex(repo, *args, timeout=timeout)
     if check and proc.returncode != 0:
         detail = (proc.stderr.strip() or proc.stdout.strip() or "no output").splitlines()
-        raise GitError(f"git {' '.join(args[:3])} failed (exit {proc.returncode}): {details_of(detail)}")
+        msg = f"git {' '.join(args[:3])} failed (exit {proc.returncode}): {details_of(detail)}"
+        raise GitError(msg)
     return proc.stdout
 
 
@@ -211,12 +214,15 @@ def _pipe(repo: Path, git_argv: list[str]) -> str:
     except subprocess.TimeoutExpired:
         producer.kill()
         producer.wait()
-        raise GitError(f"git {git_argv[1]} timed out while feeding git patch-id") from None
+        msg = f"git {git_argv[1]} timed out while feeding git patch-id"
+        raise GitError(msg) from None
     if producer.returncode != 0:
         err = (producer.stderr.read() or "").strip().splitlines()
-        raise GitError(f"git {git_argv[1]} failed (exit {producer.returncode}): {details_of(err)}")
+        msg = f"git {git_argv[1]} failed (exit {producer.returncode}): {details_of(err)}"
+        raise GitError(msg)
     if consumer.returncode != 0:
-        raise GitError(f"git patch-id failed (exit {consumer.returncode}): {consumer.stderr.strip()}")
+        msg = f"git patch-id failed (exit {consumer.returncode}): {consumer.stderr.strip()}"
+        raise GitError(msg)
     return consumer.stdout
 
 
@@ -339,14 +345,16 @@ def merge_base(repo: Path, a: str, b: str) -> str | None:
         return proc.stdout.strip()
     if proc.returncode == 1 and not proc.stdout.strip():
         return None  # no common ancestor
-    raise GitError(f"git merge-base {a} {b} failed: {(proc.stderr.strip() or 'unknown error')[:200]}")
+    msg = f"git merge-base {a} {b} failed: {(proc.stderr.strip() or 'unknown error')[:200]}"
+    raise GitError(msg)
 
 
 def resolve_repo(path_str: str) -> Path:
     "Resolve repo."
     repo = Path(path_str or ".").expanduser().resolve()
     if not repo.is_dir():
-        raise GitError(f"not a directory: {repo}")
+        msg = f"not a directory: {repo}"
+        raise GitError(msg)
     run_git(repo, "rev-parse", "--git-dir")  # raises GitError when not a repository
     return repo
 
@@ -357,7 +365,8 @@ def resolve_base(repo: Path, explicit: str | None) -> str:
     of the local branch, prefer it (fresher squash-merge detection)."""
     if explicit:
         if not ref_exists(repo, explicit):
-            raise GitError(f"--base '{explicit}' does not resolve to a commit in this repository")
+            msg = f"--base '{explicit}' does not resolve to a commit in this repository"
+            raise GitError(msg)
         return explicit
     local: str | None = None
     origin_head = run_git(repo, "symbolic-ref", "-q", "--short", "refs/remotes/origin/HEAD", check=False).strip()
@@ -371,7 +380,8 @@ def resolve_base(repo: Path, explicit: str | None) -> str:
                 local = candidate
                 break
     if local is None:
-        raise GitError("could not auto-detect a base branch (no origin/HEAD, 'main' or 'master'); pass --base")
+        msg = "could not auto-detect a base branch (no origin/HEAD, 'main' or 'master'); pass --base"
+        raise GitError(msg)
     remote = f"origin/{local}"
     if ref_exists(repo, f"refs/remotes/{remote}"):
         try:
@@ -855,7 +865,8 @@ def _analyze(args: argparse.Namespace, repo: Path | None = None):
 
 def _reject_conflicting_flags(args: argparse.Namespace) -> None:
     if getattr(args, "yes", False) and getattr(args, "dry_run", False):
-        raise GitError("--yes and --dry-run are mutually exclusive")
+        msg = "--yes and --dry-run are mutually exclusive"
+        raise GitError(msg)
 
 
 def cmd_scan(args: argparse.Namespace) -> int:
@@ -969,10 +980,12 @@ def cmd_prune_remote(args: argparse.Namespace) -> int:
     _reject_conflicting_flags(args)
     repo = resolve_repo(args.repo)
     if not run_git(repo, "remote").split():
-        raise GitError("no git remote is configured; 'prune-remote' needs a remote to fetch --prune")
+        msg = "no git remote is configured; 'prune-remote' needs a remote to fetch --prune"
+        raise GitError(msg)
     proc = run_git_ex(repo, "fetch", "--prune", timeout=FETCH_TIMEOUT)
     if proc.returncode != 0:
-        raise GitError(f"git fetch --prune failed: {(proc.stderr.strip() or proc.stdout.strip())[:200]}")
+        msg = f"git fetch --prune failed: {(proc.stderr.strip() or proc.stdout.strip())[:200]}"
+        raise GitError(msg)
     if not args.json:
         print("ran: git fetch --prune")
         for line in (proc.stderr or "").splitlines():
@@ -1087,7 +1100,8 @@ def _run(
         ["git", *args], cwd=str(repo), capture_output=True, encoding="utf-8", errors="replace", env=env
     )
     if check and proc.returncode != 0:
-        raise AssertionError(f"git {args} failed (exit {proc.returncode}): {proc.stderr.strip()}")
+        msg = f"git {args} failed (exit {proc.returncode}): {proc.stderr.strip()}"
+        raise AssertionError(msg)
     return proc
 
 
@@ -1155,7 +1169,8 @@ def _demo_cli(repo: Path, *argv: str) -> int:
 def cmd_demo(args: argparse.Namespace) -> int:
     root = Path(args.dir).expanduser().resolve() if args.dir else Path(tempfile.mkdtemp(prefix="git-trim-demo-"))
     if root.exists() and any(root.iterdir()):
-        raise GitError(f"demo directory is not empty: {root}")
+        msg = f"demo directory is not empty: {root}"
+        raise GitError(msg)
     root.mkdir(parents=True, exist_ok=True)
     repo = root / "project"
 
@@ -1308,10 +1323,13 @@ def test_parse_refs() -> None:
     )
     refs = parse_refs(raw)
     assert len(refs) == 2
-    assert refs[0].name == "bugfix/x" and refs[0].sha == "abc123def456"
-    assert refs[0].upstream == "origin/bugfix/x" and refs[0].upstream_gone
+    assert refs[0].name == "bugfix/x"
+    assert refs[0].sha == "abc123def456"
+    assert refs[0].upstream == "origin/bugfix/x"
+    assert refs[0].upstream_gone
     assert refs[0].committed_ts == 1700000000.0
-    assert refs[1].upstream == "" and not refs[1].upstream_gone
+    assert refs[1].upstream == ""
+    assert not refs[1].upstream_gone
     assert refs[1].track == ""
 
 
@@ -1362,8 +1380,10 @@ def test_plain_merge_classified_merged(tmp_path, capsys) -> None:
     _merge(repo, "bugfix/crash")
     rc, data = _scan(repo, capsys)
     branch = _branch_map(data)["bugfix/crash"]
-    assert branch["merged"] is True and branch["method"] == "ancestor"
-    assert branch["safe"] is True and branch["reasons"] == []
+    assert branch["merged"] is True
+    assert branch["method"] == "ancestor"
+    assert branch["safe"] is True
+    assert branch["reasons"] == []
     assert rc == EXIT_CANDIDATES
 
 
@@ -1375,7 +1395,8 @@ def test_single_commit_squash_detected(tmp_path, capsys) -> None:
     _squash_merge(repo, "feat/theme", "feat(theme): dark mode (#12)")
     rc, data = _scan(repo, capsys)
     branch = _branch_map(data)["feat/theme"]
-    assert branch["merged"] is True and branch["method"] == "patch-id"
+    assert branch["merged"] is True
+    assert branch["method"] == "patch-id"
     assert branch["safe"] is True
     assert rc == EXIT_CANDIDATES
 
@@ -1386,9 +1407,10 @@ def test_multicommit_squash_detected(tmp_path, capsys) -> None:
     repo = _mkrepo(tmp_path)
     _commit_on(repo, "feat/login", [("login-1.txt", "1\n"), ("login-2.txt", "2\n")])
     _squash_merge(repo, "feat/login", "feat(login): add login (#11)")
-    rc, data = _scan(repo, capsys)
+    _rc, data = _scan(repo, capsys)
     branch = _branch_map(data)["feat/login"]
-    assert branch["merged"] is True and branch["method"] == "squash"
+    assert branch["merged"] is True
+    assert branch["method"] == "squash"
     assert branch["safe"] is True
 
 
@@ -1400,9 +1422,10 @@ def test_rebase_merge_detected(tmp_path, capsys) -> None:
     _run(repo, "checkout", "-q", "main")
     _commit(repo, "base-advance.txt", "b\n", "advance base")  # parents now differ, so the
     _run(repo, "cherry-pick", *shas)  # replayed commits are new objects (like a real rebase)
-    rc, data = _scan(repo, capsys)
+    _rc, data = _scan(repo, capsys)
     branch = _branch_map(data)["feat/rb"]
-    assert branch["merged"] is True and branch["method"] == "patch-id"
+    assert branch["merged"] is True
+    assert branch["method"] == "patch-id"
     assert branch["safe"] is True
 
 
@@ -1413,11 +1436,13 @@ def test_unmerged_branch_is_unsafe_and_survives_delete(tmp_path, capsys) -> None
     _commit_on(repo, "feat/wip", [("wip.txt", "wip\n")])
     rc, data = _scan(repo, capsys)
     branch = _branch_map(data)["feat/wip"]
-    assert branch["merged"] is False and branch["safe"] is False
+    assert branch["merged"] is False
+    assert branch["safe"] is False
     assert any(r == "unmerged: no upstream" for r in branch["reasons"])
     rc = main(["-C", str(repo), "delete", "--yes"])
     captured = capsys.readouterr()
-    assert rc == EXIT_OK and "nothing to delete" in captured.out
+    assert rc == EXIT_OK
+    assert "nothing to delete" in captured.out
     assert _exists(repo, "feat/wip")
 
 
@@ -1428,9 +1453,10 @@ def test_branch_in_worktree_is_skipped(tmp_path, capsys) -> None:
     _commit_on(repo, "feat/wt", [("wt.txt", "wt\n")])
     _merge(repo, "feat/wt")
     _run(repo, "worktree", "add", str(tmp_path / "wt"), "feat/wt")
-    rc, data = _scan(repo, capsys)
+    _rc, data = _scan(repo, capsys)
     branch = _branch_map(data)["feat/wt"]
-    assert branch["merged"] is True and branch["safe"] is False
+    assert branch["merged"] is True
+    assert branch["safe"] is False
     assert branch["worktree"] == str(tmp_path / "wt")
     assert any("worktree" in r for r in branch["reasons"])
     main(["-C", str(repo), "delete", "--yes"])
@@ -1446,7 +1472,8 @@ def test_current_branch_is_never_a_candidate(tmp_path, capsys) -> None:
     _run(repo, "checkout", "-q", "bugfix/x")  # merged, but checked out here
     rc, data = _scan(repo, capsys)
     branch = _branch_map(data)["bugfix/x"]
-    assert branch["current"] is True and branch["safe"] is False
+    assert branch["current"] is True
+    assert branch["safe"] is False
     assert "current branch" in branch["reasons"]
     assert rc == EXIT_OK
 
@@ -1480,27 +1507,33 @@ def test_dryrun_yes_undo_roundtrip(tmp_path, capsys) -> None:
 
     rc = main(["-C", str(repo), "delete"])  # dry-run is the default
     out = capsys.readouterr().out
-    assert rc == EXIT_CANDIDATES and "dry-run" in out and "feat/one" in out
+    assert rc == EXIT_CANDIDATES
+    assert "dry-run" in out
+    assert "feat/one" in out
     assert _exists(repo, "feat/one")
 
     rc = main(["-C", str(repo), "delete", "--yes"])
     out = capsys.readouterr().out
-    assert rc == EXIT_OK and "deleted feat/one" in out
+    assert rc == EXIT_OK
+    assert "deleted feat/one" in out
     assert not _exists(repo, "feat/one")
 
     log_file = git_dir(repo) / TRIM_LOG_NAME
     entries = [json.loads(line) for line in log_file.read_text().splitlines() if line.strip()]
-    assert entries[-1]["name"] == "feat/one" and entries[-1]["sha"] == tip
+    assert entries[-1]["name"] == "feat/one"
+    assert entries[-1]["sha"] == tip
     assert entries[-1]["source"] == "delete"
 
     rc = main(["-C", str(repo), "undo"])
     out = capsys.readouterr().out
-    assert rc == EXIT_OK and "restored feat/one" in out
+    assert rc == EXIT_OK
+    assert "restored feat/one" in out
     assert _run(repo, "rev-parse", "refs/heads/feat/one").stdout.strip() == tip  # exact SHA
 
     rc = main(["-C", str(repo), "undo"])  # idempotent
     out = capsys.readouterr().out
-    assert rc == EXIT_OK and "already exist" in out
+    assert rc == EXIT_OK
+    assert "already exist" in out
 
 
 def test_undo_restores_upstream_tracking(tmp_path, capsys) -> None:
@@ -1519,11 +1552,13 @@ def test_undo_restores_upstream_tracking(tmp_path, capsys) -> None:
     assert _branch_map(data)["feat/old"]["safe"] is True  # unmerged but recoverable
     rc = main(["-C", str(repo), "delete", "--yes"])
     capsys.readouterr()
-    assert rc == EXIT_OK and not _exists(repo, "feat/old")
+    assert rc == EXIT_OK
+    assert not _exists(repo, "feat/old")
 
     rc = main(["-C", str(repo), "undo"])
     capsys.readouterr()
-    assert rc == EXIT_OK and _exists(repo, "feat/old")
+    assert rc == EXIT_OK
+    assert _exists(repo, "feat/old")
     up = _run(repo, "rev-parse", "--abbrev-ref", "feat/old@{upstream}").stdout.strip()
     assert up == "origin/feat/old"
 
@@ -1540,8 +1575,10 @@ def test_delete_pattern_filters(tmp_path, capsys) -> None:
         _merge(repo, name)
     rc = main(["-C", str(repo), "delete", "--yes", "--pattern", "feat/*"])
     out = capsys.readouterr().out
-    assert rc == EXIT_OK and "deleted feat/a" in out
-    assert not _exists(repo, "feat/a") and _exists(repo, "chore/b")
+    assert rc == EXIT_OK
+    assert "deleted feat/a" in out
+    assert not _exists(repo, "feat/a")
+    assert _exists(repo, "chore/b")
     assert "excluded by --pattern" in out
 
 
@@ -1556,9 +1593,11 @@ def test_scan_exit_codes(tmp_path, capsys) -> None:
     rc, _data = _scan(repo, capsys)
     assert rc == EXIT_CANDIDATES
     rc = main(["-C", str(tmp_path / "does-not-exist"), "scan"])
-    assert rc == EXIT_ERROR and "error" in capsys.readouterr().err
+    assert rc == EXIT_ERROR
+    assert "error" in capsys.readouterr().err
     rc = main(["-C", str(repo), "scan", "--base", "no-such-ref"])
-    assert rc == EXIT_ERROR and "error" in capsys.readouterr().err
+    assert rc == EXIT_ERROR
+    assert "error" in capsys.readouterr().err
 
 
 def test_scan_json_shape(tmp_path, capsys) -> None:
@@ -1568,8 +1607,10 @@ def test_scan_json_shape(tmp_path, capsys) -> None:
     _commit_on(repo, "feat/one", [("one.txt", "1\n")])
     _merge(repo, "feat/one")
     _rc, data = _scan(repo, capsys)
-    assert data["tool"] == "git-trim" and data["base"] == "main"
-    assert data["shallow"] is False and data["current"] == "main"
+    assert data["tool"] == "git-trim"
+    assert data["base"] == "main"
+    assert data["shallow"] is False
+    assert data["current"] == "main"
     branch = _branch_map(data)["feat/one"]
     assert {
         "name",
@@ -1604,12 +1645,15 @@ def test_gone_upstream_counts_as_no_upstream(tmp_path, capsys) -> None:
     _run(repo, "fetch", "--prune")
     _rc, data = _scan(repo, capsys)
     branch = _branch_map(data)["feat/wip"]
-    assert branch["upstream"] == "origin/feat/wip" and branch["upstream_gone"] is True
-    assert branch["merged"] is False and branch["safe"] is False
+    assert branch["upstream"] == "origin/feat/wip"
+    assert branch["upstream_gone"] is True
+    assert branch["merged"] is False
+    assert branch["safe"] is False
     assert any("gone" in r for r in branch["reasons"])
     rc = main(["-C", str(repo), "prune-remote", "--yes"])
     capsys.readouterr()
-    assert rc == EXIT_OK and _exists(repo, "feat/wip")
+    assert rc == EXIT_OK
+    assert _exists(repo, "feat/wip")
 
 
 def test_prune_remote_deletes_merged_gone_and_undo_restores(tmp_path, capsys) -> None:
@@ -1627,22 +1671,29 @@ def test_prune_remote_deletes_merged_gone_and_undo_restores(tmp_path, capsys) ->
 
     _rc, data = _scan(repo, capsys)
     branch = _branch_map(data)["feat/done"]
-    assert branch["merged"] is True and branch["upstream_gone"] is True and branch["safe"] is True
+    assert branch["merged"] is True
+    assert branch["upstream_gone"] is True
+    assert branch["safe"] is True
 
     rc = main(["-C", str(repo), "prune-remote"])  # dry-run
     out = capsys.readouterr().out
-    assert rc == EXIT_CANDIDATES and "feat/done" in out and "dry-run" in out
+    assert rc == EXIT_CANDIDATES
+    assert "feat/done" in out
+    assert "dry-run" in out
     assert _exists(repo, "feat/done")
 
     rc = main(["-C", str(repo), "prune-remote", "--yes"])
     out = capsys.readouterr().out
-    assert rc == EXIT_OK and "deleted feat/done" in out
+    assert rc == EXIT_OK
+    assert "deleted feat/done" in out
     assert not _exists(repo, "feat/done")
     entries = [json.loads(l) for l in (git_dir(repo) / TRIM_LOG_NAME).read_text().splitlines() if l.strip()]
-    assert entries[-1]["source"] == "prune-remote" and entries[-1]["name"] == "feat/done"
+    assert entries[-1]["source"] == "prune-remote"
+    assert entries[-1]["name"] == "feat/done"
 
     rc = main(["-C", str(repo), "undo"])
-    assert rc == EXIT_OK and _exists(repo, "feat/done")
+    assert rc == EXIT_OK
+    assert _exists(repo, "feat/done")
 
 
 def test_stale_window_rules(tmp_path, capsys) -> None:
@@ -1660,7 +1711,8 @@ def test_stale_window_rules(tmp_path, capsys) -> None:
 
     _rc, data = _scan(repo, capsys)
     branches = _branch_map(data)
-    assert branches["feat/old"]["merged"] is False and branches["feat/old"]["safe"] is True
+    assert branches["feat/old"]["merged"] is False
+    assert branches["feat/old"]["safe"] is True
     assert branches["feat/old"]["reasons"] == []
     fresh = branches["feat/fresh"]
     assert fresh["safe"] is False
@@ -1682,7 +1734,8 @@ def test_shallow_clone_downgrades_to_unknown(tmp_path, capsys) -> None:
     rc, data = _scan(repo, capsys)
     assert data["shallow"] is True
     branch = _branch_map(data)["feat/sq"]
-    assert branch["merged"] is None and branch["safe"] is False
+    assert branch["merged"] is None
+    assert branch["safe"] is False
     assert any("shallow" in r for r in branch["reasons"])
     assert rc == EXIT_OK  # nothing is safe to delete
     assert not _exists(repo, "nonexistent")  # sanity: repo still intact
@@ -1698,8 +1751,11 @@ def test_orphan_upstream_warning(tmp_path, capsys) -> None:
     _run(repo, "branch", "--set-upstream-to=lib", "tool")  # tool tracks LOCAL branch lib
     rc = main(["-C", str(repo), "delete", "--yes"])
     captured = capsys.readouterr()
-    assert rc == EXIT_OK and "deleted lib" in captured.out
-    assert "warning" in captured.err and "tool" in captured.err and "lib" in captured.err
+    assert rc == EXIT_OK
+    assert "deleted lib" in captured.out
+    assert "warning" in captured.err
+    assert "tool" in captured.err
+    assert "lib" in captured.err
 
 
 def test_detached_head_scan_works(tmp_path, capsys) -> None:
@@ -1756,7 +1812,8 @@ def test_base_prefers_remote_when_strictly_ahead(tmp_path, capsys) -> None:
     rc, data = _scan(repo, capsys)
     assert data["base"] == "origin/main"  # remote strictly ahead -> used as base
     branch = _branch_map(data)["feat/x"]
-    assert branch["merged"] is True and branch["safe"] is True
+    assert branch["merged"] is True
+    assert branch["safe"] is True
     assert rc == EXIT_CANDIDATES
 
 
@@ -1766,7 +1823,8 @@ def test_undo_without_log(tmp_path, capsys) -> None:
     repo = _mkrepo(tmp_path)
     rc = main(["-C", str(repo), "undo"])
     out = capsys.readouterr().out
-    assert rc == EXIT_OK and "nothing to undo" in out
+    assert rc == EXIT_OK
+    assert "nothing to undo" in out
 
 
 def test_extra_unmerged_commit_keeps_branch_unmerged(tmp_path, capsys) -> None:
@@ -1780,7 +1838,8 @@ def test_extra_unmerged_commit_keeps_branch_unmerged(tmp_path, capsys) -> None:
     _run(repo, "checkout", "-q", "main")
     rc, data = _scan(repo, capsys)
     branch = _branch_map(data)["feat/plus"]
-    assert branch["merged"] is False and branch["safe"] is False
+    assert branch["merged"] is False
+    assert branch["safe"] is False
     assert rc == EXIT_OK
 
 
@@ -1790,8 +1849,11 @@ def test_demo_runs(tmp_path, capsys) -> None:
     rc = main(["demo", "--dir", str(tmp_path / "demo")])
     out = capsys.readouterr().out
     assert rc == EXIT_OK
-    assert "squash" in out and "git-trim scan" in out
-    assert "restored" in out and "prune-remote" in out and "undo" in out
+    assert "squash" in out
+    assert "git-trim scan" in out
+    assert "restored" in out
+    assert "prune-remote" in out
+    assert "undo" in out
 
 
 def _run2() -> None:

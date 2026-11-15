@@ -180,11 +180,8 @@ def class_summary(node: ast.ClassDef) -> str | None:
     if "Exception" in bases:
         return "Signal an error raised by this module."
     dataclass_decorator = any(
-        isinstance(dec, ast.Name)
-        and dec.id == "dataclass"
-        or isinstance(dec, ast.Call)
-        and isinstance(dec.func, ast.Name)
-        and dec.func.id == "dataclass"
+        (isinstance(dec, ast.Name) and dec.id == "dataclass")
+        or (isinstance(dec, ast.Call) and isinstance(dec.func, ast.Name) and dec.func.id == "dataclass")
         for dec in node.decorator_list
     )
     if dataclass_decorator:

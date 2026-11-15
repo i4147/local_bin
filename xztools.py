@@ -1130,7 +1130,8 @@ def cmd_compress2(
     ] = DEFAULT_CHUNK_SIZE,
 ) -> None:
     if preset is not None and preset not in range(10):
-        raise typer.BadParameter(f"invalid choice: {preset!r} (choose from {range(10)})")
+        msg = f"invalid choice: {preset!r} (choose from {range(10)})"
+        raise typer.BadParameter(msg)
     _STATE.update(
         preset=preset,
         threads=threads,
@@ -1169,7 +1170,8 @@ def cmd_tar_dirs2(
     no_verify: Annotated[bool, typer.Option("--no-verify", help="Skip archive verification (faster, riskier)")] = False,
 ) -> None:
     if preset is not None and preset not in range(10):
-        raise typer.BadParameter(f"invalid choice: {preset!r} (choose from {range(10)})")
+        msg = f"invalid choice: {preset!r} (choose from {range(10)})"
+        raise typer.BadParameter(msg)
     _STATE.update(
         directory=directory,
         preset=preset,

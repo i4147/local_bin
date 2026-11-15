@@ -81,11 +81,13 @@ def schema_of(value: Any) -> tuple[Any, ...]:
             return ("string_dictionary",)
         properties = tuple((key, schema_of(item)) for key, item in sorted(value.items()))
         return ("object", properties)
-    raise TypeError(f"Unsupported JSON value type: {type(value).__name__}")
+    msg = f"Unsupported JSON value type: {type(value).__name__}"
+    raise TypeError(msg)
 
 
 def reject_nonstandard_constant(value: str) -> NoReturn:
-    raise ValueError(f"Non-standard JSON constant: {value}")
+    msg = f"Non-standard JSON constant: {value}"
+    raise ValueError(msg)
 
 
 def read_json(path: Path) -> tuple[Any | None, str | None]:
@@ -147,7 +149,8 @@ def merge_values(
         return right
     if conflict_policy == "list":
         return [left, right]
-    raise ValueError(f"Conflicting values for key: {path or '<root>'}")
+    msg = f"Conflicting values for key: {path or '<root>'}"
+    raise ValueError(msg)
 
 
 def dedup_value(value: Any) -> Any:
@@ -168,7 +171,7 @@ def dedup_value(value: Any) -> Any:
         return compact
 
     if isinstance(value, dict):
-        return {key: dedup_value(value[key]) for key in sorted(value.keys(), key=lambda x: str(x))}
+        return {key: dedup_value(value[key]) for key in sorted(value.keys(), key=str)}
 
     return value
 

@@ -26,7 +26,7 @@ import typer
 def _version_callback(value: bool) -> None:
     if value:
         typer.echo("pyocr " + __version__)
-        raise typer.Exit()
+        raise typer.Exit
 
 
 _STATE: dict[str, object] = {}
@@ -1907,7 +1907,8 @@ def cmd_langs(
     tool: Annotated[str, typer.Option("-t", "--tool")] = "tesseract",
 ) -> None:
     if tool is not None and tool not in list(_TOOLS_BY_NAME):
-        raise typer.BadParameter(f"invalid choice: {tool!r} (choose from {list(_TOOLS_BY_NAME)})")
+        msg_0 = f"invalid choice: {tool!r} (choose from {list(_TOOLS_BY_NAME)})"
+        raise typer.BadParameter(msg_0)
     _STATE.update(tool=tool, command="langs", func=_cmd_langs)
     _run()
 
@@ -1919,7 +1920,8 @@ def cmd_orientation(
     lang: Annotated[str | None, typer.Option("-l", "--lang")] = None,
 ) -> None:
     if tool is not None and tool not in list(_TOOLS_BY_NAME):
-        raise typer.BadParameter(f"invalid choice: {tool!r} (choose from {list(_TOOLS_BY_NAME)})")
+        msg_0 = f"invalid choice: {tool!r} (choose from {list(_TOOLS_BY_NAME)})"
+        raise typer.BadParameter(msg_0)
     _STATE.update(image=image, tool=tool, lang=lang, command="orientation", func=_cmd_orientation)
     _run()
 
@@ -1934,9 +1936,11 @@ def cmd_ocr(
     ] = "text",
 ) -> None:
     if tool is not None and tool not in list(_TOOLS_BY_NAME):
-        raise typer.BadParameter(f"invalid choice: {tool!r} (choose from {list(_TOOLS_BY_NAME)})")
+        msg_0 = f"invalid choice: {tool!r} (choose from {list(_TOOLS_BY_NAME)})"
+        raise typer.BadParameter(msg_0)
     if builder is not None and builder not in list(_BUILDERS):
-        raise typer.BadParameter(f"invalid choice: {builder!r} (choose from {list(_BUILDERS)})")
+        msg_0 = f"invalid choice: {builder!r} (choose from {list(_BUILDERS)})"
+        raise typer.BadParameter(msg_0)
     _STATE.update(image=image, tool=tool, lang=lang, builder=builder, command="ocr", func=_cmd_ocr)
     _run()
 

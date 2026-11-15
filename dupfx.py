@@ -46,8 +46,6 @@ class Keep(StrEnum):
     newest = "newest"
 
 
-if TYPE_CHECKING:
-    pass
 QUICK_READ = 4096
 CHUNK_SIZE = 65536
 POOL_WORKERS = 8

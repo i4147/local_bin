@@ -36,6 +36,7 @@ from __future__ import annotations
 from array import array
 import base64
 from collections import Counter
+import contextlib
 from enum import StrEnum
 import fcntl
 import glob
@@ -86,16 +87,14 @@ class Color(StrEnum):
 def _version_callback(value: bool) -> None:
     if value:
         typer.echo(f"svgview.py {__version__}")
-        raise typer.Exit()
+        raise typer.Exit
 
 
 __version__ = "1.0.0"
 
 # Die quietly on SIGPIPE (e.g. `svgview.py big.svg | head`).
-try:
+with contextlib.suppress(AttributeError, ValueError, OSError):
     signal.signal(signal.SIGPIPE, signal.SIG_DFL)
-except (AttributeError, ValueError, OSError):
-    pass
 
 XLINK_HREF = "{http://www.w3.org/1999/xlink}href"
 
@@ -157,7 +156,7 @@ NAMED_COLORS = {_tok[i]: _tok[i + 1] for i in range(0, len(_tok), 2)}
 def _hsl_to_rgb(h, s, l) -> tuple:
     """h in degrees, s/l in 0..1 -> (r, g, b) 0..255."""
     if s <= 0:
-        v = int(round(l * 255))
+        v = round(l * 255)
         return (v, v, v)
     h = (h % 360.0) / 360.0
     q = l * (1 + s) if l < 0.5 else l + s - l * s
@@ -173,7 +172,7 @@ def _hsl_to_rgb(h, s, l) -> tuple:
             return p + (q - p) * (2 / 3 - t) * 6
         return p
 
-    return tuple(int(round(c * 255)) for c in (cu(h + 1 / 3), cu(h), cu(h - 1 / 3)))
+    return tuple(round(c * 255) for c in (cu(h + 1 / 3), cu(h), cu(h - 1 / 3)))
 
 
 def parse_color(value, current: tuple = (0, 0, 0)):
@@ -182,10 +181,12 @@ def parse_color(value, current: tuple = (0, 0, 0)):
     Returns None for 'none'.  Raises ValueError on garbage.
     """
     if value is None:
-        raise ValueError("no color")
+        msg = "no color"
+        raise ValueError(msg)
     v = value.strip()
     if not v:
-        raise ValueError("empty color")
+        msg = "empty color"
+        raise ValueError(msg)
     lv = v.lower()
     if lv == "none":
         return None
@@ -203,12 +204,14 @@ def parse_color(value, current: tuple = (0, 0, 0)):
             return (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16), 1.0)
         if re.fullmatch(r"[0-9a-f]{8}", h):
             return (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16), int(h[6:8], 16) / 255.0)
-        raise ValueError(f"bad hex color {v!r}")
+        msg = f"bad hex color {v!r}"
+        raise ValueError(msg)
     m = re.match(r"^rgba?\(\s*([^)]*)\)$", lv)
     if m:
         parts = [p for p in re.split(r"[,\s]+", m.group(1).strip()) if p]
         if len(parts) not in (3, 4):
-            raise ValueError(f"bad rgb() {v!r}")
+            msg = f"bad rgb() {v!r}"
+            raise ValueError(msg)
         out = []
         for i, p in enumerate(parts):
             if p.endswith("%"):
@@ -217,16 +220,17 @@ def parse_color(value, current: tuple = (0, 0, 0)):
                 fv = _f(p) / 255.0 if i < 3 else _f(p)
             out.append(max(0.0, min(1.0, fv)))
         return (
-            int(round(out[0] * 255)),
-            int(round(out[1] * 255)),
-            int(round(out[2] * 255)),
+            round(out[0] * 255),
+            round(out[1] * 255),
+            round(out[2] * 255),
             out[3] if len(out) > 3 else 1.0,
         )
     m = re.match(r"^hsla?\(\s*([^)]*)\)$", lv)
     if m:
         parts = [p for p in re.split(r"[,\s]+", m.group(1).strip()) if p]
         if len(parts) not in (3, 4):
-            raise ValueError(f"bad hsl() {v!r}")
+            msg = f"bad hsl() {v!r}"
+            raise ValueError(msg)
         h = _f(parts[0].rstrip("deg"))
         s = max(0.0, min(1.0, _f(parts[1].rstrip("%")) / 100.0))
         l = max(0.0, min(1.0, _f(parts[2].rstrip("%")) / 100.0))
@@ -240,7 +244,8 @@ def parse_color(value, current: tuple = (0, 0, 0)):
     hexv = NAMED_COLORS.get(lv)
     if hexv:
         return (int(hexv[0:2], 16), int(hexv[2:4], 16), int(hexv[4:6], 16), 1.0)
-    raise ValueError(f"unknown color {v!r}")
+    msg = f"unknown color {v!r}"
+    raise ValueError(msg)
 
 
 _UNITS = {
@@ -308,7 +313,7 @@ class M:
     def scale(self):
         det = abs(self.a * self.d - self.b * self.c)
         s = math.sqrt(det)
-        return s if s > 1e-12 else 1e-12
+        return max(1e-12, s)
 
 
 IDENT = M()
@@ -386,7 +391,8 @@ class _PP:
         if c.isalpha():
             self.i += 1
             return c
-        raise PathError(f"unexpected character {c!r} at offset {self.i}")
+        msg = f"unexpected character {c!r} at offset {self.i}"
+        raise PathError(msg)
 
     def more(self) -> bool:
         """True if another parameter group follows for the current command."""
@@ -398,13 +404,15 @@ class _PP:
             return False
         if c in "+-.0123456789":
             return True
-        raise PathError(f"unexpected character {c!r} at offset {self.i}")
+        msg = f"unexpected character {c!r} at offset {self.i}"
+        raise PathError(msg)
 
     def num(self) -> float:
         self._ws()
         m = NUM_RE.match(self.d, self.i)
         if not m:
-            raise PathError(f"expected number at offset {self.i}")
+            msg = f"expected number at offset {self.i}"
+            raise PathError(msg)
         self.i = m.end()
         return float(m.group())
 
@@ -413,7 +421,8 @@ class _PP:
         if self.i < self.n and self.d[self.i] in "01":
             self.i += 1
             return int(self.d[self.i - 1])
-        raise PathError(f"expected arc flag at offset {self.i}")
+        msg = f"expected arc flag at offset {self.i}"
+        raise PathError(msg)
 
 
 def _cubic(p0, p1, p2, p3, tol, out, depth: int = 0) -> None:
@@ -530,7 +539,7 @@ def _arc(x0, y0, rx, ry, phi_deg, laf, sf, x1, y1, tol):
         n = 2
     else:
         dseg = 2.0 * math.acos(max(-1.0, 1.0 - tol / rmax))
-        n = int(math.ceil(abs(dtheta) / max(dseg, 1e-6)))
+        n = math.ceil(abs(dtheta) / max(dseg, 1e-6))
         n = max(2, min(n, 512))
     pts = []
     for i in range(1, n + 1):
@@ -710,7 +719,8 @@ def flatten_path(d, tol):
                     x, y = start
             last_c = "Z"
         else:
-            raise PathError(f"unsupported path command {c!r}")
+            msg = f"unsupported path command {c!r}"
+            raise PathError(msg)
     if cur is not None:
         subs.append((cur, False))
     return subs
@@ -726,7 +736,7 @@ def _seg_count(radius, tol):
     if radius <= tol:
         return 8
     dseg = 2.0 * math.acos(max(-1.0, 1.0 - tol / radius))
-    return max(8, min(720, int(math.ceil(2 * math.pi / max(dseg, 1e-6)))))
+    return max(8, min(720, math.ceil(2 * math.pi / max(dseg, 1e-6))))
 
 
 def _ellipse_pts(cx, cy, rx, ry, tol):
@@ -1175,7 +1185,8 @@ class Doc:
             text = data
         self.root = ET.fromstring(text)  # may raise ET.ParseError
         if _local(self.root.tag) != "svg":
-            raise ValueError("not an SVG document (root element is not <svg>)")
+            msg = "not an SVG document (root element is not <svg>)"
+            raise ValueError(msg)
         self.ids = {}
         for el in self.root.iter():
             if isinstance(el.tag, str):
@@ -1328,14 +1339,10 @@ def _bbox(polys) -> tuple:
     maxx = maxy = -1e30
     for pts, _closed in polys:
         for x, y in pts:
-            if x < minx:
-                minx = x
-            if x > maxx:
-                maxx = x
-            if y < miny:
-                miny = y
-            if y > maxy:
-                maxy = y
+            minx = min(minx, x)
+            maxx = max(maxx, x)
+            miny = min(miny, y)
+            maxy = max(maxy, y)
     return minx, miny, maxx, maxy
 
 
@@ -1366,8 +1373,8 @@ def _sweep(W, H, edges, y_lo, y_hi, on_span) -> None:
     if not edges:
         return
     edges.sort(key=lambda e: e[0])
-    y_lo = max(0, int(math.floor(y_lo)))
-    y_hi = min(H - 1, int(math.ceil(y_hi)))
+    y_lo = max(0, math.floor(y_lo))
+    y_hi = min(H - 1, math.ceil(y_hi))
     if y_hi < y_lo:
         return
     aet = []
@@ -1412,12 +1419,10 @@ def _fill_evenodd(buf, W, H, polys, cr, cg, cb, ca) -> None:
     def span(x0, x1, y) -> None:
         if x1 <= x0:
             return
-        xi0 = int(math.ceil(x0 - 0.5))
-        xi1 = int(math.floor(x1 - 0.5))
-        if xi0 < 0:
-            xi0 = 0
-        if xi1 > W - 1:
-            xi1 = W - 1
+        xi0 = math.ceil(x0 - 0.5)
+        xi1 = math.floor(x1 - 0.5)
+        xi0 = max(xi0, 0)
+        xi1 = min(xi1, W - 1)
         if xi1 < xi0:
             return
         base = (y * W + xi0) * 4
@@ -1455,8 +1460,8 @@ def _fill_nonzero(buf, W, H, polys, cr, cg, cb, ca) -> None:
     if not edges:
         return
     edges.sort(key=lambda e: e[0])
-    y_lo = max(0, int(math.floor(miny)))
-    y_hi = min(H - 1, int(math.ceil(maxy)))
+    y_lo = max(0, math.floor(miny))
+    y_hi = min(H - 1, math.ceil(maxy))
     if y_hi < y_lo:
         return
     aet = []
@@ -1486,12 +1491,10 @@ def _fill_nonzero(buf, W, H, polys, cr, cg, cb, ca) -> None:
             elif prev != 0 and wind == 0 and start is not None:
                 x0, x1 = start, x
                 if x1 > x0:
-                    xi0 = int(math.ceil(x0 - 0.5))
-                    xi1 = int(math.floor(x1 - 0.5))
-                    if xi0 < 0:
-                        xi0 = 0
-                    if xi1 > W - 1:
-                        xi1 = W - 1
+                    xi0 = math.ceil(x0 - 0.5)
+                    xi1 = math.floor(x1 - 0.5)
+                    xi0 = max(xi0, 0)
+                    xi1 = min(xi1, W - 1)
                     if xi1 >= xi0:
                         base = (y * W + xi0) * 4
                         if opaque:
@@ -1523,12 +1526,10 @@ def _mask_polys(mask, W, H, polys) -> None:
     def span(x0, x1, y) -> None:
         if x1 <= x0:
             return
-        xi0 = int(math.ceil(x0 - 0.5))
-        xi1 = int(math.floor(x1 - 0.5))
-        if xi0 < 0:
-            xi0 = 0
-        if xi1 > W - 1:
-            xi1 = W - 1
+        xi0 = math.ceil(x0 - 0.5)
+        xi1 = math.floor(x1 - 0.5)
+        xi0 = max(xi0, 0)
+        xi1 = min(xi1, W - 1)
         if xi1 < xi0:
             return
         base = y * W
@@ -1657,7 +1658,8 @@ def _paeth(a, b, c):
 def decode_png(data) -> tuple:
     """PNG bytes (8-bit, non-interlaced, ct 0/2/3/4/6) -> (w, h, rgba)."""
     if data[:8] != _PNG_SIG:
-        raise ValueError("not a PNG")
+        msg = "not a PNG"
+        raise ValueError(msg)
     i = 8
     ihdr = None
     plte = b""
@@ -1680,17 +1682,21 @@ def decode_png(data) -> tuple:
         elif tag == b"IEND":
             break
     if not ihdr:
-        raise ValueError("PNG missing IHDR")
+        msg = "PNG missing IHDR"
+        raise ValueError(msg)
     w, h, bd, ct, _comp, _filt, inter = ihdr
     if bd != 8 or inter != 0:
-        raise ValueError("unsupported PNG (need 8-bit non-interlaced)")
+        msg = "unsupported PNG (need 8-bit non-interlaced)"
+        raise ValueError(msg)
     if ct not in (0, 2, 3, 4, 6):
-        raise ValueError(f"unsupported PNG color type {ct}")
+        msg = f"unsupported PNG color type {ct}"
+        raise ValueError(msg)
     nch = {0: 1, 2: 3, 3: 1, 4: 2, 6: 4}[ct]
     stride = w * nch
     raw = zlib.decompress(bytes(idat))
     if len(raw) < h * (stride + 1):
-        raise ValueError("truncated PNG")
+        msg = "truncated PNG"
+        raise ValueError(msg)
     out = bytearray(w * h * 4)
     prev = bytearray(stride)
     for y in range(h):
@@ -1714,7 +1720,8 @@ def decode_png(data) -> tuple:
                 c = prev[x - nch] if x >= nch else 0
                 line[x] = (line[x] + _paeth(a, b, c)) & 255
         elif ft != 0:
-            raise ValueError(f"bad PNG filter {ft}")
+            msg = f"bad PNG filter {ft}"
+            raise ValueError(msg)
         if ct == 6:
             out[y * w * 4 : (y + 1) * w * 4] = line
         else:
@@ -1801,10 +1808,8 @@ class TermInfo:
         except Exception:
             pass
         finally:
-            try:
+            with contextlib.suppress(termios.error):
                 termios.tcsetattr(fd, termios.TCSADRAIN, old)
-            except termios.error:
-                pass
 
     def _parse_probe(self, resp):
         m = re.search(rb"\x1b\[\?([0-9;]+)c", resp)
@@ -2272,14 +2277,16 @@ def main(
     for pat in args.files:
         if any(ch in pat for ch in "*?["):
             hits = sorted(glob.glob(pat))
-            files.extend(hits if hits else [pat])
+            files.extend(hits or [pat])
         else:
             files.append(pat)
     if args.png and len(files) > 1:
-        raise typer.BadParameter("--png needs exactly one input file")
+        msg = "--png needs exactly one input file"
+        raise typer.BadParameter(msg)
 
     if args.ss < 1 or args.ss > 5:
-        raise typer.BadParameter("--ss must be between 1 and 5")
+        msg = "--ss must be between 1 and 5"
+        raise typer.BadParameter(msg)
 
     term = TermInfo()
     renderer = args.renderer
@@ -2306,7 +2313,8 @@ def main(
                 c = parse_color(args.bg)
                 bg = (c[0], c[1], c[2])
             except ValueError:
-                raise typer.BadParameter(f"unknown --bg color {args.bg!r}")
+                msg = f"unknown --bg color {args.bg!r}"
+                raise typer.BadParameter(msg)
 
     cs = load_cairosvg() if args.engine in ("auto", "cairosvg") else None
     status = {"cairosvg": cs}
@@ -2335,13 +2343,13 @@ def main(
             print(f"svgview: {path}: cairosvg failed and --engine cairosvg was forced", file=sys.stderr)
             failures += 1
             continue
-        img, engine, warn, pw, ph = result
+        img, engine, warn, _pw, _ph = result
         out = emit(renderer, img, term, bg, truecolor)
         try:
             sys.stdout.buffer.write(out)
             sys.stdout.buffer.flush()
         except BrokenPipeError:
-            return
+            return None
 
         png_path = None
         try:

@@ -2,8 +2,6 @@
 "List and bulk-delete branches that are already merged into the base branch."
 
 from __future__ import annotations
-import argparse
-from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 from enum import StrEnum
 import fnmatch
@@ -17,10 +15,15 @@ import subprocess
 import sys
 import time
 from types import SimpleNamespace
-from typing import Annotated, Literal
+from typing import TYPE_CHECKING, Annotated, Literal
 
 import click
 import typer
+
+
+if TYPE_CHECKING:
+    import argparse
+    from collections.abc import Sequence
 
 
 class Scope2(StrEnum):
@@ -67,14 +70,7 @@ Kind = Literal["merged", "squash"]
 
 DEFAULT_PROTECTED: tuple[str, ...] = ("main", "master", "develop", "dev", "trunk", "release/*")
 SEP = "\x1f"
-FIELDS = "%1f".join((
-    "%(refname)",
-    "%(objectname)",
-    "%(committerdate:unix)",
-    "%(authorname)",
-    "%(upstream:track)",
-    "%(subject)",
-))
+FIELDS = "%(refname)%1f%(objectname)%1f%(committerdate:unix)%1f%(authorname)%1f%(upstream:track)%1f%(subject)"
 
 
 class GitError(Exception):
@@ -180,7 +176,8 @@ class Git:
                 check=False,
             )
         except FileNotFoundError as exc:
-            raise GitError("git executable not found") from exc
+            msg = "git executable not found"
+            raise GitError(msg) from exc
 
     def run(self, *args: str) -> str:
         proc = self.exec(*args)
@@ -204,7 +201,8 @@ def detect_base(git: Git, remote: str, explicit: str | None) -> tuple[str, str]:
     "Detect base."
     if explicit:
         if not ref_exists(git, explicit):
-            raise GitError(f"base ref not found: {explicit}")
+            msg = f"base ref not found: {explicit}"
+            raise GitError(msg)
         return explicit, explicit.removeprefix(f"{remote}/")
     head = git.text("symbolic-ref", "--quiet", "--short", f"refs/remotes/{remote}/HEAD")
     if head and ref_exists(git, head):
@@ -216,7 +214,8 @@ def detect_base(git: Git, remote: str, explicit: str | None) -> tuple[str, str]:
     current = git.text("symbolic-ref", "--quiet", "--short", "HEAD")
     if current:
         return current, current
-    raise GitError("cannot determine the base branch; pass --base")
+    msg = "cannot determine the base branch; pass --base"
+    raise GitError(msg)
 
 
 def worktree_branches(git: Git) -> set[str]:
@@ -269,9 +268,7 @@ def passes(branch: Branch, policy: Policy, now: float) -> bool:
         return False
     if policy.older_than is not None and now - branch.committed < policy.older_than * 86400:
         return False
-    if policy.author and policy.author.lower() not in branch.author.lower():
-        return False
-    return True
+    return not (policy.author and policy.author.lower() not in branch.author.lower())
 
 
 def squash_merged(git: Git, base: str, base_tree: str, branch: Branch) -> bool:
@@ -366,7 +363,8 @@ def remove(git: Git, remote: str, branch: Branch) -> None:
     if branch.scope == "local":
         current = git.text("rev-parse", "--verify", "--quiet", branch.refname)
         if current != branch.sha:
-            raise GitError("branch moved since the scan; left untouched")
+            msg = "branch moved since the scan; left untouched"
+            raise GitError(msg)
         git.run("branch", "-D", branch.name)
     else:
         git.run("push", remote, f":refs/heads/{branch.name}")
@@ -394,7 +392,8 @@ def choose(candidates: Sequence[Branch], assume_yes: bool) -> list[Branch]:
     if assume_yes:
         return list(candidates)
     if not sys.stdin.isatty():
-        raise GitError("refusing to prompt without a terminal; pass --yes")
+        msg = "refusing to prompt without a terminal; pass --yes"
+        raise GitError(msg)
     answer = input(f"Delete {len(candidates)} branch(es)? [y/N/i=pick each] ").strip().lower()
     if answer in {"y", "yes"}:
         return list(candidates)
@@ -439,12 +438,15 @@ def execute(git: Git, opts: Options, con: Console, chosen: Sequence[Branch]) -> 
 def run(opts: Options) -> int:
     con = Console(opts.color)
     if not opts.repo.is_dir():
-        raise GitError(f"not a directory: {opts.repo}")
+        msg = f"not a directory: {opts.repo}"
+        raise GitError(msg)
     git = Git(opts.repo)
     if not git.ok("rev-parse", "--git-dir"):
-        raise GitError(f"not a git repository: {opts.repo}")
+        msg = f"not a git repository: {opts.repo}"
+        raise GitError(msg)
     if ("remote" in opts.scopes or opts.fetch) and opts.remote not in git.text("remote").split():
-        raise GitError(f"remote not found: {opts.remote}")
+        msg = f"remote not found: {opts.remote}"
+        raise GitError(msg)
     if opts.fetch:
         git.run("fetch", "--prune", opts.remote)
     base, short = detect_base(git, opts.remote, opts.base)
@@ -580,9 +582,7 @@ def cli(
     patterns: Annotated[
         list[str] | None, typer.Argument(help="only consider branches matching these globs", metavar="PATTERN")
     ] = None,
-    repo: Annotated[Path, typer.Option("-C", "--repo", help="repository path (default: current directory)")] = Path(
-        "."
-    ),
+    repo: Annotated[Path, typer.Option("-C", "--repo", help="repository path (default: current directory)")] = Path(),
     base: Annotated[
         str | None,
         typer.Option("-b", "--base", help="base ref to compare against (default: remote HEAD, main or master)"),

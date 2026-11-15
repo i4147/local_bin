@@ -50,7 +50,7 @@ class Align(StrEnum):
 def _version_callback(value: bool) -> None:
     if value:
         typer.echo("chafa.py 1.0 (chafa clone)")
-        raise typer.Exit()
+        raise typer.Exit
 
 
 _STATE: dict[str, object] = {}
@@ -474,7 +474,7 @@ def _default_tags(c: int) -> int:
 
 
 class Symbol:
-    __slots__ = ("c", "tags", "bitmap", "cov", "popcount", "fg_weight", "bg_weight")
+    __slots__ = ("bg_weight", "bitmap", "c", "cov", "fg_weight", "popcount", "tags")
 
     def __init__(self, c: int, tags: int, cov: np.ndarray):
         "Initialize the instance state from the supplied arguments."
@@ -731,11 +731,13 @@ def _parse_selectors_new(spec: str) -> tuple[list[_Selector], bool]:
                 escaped = False
                 p += 1
             if not closed:
-                raise ValueError("Syntax error in symbol selector set.")
+                msg = "Syntax error in symbol selector set."
+                raise ValueError(msg)
             continue
         m = re.match(r"[a-zA-Z0-9.]+", spec[p:])
         if not m:
-            raise ValueError("Syntax error in symbol tag selectors.")
+            msg = "Syntax error in symbol tag selectors."
+            raise ValueError(msg)
         token = m.group(0)
         p += len(token)
         low = token.lower()
@@ -745,14 +747,17 @@ def _parse_selectors_new(spec: str) -> tuple[list[_Selector], bool]:
             continue
         val, consumed = _parse_code_point(token)
         if not consumed:
-            raise ValueError(f"Unrecognized symbol tag '{token}'.")
+            msg = f"Unrecognized symbol tag '{token}'."
+            raise ValueError(msg)
         rest = token[consumed:]
         if rest:
             if len(rest) < 3 or not rest.startswith(".."):
-                raise ValueError(f"Unrecognized symbol tag '{token}'.")
+                msg = f"Unrecognized symbol tag '{token}'."
+                raise ValueError(msg)
             val2, consumed2 = _parse_code_point(rest[2:])
             if not consumed2 or consumed2 + 2 != len(rest):
-                raise ValueError(f"Unrecognized symbol tag '{token}'.")
+                msg = f"Unrecognized symbol tag '{token}'."
+                raise ValueError(msg)
             last = val2
         else:
             last = val
@@ -1054,7 +1059,7 @@ def fs_dither(pix: np.ndarray, palette: Palette, dither: Dither) -> None:
             adj = np.clip(adj, 0, 255)
             block[...] = adj
             acc = adj.reshape(-1, 3).sum(0)
-            mean = acc // (npx if npx else 1)
+            mean = acc // (npx or 1)
             q = mean.reshape(1, 3).astype(np.uint8)
             pens = palette.lookup(q, np.array([255], dtype=np.uint8))
             col = palette.colors[pens[0]]
@@ -1220,9 +1225,8 @@ def prepare_work_pixels(img: Image.Image, cfg: Config, palette: Palette | None) 
     if palette is not None and cfg.color_space == "din99d":
         work[..., :3] = rgb_to_din99d(work[..., :3])
 
-    if dither.mode == "diffusion":
-        if palette is not None:
-            fs_dither(work, palette, dither)
+    if dither.mode == "diffusion" and palette is not None:
+        fs_dither(work, palette, dither)
     return work
 
 
@@ -1557,7 +1561,7 @@ def _apply_fill(
                 k, inv = i1, True
         idx[j], inverted[j] = k, inv
     chars[fidx] = [fill_symbols[i].c for i in idx]
-    if mode != Mode.FGBG and mode != Mode.INDEXED_16_8:
+    if mode not in (Mode.FGBG, Mode.INDEXED_16_8):
         cand1 = np.where(best_i == 0, cand0, cand1)
         cand0 = np.where(best_i == 64, cand1, cand0)
     f_pen = np.where(inverted, cand0, cand1)
@@ -1606,7 +1610,7 @@ def _aix16bg(pen: int) -> int:
 
 
 class _PrintCtx:
-    __slots__ = ("cur_char", "n_reps", "cur_inverted", "cur_bold", "cur_fg", "cur_bg", "parts")
+    __slots__ = ("cur_bg", "cur_bold", "cur_char", "cur_fg", "cur_inverted", "n_reps", "parts")
 
     def __init__(self) -> None:
         "Initialize the instance state from the supplied arguments."
@@ -1662,13 +1666,13 @@ def _emit_attrs(ctx: _PrintCtx, fg, bg, inverted, bold, mode: Mode, fg_only: boo
             ctx.parts.append(SEQ_BOLD)
 
     if fg != ctx.cur_fg:
-        if bg != ctx.cur_bg and bg != TRANSPARENT:
+        if bg not in (ctx.cur_bg, TRANSPARENT):
             ctx.flush()
             ctx.parts.append(_sgr_fgbg(mode, fg, bg))
         elif fg != TRANSPARENT:
             ctx.flush()
             ctx.parts.append(_sgr_fg(mode, fg))
-    elif bg != ctx.cur_bg and bg != TRANSPARENT:
+    elif bg not in (ctx.cur_bg, TRANSPARENT):
         ctx.flush()
         ctx.parts.append(_sgr_bg(mode, bg))
     ctx.cur_fg = fg
@@ -2027,7 +2031,8 @@ def _parse_size(val: str, term_w: int, term_h: int) -> tuple[int, int]:
         return term_w, term_h
     m = re.match(r"^(\d*)x(\d*)$", val)
     if not m or (not m.group(1) and not m.group(2)):
-        raise ValueError("Size must be [width]x[height], e.g. 80x25, 80x or x25.")
+        msg = "Size must be [width]x[height], e.g. 80x25, 80x or x25."
+        raise ValueError(msg)
     w = int(m.group(1)) if m.group(1) else 1 << 30
     h = int(m.group(2)) if m.group(2) else 1 << 30
     return w, h
@@ -2043,7 +2048,8 @@ def _parse_color(val: str, what: str) -> tuple[int, int, int]:
         r, g, b = ImageColor.getrgb(v)[:3]
         return int(r), int(g), int(b)
     except Exception:
-        raise ValueError(f"Unrecognized {what} color '{val}'.") from None
+        msg = f"Unrecognized {what} color '{val}'."
+        raise ValueError(msg) from None
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -2088,10 +2094,8 @@ def run(argv: list[str] | None = None) -> int:
         except ValueError as e:
             print(f"chafa.py: {e}", file=sys.stderr)
             return 1
-    if cfg.width > (1 << 29):
-        cfg.width = 1 << 29
-    if cfg.height > (1 << 29):
-        cfg.height = 1 << 29
+    cfg.width = min(cfg.width, 1 << 29)
+    cfg.height = min(cfg.height, 1 << 29)
 
     if args.colors:
         cmap = {
@@ -2207,9 +2211,8 @@ def run(argv: list[str] | None = None) -> int:
         except ValueError as e:
             print(f"chafa.py: {e}", file=sys.stderr)
             return 1
-    else:
-        if cfg.mode != Mode.FGBG:
-            selectors = apply_selectors(selectors, "-inverted")
+    elif cfg.mode != Mode.FGBG:
+        selectors = apply_selectors(selectors, "-inverted")
     try:
         if args.fill is not None:
             fill_selectors = apply_selectors([], args.fill)

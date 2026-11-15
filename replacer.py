@@ -1,17 +1,12 @@
 #!/data/data/com.termux/files/usr/bin/env python
-"Utilities for replacer."
-
 from __future__ import annotations
-import argparse
+
 import concurrent.futures
-from dataclasses import dataclass, field
 import difflib
-from enum import StrEnum
 import fnmatch
 import hashlib
 import json
 import os
-from pathlib import Path
 import re
 import shutil
 import stat
@@ -20,67 +15,14 @@ import sys
 import tempfile
 import threading
 import time
-from types import SimpleNamespace
-from typing import Annotated, Callable, Iterator, Sequence
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Callable, Iterator, List, Optional, Sequence
 
-import click
-from dh import SKIP_DIRS
-from isbinary import is_binary
 import typer
 
-
-class Symlink_policy(StrEnum):
-    "Enumerate the supported Symlink policy values."
-
-    skip = "skip"
-    follow = "follow"
-    error = "error"
-
-
-class Color(StrEnum):
-    "Enumerate the supported Color values."
-
-    auto = "auto"
-    always = "always"
-    never = "never"
-
-
-def _version_callback(value: bool) -> None:
-    if value:
-        typer.echo("replacer 2.0")
-        raise typer.Exit()
-
-
-_STATE: dict[str, object] = {}
-
-
-class _Args(SimpleNamespace):
-    """argparse.Namespace look-alike: unknown attributes read as None."""
-
-    def __getattr__(self, name):
-        if name.startswith("__"):
-            raise AttributeError(name)
-        return None
-
-
-class _ParserShim:
-    """Stand-in for the removed argparse parser; hands back what Typer parsed."""
-
-    def parse_args(self, args=None, namespace=None):
-        "Parse args."
-        return _Args(**_STATE)
-
-    def error(self, message):
-        raise typer.BadParameter(message)
-
-    def print_help(self, file=None):
-        "Print help."
-        typer.echo(click.get_current_context().get_help(), file=file)
-
-    def print_usage(self, file=None):
-        "Print usage."
-        typer.echo(click.get_current_context().get_usage(), file=file)
-
+from dh import SKIP_DIRS
+from isbinary import is_binary
 
 try:
     from charset_normalizer import from_bytes as _detect_encoding_fn
@@ -133,8 +75,6 @@ _color_lock = threading.Lock()
 
 @dataclass
 class Options:
-    "Store search, replace, regex, ignore_case, smart_case and related state."
-
     search: str = ""
     replace: str = ""
     regex: bool = False
@@ -145,29 +85,29 @@ class Options:
     remove: bool = False
     dry_run: bool = False
     apply: bool = False
-    files: list[str] = field(default_factory=list)
-    globs: list[str] = field(default_factory=list)
-    excludes: list[str] = field(default_factory=list)
+    files: List[str] = field(default_factory=list)
+    globs: List[str] = field(default_factory=list)
+    excludes: List[str] = field(default_factory=list)
     include_hidden: bool = True
     follow_symlinks: bool = False
     symlink_policy: str = "skip"
-    max_depth: int | None = None
+    max_depth: Optional[int] = None
     max_filesize: int = 10 * 1024 * 1024
-    types: list[str] = field(default_factory=list)
-    ignore_file: str | None = None
+    types: List[str] = field(default_factory=list)
+    ignore_file: Optional[str] = None
     no_ignore: bool = False
     preserve_case: bool = False
     upper: bool = False
     lower: bool = False
     capitalize: bool = False
     env_expand: bool = False
-    replace_from: str | None = None
+    replace_from: Optional[str] = None
     literal_replace: bool = False
-    max_count: int | None = None
+    max_count: Optional[int] = None
     prompt: bool = False
-    backup: str | None = None
-    backup_dir: str | None = None
-    undo_journal: str | None = None
+    backup: Optional[str] = None
+    backup_dir: Optional[str] = None
+    undo_journal: Optional[str] = None
     undo: bool = False
     require_clean_git: bool = False
     confirm: bool = False
@@ -184,34 +124,30 @@ class Options:
     exit_code: bool = False
     check: bool = False
     jobs: int = 1
-    rules_file: str | None = None
-    files_from: str | None = None
-    encoding: str | None = None
+    rules_file: Optional[str] = None
+    files_from: Optional[str] = None
+    encoding: Optional[str] = None
 
 
 @dataclass
 class Rule:
-    "Store pattern, replacement, preserve_case, upper, lower and related state."
-
     pattern: re.Pattern[str]
     replacement: str
     preserve_case: bool = False
     upper: bool = False
     lower: bool = False
     capitalize: bool = False
-    max_count: int | None = None
+    max_count: Optional[int] = None
 
 
 @dataclass
 class FileResult:
-    "Store path, matches, changed, skipped, reason and related state."
-
     path: str
     matches: int = 0
     changed: bool = False
     skipped: bool = False
-    reason: str | None = None
-    diff: str | None = None
+    reason: Optional[str] = None
+    diff: Optional[str] = None
 
 
 def _colorize(text: str, color: str, when: str) -> str:
@@ -220,7 +156,15 @@ def _colorize(text: str, color: str, when: str) -> str:
     if when == "auto":
         if not sys.stdout.isatty() or os.environ.get("NO_COLOR"):
             return text
-    codes = {"red": "31", "green": "32", "yellow": "33", "blue": "34", "magenta": "35", "cyan": "36", "bold": "1"}
+    codes = {
+        "red": "31",
+        "green": "32",
+        "yellow": "33",
+        "blue": "34",
+        "magenta": "35",
+        "cyan": "36",
+        "bold": "1",
+    }
     c = codes.get(color, "")
     if not c:
         return text
@@ -277,7 +221,7 @@ def _build_pattern(search_text: str, opts: Options) -> re.Pattern[str]:
     return re.compile(src, flags)
 
 
-def _read_with_meta(path: Path, encoding: str | None) -> tuple[str, str, bool, bytes] | None:
+def _read_with_meta(path: Path, encoding: Optional[str]) -> Optional[tuple[str, str, bool, bytes]]:
     try:
         raw = path.read_bytes()
     except OSError:
@@ -366,13 +310,13 @@ def _file_allowed(path: Path, opts: Options, root: Path) -> bool:
     return True
 
 
-def _load_ignore_patterns(opts: Options) -> list[str]:
+def _load_ignore_patterns(opts: Options) -> List[str]:
     if opts.no_ignore or not opts.ignore_file:
         return []
     p = Path(opts.ignore_file)
     if not p.is_file():
         return []
-    out: list[str] = []
+    out: List[str] = []
     for line in p.read_text(encoding="utf-8").splitlines():
         line = line.strip()
         if not line or line.startswith("#"):
@@ -381,7 +325,7 @@ def _load_ignore_patterns(opts: Options) -> list[str]:
     return out
 
 
-def _is_ignored(path: Path, patterns: list[str], root: Path) -> bool:
+def _is_ignored(path: Path, patterns: List[str], root: Path) -> bool:
     if not patterns:
         return False
     try:
@@ -398,8 +342,8 @@ def _is_ignored(path: Path, patterns: list[str], root: Path) -> bool:
     return ignored
 
 
-def _walk_dir(root: Path, opts: Options, ignore_patterns: list[str], start_depth: int) -> Iterator[Path]:
-    stack: list[tuple[Path, int]] = [(root, start_depth)]
+def _walk_dir(root: Path, opts: Options, ignore_patterns: List[str], start_depth: int) -> Iterator[Path]:
+    stack: List[tuple[Path, int]] = [(root, start_depth)]
     seen_dirs: set[str] = set()
     while stack:
         d, depth = stack.pop()
@@ -496,7 +440,7 @@ def _save_for_undo(journal_path: Path, file_path: Path, original: bytes, new_has
         "new_hash": new_hash,
         "ts": time.time(),
     }
-    entries: list[dict] = []
+    entries: List[dict] = []
     if journal_path.is_file():
         try:
             entries = json.loads(journal_path.read_text(encoding="utf-8"))
@@ -588,7 +532,7 @@ def _process_one(
             return "" if opts.remove else fn(m)
 
         if opts.prompt and not prompt_state.get("all"):
-            chunks: list[str] = []
+            chunks: List[str] = []
             last = 0
             quit_now = False
             auto_all = False
@@ -700,7 +644,11 @@ def _process_stdin(rules: Sequence[Rule], opts: Options) -> int:
     return EXIT_OK
 
 
-def _load_config(path: Path | None) -> dict:
+def _normalize_config(data: dict) -> dict:
+    return {k.replace("-", "_"): v for k, v in data.items()}
+
+
+def _load_config(path: Optional[Path]) -> dict:
     if path is None:
         cwd = Path.cwd()
         for p in (cwd, *cwd.parents):
@@ -714,16 +662,16 @@ def _load_config(path: Path | None) -> dict:
     if path.suffix in (".toml", ""):
         if _toml is not None:
             try:
-                return _toml.loads(text)
+                return _normalize_config(_toml.loads(text))
             except Exception:
                 pass
     try:
-        return json.loads(text)
+        return _normalize_config(json.loads(text))
     except json.JSONDecodeError:
         return {}
 
 
-def _load_rules_file(path: Path) -> list[Rule]:
+def _load_rules_file(path: Path) -> List[Rule]:
     text = path.read_text(encoding="utf-8")
     data: dict = {}
     if path.suffix in (".toml", ""):
@@ -740,7 +688,7 @@ def _load_rules_file(path: Path) -> list[Rule]:
     rules_data = data.get("rules", data.get("rule", []))
     if isinstance(rules_data, dict):
         rules_data = [rules_data]
-    out: list[Rule] = []
+    out: List[Rule] = []
     for rd in rules_data:
         search = rd.get("search") or rd.get("pattern")
         if not search:
@@ -765,7 +713,7 @@ def _load_rules_file(path: Path) -> list[Rule]:
     return out
 
 
-def _build_rules(opts: Options) -> list[Rule]:
+def _build_rules(opts: Options) -> List[Rule]:
     if opts.rules_file:
         return _load_rules_file(Path(opts.rules_file))
     replacement = opts.replace
@@ -788,138 +736,254 @@ def _build_rules(opts: Options) -> list[Rule]:
     ]
 
 
-def _build_parser() -> argparse.ArgumentParser:
-    p = _ParserShim()
-
-    return p
-
-
-def _merge_config(args: argparse.Namespace, cfg: dict) -> argparse.Namespace:
-    for k, v in cfg.items():
-        k_norm = k.replace("-", "_")
-        if hasattr(args, k_norm) and getattr(args, k_norm) in (None, False, [], ""):
-            if v is not None:
-                setattr(args, k_norm, v)
-    return args
+def _version_callback(value: bool) -> None:
+    if value:
+        typer.echo("replacer 2.0")
+        raise typer.Exit()
 
 
-def main() -> int:
-    "Run the command-line interface."
-    parser = _build_parser()
-    args = parser.parse_args()
-    cfg = _load_config(Path(args.config) if args.config else None)
-    if cfg:
-        args = _merge_config(args, cfg)
+def _fail(msg: str, code: int = EXIT_USAGE) -> None:
+    typer.echo(f"error: {msg}", err=True)
+    raise typer.Exit(code)
 
-    if args.undo:
-        if not args.undo_journal:
-            parser.error("--undo requires --undo-journal")
-        return _do_undo(Path(args.undo_journal))
 
-    if args.dry_run and args.apply:
-        parser.error("--dry-run and --apply are mutually exclusive")
-    dry_run = args.dry_run and not args.apply
-    if args.diff:
-        dry_run = True
+app = typer.Typer(
+    add_completion=False,
+    pretty_exceptions_enable=False,
+    no_args_is_help=False,
+)
 
-    if not args.search and not args.rules_file:
-        parser.error("provide SEARCH or --rules")
 
-    if args.backup_dir and not args.backup:
-        args.backup = ".bak"
+@app.command()
+def main(
+    search: str = typer.Argument("", help="Text to search for"),
+    replace: str = typer.Argument("", help="Replacement text (defaults to empty)"),
+    remove: bool = typer.Option(False, "-r", "--remove", help="Remove the search text"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Preview changes without applying"),
+    apply: bool = typer.Option(False, "--apply", help="Invert --dry-run default"),
+    files: List[str] = typer.Option([], "-f", "--file", help="Process only these files (repeatable)"),
+    files_from: Optional[str] = typer.Option(None, "--files-from", help="Read file list from a file or '-'"),
+    globs: List[str] = typer.Option([], "-g", "--glob", help="Include files matching glob (repeatable)"),
+    excludes: List[str] = typer.Option([], "--exclude", help="Exclude files matching glob (repeatable)"),
+    types: List[str] = typer.Option([], "--type", help="Only process files of these types (repeatable)"),
+    include_hidden: Optional[bool] = typer.Option(None, "--include-hidden/--no-hidden", help="Include dotfiles"),
+    follow_symlinks: Optional[bool] = typer.Option(
+        None, "--follow-symlinks/--no-follow-symlinks", help="Follow symlinks"
+    ),
+    symlink_policy: Optional[str] = typer.Option(None, "--symlink-policy", help="skip|follow|error"),
+    max_depth: Optional[int] = typer.Option(None, "--max-depth", help="Maximum directory depth"),
+    max_filesize: Optional[int] = typer.Option(None, "--max-filesize", help="Skip files larger than N bytes"),
+    ignore_file: Optional[str] = typer.Option(None, "--ignore-file", help="Path to .ignore file"),
+    no_ignore: bool = typer.Option(False, "--no-ignore", help=f"Disable {DEFAULT_IGNORE_FILENAME}"),
+    fixed_strings: bool = typer.Option(False, "-F", "--fixed-strings", help="Literal string search (default)"),
+    regex: bool = typer.Option(False, "-E", "--regex", help="Treat SEARCH as regex"),
+    ignore_case: bool = typer.Option(False, "-i", "--ignore-case", help="Case-insensitive"),
+    case_sensitive: bool = typer.Option(False, "-s", "--case-sensitive", help="Explicit case-sensitive"),
+    smart_case: bool = typer.Option(False, "-S", "--smart-case", help="Smart-case (insensitive unless uppercase)"),
+    word: bool = typer.Option(False, "-w", "--word", help="Word-boundary matching"),
+    multiline: bool = typer.Option(False, "-U", "--multiline", help="Multiline mode"),
+    preserve_case: bool = typer.Option(False, "--preserve-case", help="Preserve matched text case"),
+    upper: bool = typer.Option(False, "--upper", help="Uppercase replacement"),
+    lower: bool = typer.Option(False, "--lower", help="Lowercase replacement"),
+    capitalize: bool = typer.Option(False, "--capitalize", help="Capitalize replacement"),
+    env_expand: bool = typer.Option(False, "--env", help="Expand $VAR in replacement"),
+    replace_from: Optional[str] = typer.Option(None, "--replace-from", help="Read replacement from file"),
+    literal_replace: bool = typer.Option(False, "--literal-replace", help="Don't expand backreferences"),
+    max_count: Optional[int] = typer.Option(None, "--max-count", help="Max replacements per file"),
+    rules_file: Optional[str] = typer.Option(None, "--rules", help="Load rules from TOML/JSON file"),
+    prompt: bool = typer.Option(False, "-p", "--prompt", help="Interactive y/n/a/q per match"),
+    backup: Optional[str] = typer.Option(None, "--backup", help="Create backup with given suffix (e.g. .bak)"),
+    backup_dir: Optional[str] = typer.Option(None, "--backup-dir", help="Backup directory (implies --backup)"),
+    undo_journal: Optional[str] = typer.Option(None, "--undo-journal", help="Journal path for --undo"),
+    undo: bool = typer.Option(False, "--undo", help="Undo from journal"),
+    require_clean_git: bool = typer.Option(False, "--require-clean-git", help="Refuse if git dirty"),
+    confirm: bool = typer.Option(False, "--confirm", help="Prompt before applying"),
+    diff: bool = typer.Option(False, "--diff", help="Show unified diff (implies --dry-run)"),
+    color: Optional[str] = typer.Option(None, "--color", help="auto|always|never"),
+    quiet: bool = typer.Option(False, "-q", "--quiet", help="Suppress non-error output"),
+    verbose: bool = typer.Option(False, "-v", "--verbose", help="Verbose logging"),
+    json_out: bool = typer.Option(False, "--json", help="JSON output"),
+    count: bool = typer.Option(False, "-c", "--count", help="Print match count per file"),
+    stats: bool = typer.Option(False, "--stats", help="Show statistics"),
+    context: Optional[int] = typer.Option(None, "--context", help="Context chars for previews"),
+    exit_code: bool = typer.Option(False, "--exit-code", help="Exit 1 if no matches/changes"),
+    check: bool = typer.Option(False, "--check", help="Exit 0 if matches, 1 otherwise"),
+    files_with_matches: bool = typer.Option(False, "-l", "--files-with-matches", help="Only print paths with matches"),
+    files_without_match: bool = typer.Option(
+        False, "-L", "--files-without-match", help="Only print paths without matches"
+    ),
+    jobs: Optional[int] = typer.Option(None, "-j", "--jobs", help="Parallel workers"),
+    config: Optional[str] = typer.Option(None, "--config", help="Path to config file"),
+    encoding: Optional[str] = typer.Option(None, "--encoding", help="Force file encoding"),
+    version: bool = typer.Option(
+        False, "--version", callback=_version_callback, is_eager=True, help="Show version and exit"
+    ),
+) -> None:
+    if fixed_strings and regex:
+        _fail("--fixed-strings and --regex are mutually exclusive")
+    if sum([ignore_case, case_sensitive, smart_case]) > 1:
+        _fail("-i/--ignore-case, -s/--case-sensitive, -S/--smart-case are mutually exclusive")
+    if files_with_matches and files_without_match:
+        _fail("-l/--files-with-matches and -L/--files-without-match are mutually exclusive")
+    if dry_run and apply:
+        _fail("--dry-run and --apply are mutually exclusive")
 
-    if not args.ignore_file and not args.no_ignore:
+    cfg = _load_config(Path(config) if config else None)
+
+    def _b(val: bool, key: str) -> bool:
+        if val:
+            return True
+        return bool(cfg.get(key, False))
+
+    def _tb(val: Optional[bool], key: str, default: bool) -> bool:
+        if val is not None:
+            return val
+        if key in cfg:
+            return bool(cfg[key])
+        return default
+
+    def _s(val: Optional[str], key: str, default: Optional[str] = None) -> Optional[str]:
+        if val is not None:
+            return val
+        return cfg.get(key, default)
+
+    def _i(val: Optional[int], key: str, default: Optional[int] = None) -> Optional[int]:
+        if val is not None:
+            return val
+        return cfg.get(key, default)
+
+    def _l(val: List[str], key: str) -> List[str]:
+        if val:
+            return val
+        return list(cfg.get(key, []))
+
+    effective_undo_journal = _s(undo_journal, "undo_journal")
+    if undo:
+        if not effective_undo_journal:
+            _fail("--undo requires --undo-journal")
+        raise typer.Exit(_do_undo(Path(effective_undo_journal)))
+
+    effective_color = _s(color, "color", "auto") or "auto"
+    if effective_color not in ("auto", "always", "never"):
+        _fail(f"invalid --color value: {effective_color}")
+
+    effective_symlink_policy = _s(symlink_policy, "symlink_policy", "skip") or "skip"
+    if effective_symlink_policy not in ("skip", "follow", "error"):
+        _fail(f"invalid --symlink-policy value: {effective_symlink_policy}")
+
+    effective_follow = _tb(follow_symlinks, "follow_symlinks", False)
+    if effective_follow or effective_symlink_policy == "follow":
+        effective_follow = True
+        effective_symlink_policy = "follow"
+
+    effective_backup = _s(backup, "backup")
+    effective_backup_dir = _s(backup_dir, "backup_dir")
+    if effective_backup_dir and not effective_backup:
+        effective_backup = ".bak"
+
+    effective_ignore_file = _s(ignore_file, "ignore_file")
+    if not effective_ignore_file and not no_ignore and not cfg.get("no_ignore", False):
         default_ignore = Path(DEFAULT_IGNORE_FILENAME)
         if default_ignore.is_file():
-            args.ignore_file = str(default_ignore)
+            effective_ignore_file = str(default_ignore)
 
-    if args.follow_symlinks:
-        args.symlink_policy = "follow"
-    elif args.symlink_policy == "follow":
-        args.follow_symlinks = True
+    effective_jobs = _i(jobs, "jobs", 1) or 1
+    if effective_jobs < 1:
+        effective_jobs = 1
+    if prompt and effective_jobs > 1:
+        typer.echo("--prompt with --jobs>1 unsupported; forcing jobs=1", err=True)
+        effective_jobs = 1
 
-    if args.prompt and (args.jobs or 1) > 1:
-        _safe_print("--prompt with --jobs>1 is unsupported; forcing jobs=1", file=sys.stderr)
-        args.jobs = 1
+    effective_dry_run = (dry_run and not apply) or (bool(cfg.get("dry_run", False)) and not apply)
+    if diff:
+        effective_dry_run = True
+
+    effective_include_hidden = _tb(include_hidden, "include_hidden", True)
+    effective_max_filesize = _i(max_filesize, "max_filesize", 10 * 1024 * 1024) or 10 * 1024 * 1024
+    effective_context = _i(context, "context", 20) or 20
+
+    effective_rules_file = _s(rules_file, "rules_file")
+    effective_search = search or cfg.get("search", "")
+    if not effective_search and not effective_rules_file:
+        _fail("provide SEARCH or --rules")
 
     opts = Options(
-        search=args.search,
-        replace=args.replace,
-        regex=args.regex,
-        ignore_case=args.ignore_case,
-        smart_case=args.smart_case,
-        word=args.word,
-        multiline=args.multiline,
-        remove=args.remove,
-        dry_run=dry_run,
-        apply=args.apply,
-        files=list(args.files),
-        globs=list(args.globs),
-        excludes=list(args.excludes),
-        include_hidden=args.include_hidden,
-        follow_symlinks=args.follow_symlinks,
-        symlink_policy=args.symlink_policy,
-        max_depth=args.max_depth,
-        max_filesize=args.max_filesize if args.max_filesize is not None else 10 * 1024 * 1024,
-        types=list(args.types),
-        ignore_file=args.ignore_file,
-        no_ignore=args.no_ignore,
-        preserve_case=args.preserve_case,
-        upper=args.upper,
-        lower=args.lower,
-        capitalize=args.capitalize,
-        env_expand=args.env_expand,
-        replace_from=args.replace_from,
-        literal_replace=args.literal_replace,
-        max_count=args.max_count,
-        prompt=args.prompt,
-        backup=args.backup,
-        backup_dir=args.backup_dir,
-        undo_journal=args.undo_journal,
-        undo=args.undo,
-        require_clean_git=args.require_clean_git,
-        confirm=args.confirm,
-        diff=args.diff,
-        color=args.color,
-        quiet=args.quiet,
-        verbose=args.verbose,
-        json_out=args.json_out,
-        count=args.count,
-        stats=args.stats,
-        files_with_matches=args.files_with_matches,
-        files_without_match=args.files_without_match,
-        context=args.context if args.context is not None else 20,
-        exit_code=args.exit_code,
-        check=args.check,
-        jobs=max(1, args.jobs or 1),
-        rules_file=args.rules_file,
-        files_from=args.files_from,
-        encoding=args.encoding,
+        search=effective_search,
+        replace=replace if replace else cfg.get("replace", ""),
+        regex=regex or cfg.get("regex", False),
+        ignore_case=ignore_case or cfg.get("ignore_case", False),
+        smart_case=smart_case or cfg.get("smart_case", False),
+        word=_b(word, "word"),
+        multiline=_b(multiline, "multiline"),
+        remove=_b(remove, "remove"),
+        dry_run=effective_dry_run,
+        apply=apply,
+        files=_l(files, "files"),
+        globs=_l(globs, "globs"),
+        excludes=_l(excludes, "excludes"),
+        include_hidden=effective_include_hidden,
+        follow_symlinks=effective_follow,
+        symlink_policy=effective_symlink_policy,
+        max_depth=_i(max_depth, "max_depth"),
+        max_filesize=effective_max_filesize,
+        types=_l(types, "types"),
+        ignore_file=effective_ignore_file,
+        no_ignore=_b(no_ignore, "no_ignore"),
+        preserve_case=_b(preserve_case, "preserve_case"),
+        upper=_b(upper, "upper"),
+        lower=_b(lower, "lower"),
+        capitalize=_b(capitalize, "capitalize"),
+        env_expand=_b(env_expand, "env_expand"),
+        replace_from=_s(replace_from, "replace_from"),
+        literal_replace=_b(literal_replace, "literal_replace"),
+        max_count=_i(max_count, "max_count"),
+        prompt=_b(prompt, "prompt"),
+        backup=effective_backup,
+        backup_dir=effective_backup_dir,
+        undo_journal=effective_undo_journal,
+        undo=undo,
+        require_clean_git=_b(require_clean_git, "require_clean_git"),
+        confirm=_b(confirm, "confirm"),
+        diff=_b(diff, "diff"),
+        color=effective_color,
+        quiet=_b(quiet, "quiet"),
+        verbose=_b(verbose, "verbose"),
+        json_out=_b(json_out, "json_out"),
+        count=_b(count, "count"),
+        stats=_b(stats, "stats"),
+        files_with_matches=files_with_matches,
+        files_without_match=files_without_match,
+        context=effective_context,
+        exit_code=_b(exit_code, "exit_code"),
+        check=_b(check, "check"),
+        jobs=effective_jobs,
+        rules_file=effective_rules_file,
+        files_from=_s(files_from, "files_from"),
+        encoding=_s(encoding, "encoding"),
     )
 
     if opts.require_clean_git and not _git_is_clean():
-        _safe_print("Working tree is not clean; aborting", file=sys.stderr)
-        return EXIT_ABORT
+        typer.echo("Working tree is not clean; aborting", err=True)
+        raise typer.Exit(EXIT_ABORT)
 
     rules = _build_rules(opts)
     if not rules:
-        _safe_print("No rules to apply", file=sys.stderr)
-        return EXIT_USAGE
+        typer.echo("No rules to apply", err=True)
+        raise typer.Exit(EXIT_USAGE)
 
     if opts.files == ["-"]:
-        return _process_stdin(rules, opts)
+        raise typer.Exit(_process_stdin(rules, opts))
 
     if opts.confirm and not opts.dry_run:
-        sys.stderr.write("Proceed with modifications? [y/N] ")
-        sys.stderr.flush()
+        typer.echo("Proceed with modifications? [y/N] ", err=True, nl=False)
         if sys.stdin.readline().strip().lower() not in ("y", "yes"):
-            return EXIT_ABORT
+            raise typer.Exit(EXIT_ABORT)
 
     if opts.dry_run:
         _safe_print(_colorize("--- DRY RUN (no files will be modified) ---", "yellow", opts.color))
 
     root = Path.cwd()
-    results: list[FileResult] = []
+    results: List[FileResult] = []
     prompt_state: dict = {"all": False, "quit": False}
     t0 = time.time()
     files_scanned = 0
@@ -992,153 +1056,12 @@ def main() -> int:
         )
 
     if opts.check:
-        return EXIT_OK if matched else EXIT_NO_MATCH
+        raise typer.Exit(EXIT_OK if matched else EXIT_NO_MATCH)
     if opts.exit_code:
         if opts.dry_run:
-            return EXIT_OK if matched else EXIT_NO_MATCH
-        return EXIT_OK if changed else EXIT_NO_MATCH
-    return EXIT_OK
-
-
-def _run() -> None:
-    raise SystemExit(main())
-
-
-app = typer.Typer(
-    add_completion=False,
-    context_settings={"help_option_names": ["-h", "--help"]},
-    pretty_exceptions_show_locals=False,
-)
-
-
-@app.command(help="Recursively replace or remove text in files.")
-def cli(
-    search: Annotated[str, typer.Argument(help="Text to search for")] = "",
-    replace: Annotated[str, typer.Argument(help="Replacement text")] = "",
-    remove: Annotated[bool, typer.Option("-r", "--remove")] = False,
-    dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
-    apply: Annotated[bool, typer.Option("--apply")] = False,
-    files: Annotated[list[str], typer.Option("-f", "--file")] = [],
-    files_from: Annotated[str | None, typer.Option("--files-from")] = None,
-    globs: Annotated[list[str], typer.Option("-g", "--glob")] = [],
-    excludes: Annotated[list[str], typer.Option("--exclude")] = [],
-    types: Annotated[list[str], typer.Option("--type")] = [],
-    include_hidden: Annotated[bool, typer.Option("--include-hidden/--no-hidden")] = True,
-    follow_symlinks: Annotated[bool, typer.Option("--follow-symlinks")] = False,
-    symlink_policy: Annotated[Symlink_policy, typer.Option("--symlink-policy")] = Symlink_policy.skip,
-    max_depth: Annotated[int | None, typer.Option("--max-depth")] = None,
-    max_filesize: Annotated[int | None, typer.Option("--max-filesize")] = None,
-    ignore_file: Annotated[str | None, typer.Option("--ignore-file")] = None,
-    no_ignore: Annotated[bool, typer.Option("--no-ignore")] = False,
-    regex: Annotated[bool, typer.Option("-F", "--fixed-strings")] = True,
-    regex_2: Annotated[bool, typer.Option("-E", "--regex")] = False,
-    ignore_case: Annotated[bool, typer.Option("-i", "--ignore-case")] = False,
-    ignore_case_2: Annotated[bool, typer.Option("-s", "--case-sensitive")] = True,
-    smart_case: Annotated[bool, typer.Option("-S", "--smart-case")] = False,
-    word: Annotated[bool, typer.Option("-w", "--word")] = False,
-    multiline: Annotated[bool, typer.Option("-U", "--multiline")] = False,
-    preserve_case: Annotated[bool, typer.Option("--preserve-case")] = False,
-    upper: Annotated[bool, typer.Option("--upper")] = False,
-    lower: Annotated[bool, typer.Option("--lower")] = False,
-    capitalize: Annotated[bool, typer.Option("--capitalize")] = False,
-    env_expand: Annotated[bool, typer.Option("--env")] = False,
-    replace_from: Annotated[str | None, typer.Option("--replace-from")] = None,
-    literal_replace: Annotated[bool, typer.Option("--literal-replace")] = False,
-    max_count: Annotated[int | None, typer.Option("--max-count")] = None,
-    rules_file: Annotated[str | None, typer.Option("--rules")] = None,
-    prompt: Annotated[bool, typer.Option("-p", "--prompt")] = False,
-    backup: Annotated[str | None, typer.Option("--backup")] = None,
-    backup_dir: Annotated[str | None, typer.Option("--backup-dir")] = None,
-    undo_journal: Annotated[str | None, typer.Option("--undo-journal")] = None,
-    undo: Annotated[bool, typer.Option("--undo")] = False,
-    require_clean_git: Annotated[bool, typer.Option("--require-clean-git")] = False,
-    confirm: Annotated[bool, typer.Option("--confirm")] = False,
-    diff: Annotated[bool, typer.Option("--diff")] = False,
-    color: Annotated[Color, typer.Option("--color")] = Color.auto,
-    quiet: Annotated[bool, typer.Option("-q", "--quiet")] = False,
-    verbose: Annotated[bool, typer.Option("-v", "--verbose")] = False,
-    json_out: Annotated[bool, typer.Option("--json")] = False,
-    count: Annotated[bool, typer.Option("-c", "--count")] = False,
-    stats: Annotated[bool, typer.Option("--stats")] = False,
-    context: Annotated[int | None, typer.Option("--context")] = None,
-    exit_code: Annotated[bool, typer.Option("--exit-code")] = False,
-    check: Annotated[bool, typer.Option("--check")] = False,
-    files_with_matches: Annotated[bool, typer.Option("-l", "--files-with-matches")] = False,
-    files_without_match: Annotated[bool, typer.Option("-L", "--files-without-match")] = False,
-    jobs: Annotated[int | None, typer.Option("-j", "--jobs")] = None,
-    config: Annotated[str | None, typer.Option("--config")] = None,
-    encoding: Annotated[str | None, typer.Option("--encoding")] = None,
-    version: Annotated[
-        bool,
-        typer.Option(
-            "--version", callback=_version_callback, is_eager=True, help="show program's version number and exit"
-        ),
-    ] = False,
-) -> None:
-    if (
-        sum((
-            bool(files_with_matches),
-            bool(files_without_match),
-        ))
-        > 1
-    ):
-        raise typer.BadParameter("-l, -L are mutually exclusive")
-    _STATE.update(
-        search=search,
-        replace=replace,
-        remove=remove,
-        dry_run=dry_run,
-        apply=apply,
-        files=files,
-        files_from=files_from,
-        globs=globs,
-        excludes=excludes,
-        types=types,
-        include_hidden=include_hidden,
-        follow_symlinks=follow_symlinks,
-        symlink_policy=symlink_policy,
-        max_depth=max_depth,
-        max_filesize=max_filesize,
-        ignore_file=ignore_file,
-        no_ignore=no_ignore,
-        regex=regex,
-        ignore_case=ignore_case,
-        smart_case=smart_case,
-        word=word,
-        multiline=multiline,
-        preserve_case=preserve_case,
-        upper=upper,
-        lower=lower,
-        capitalize=capitalize,
-        env_expand=env_expand,
-        replace_from=replace_from,
-        literal_replace=literal_replace,
-        max_count=max_count,
-        rules_file=rules_file,
-        prompt=prompt,
-        backup=backup,
-        backup_dir=backup_dir,
-        undo_journal=undo_journal,
-        undo=undo,
-        require_clean_git=require_clean_git,
-        confirm=confirm,
-        diff=diff,
-        color=color,
-        quiet=quiet,
-        verbose=verbose,
-        json_out=json_out,
-        count=count,
-        stats=stats,
-        context=context,
-        exit_code=exit_code,
-        check=check,
-        files_with_matches=files_with_matches,
-        files_without_match=files_without_match,
-        jobs=jobs,
-        config=config,
-        encoding=encoding,
-    )
-    _run()
+            raise typer.Exit(EXIT_OK if matched else EXIT_NO_MATCH)
+        raise typer.Exit(EXIT_OK if changed else EXIT_NO_MATCH)
+    raise typer.Exit(EXIT_OK)
 
 
 if __name__ == "__main__":

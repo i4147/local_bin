@@ -128,7 +128,8 @@ def absolute(path: str | Path) -> Path:
 def safe_id(value: str) -> str:
     """Reject traversal and malformed plan IDs."""
     if not ID_RE.fullmatch(value):
-        raise ValueError("invalid plan id")
+        msg = "invalid plan id"
+        raise ValueError(msg)
     return value
 
 
@@ -154,7 +155,8 @@ def fingerprint(path: Path) -> dict[str, Any]:
     before = path.lstat()
     kind = "symlink" if stat.S_ISLNK(before.st_mode) else "file"
     if kind == "file" and not stat.S_ISREG(before.st_mode):
-        raise ValueError(f"not a regular file: {path}")
+        msg = f"not a regular file: {path}"
+        raise ValueError(msg)
     sha = digest(path)
     after = path.lstat()
     if (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns) != (
@@ -163,7 +165,8 @@ def fingerprint(path: Path) -> dict[str, Any]:
         after.st_size,
         after.st_mtime_ns,
     ):
-        raise RuntimeError(f"file changed while hashing: {path}")
+        msg = f"file changed while hashing: {path}"
+        raise RuntimeError(msg)
     return {"sha256": sha, "size": after.st_size, "mtime_ns": after.st_mtime_ns, "kind": kind}
 
 
@@ -178,17 +181,20 @@ def same_content(path: Path, item: Mapping[str, Any], *, mtime: bool = False) ->
         return False
 
 
-def size_value(value: str | int | float) -> int:
+def size_value(value: str | float) -> int:
     """Parse non-negative sizes such as 20MB, 12 MiB and integer bytes."""
     if isinstance(value, bool):
-        raise ValueError("boolean is not a size")
+        msg = "boolean is not a size"
+        raise ValueError(msg)
     if isinstance(value, (int, float)):
         if value < 0:
-            raise ValueError("negative size")
+            msg = "negative size"
+            raise ValueError(msg)
         return int(value)
-    m = re.fullmatch(r"\s*(\d+(?:\.\d+)?)\s*(B|KB|MB|GB|TB|KIB|MIB|GIB|TIB)?\s*", value, re.I)
+    m = re.fullmatch(r"\s*(\d+(?:\.\d+)?)\s*(B|KB|MB|GB|TB|KIB|MIB|GIB|TIB)?\s*", value, re.IGNORECASE)
     if not m:
-        raise ValueError(f"invalid size: {value!r}")
+        msg = f"invalid size: {value!r}"
+        raise ValueError(msg)
     unit = (m.group(2) or "B").upper()
     multipliers = {
         "B": 1,
@@ -213,11 +219,14 @@ def load_config(path: str | Path | None) -> dict[str, Any]:
     general = config.setdefault("general", {})
     rules = config.setdefault("rule", [])
     if not isinstance(general, dict) or not isinstance(rules, list):
-        raise ValueError("invalid configuration")
+        msg = "invalid configuration"
+        raise ValueError(msg)
     if general.get("on_conflict", "rename") not in ("rename", "skip", "conflicts_dir"):
-        raise ValueError("on_conflict must be rename, skip or conflicts_dir")
+        msg = "on_conflict must be rename, skip or conflicts_dir"
+        raise ValueError(msg)
     if float(general.get("min_age_days", 1)) < 0:
-        raise ValueError("min_age_days must be nonnegative")
+        msg = "min_age_days must be nonnegative"
+        raise ValueError(msg)
     for rule in rules:
         if (
             not isinstance(rule, dict)
@@ -225,10 +234,12 @@ def load_config(path: str | Path | None) -> dict[str, Any]:
             or not isinstance(rule.get("dest"), str)
             or not isinstance(rule.get("match"), dict)
         ):
-            raise ValueError("every rule requires name, dest and a match table")
+            msg = "every rule requires name, dest and a match table"
+            raise ValueError(msg)
         match = rule["match"]
         if not match or set(match) - {"glob", "ext", "filename", "mime", "min_size", "max_size", "text"}:
-            raise ValueError(f"unsupported or empty match in {rule['name']!r}")
+            msg = f"unsupported or empty match in {rule['name']!r}"
+            raise ValueError(msg)
         for key in ("filename", "text"):
             if key in match:
                 re.compile(match[key])
@@ -436,7 +447,8 @@ def _values(value: Any) -> list[str]:
         return [value]
     if isinstance(value, list) and all(isinstance(x, str) for x in value):
         return value
-    raise ValueError("expected a string or list of strings")
+    msg = "expected a string or list of strings"
+    raise ValueError(msg)
 
 
 def classify(path: Path, config: Mapping[str, Any], budget_ms: int) -> dict[str, Any]:
@@ -494,7 +506,7 @@ def classify(path: Path, config: Mapping[str, Any], budget_ms: int) -> dict[str,
         fallback = dt.datetime.fromtimestamp(info.st_mtime).astimezone()
         if not date:
             date_source = "mtime fallback"
-        elif set(("year", "month", "day")) - date.keys():
+        elif {"year", "month", "day"} - date.keys():
             date_source += " (missing fields from mtime)"
         date = {"year": f"{fallback.year:04d}", "month": f"{fallback.month:02d}", "day": f"{fallback.day:02d}", **date}
         return {
@@ -515,11 +527,13 @@ def destination(path: Path, result: Mapping[str, Any]) -> Path:
     fields = {"ext": path.suffix.lower().lstrip(".") or "no-extension", **result["date"], **result["groups"]}
     for key, value in fields.items():
         if not isinstance(value, str) or value in ("", ".", "..") or "/" in value or "\\" in value or "\x00" in value:
-            raise ValueError(f"unsafe template value for {key}")
+            msg = f"unsafe template value for {key}"
+            raise ValueError(msg)
     try:
         directory = str(result["dest_template"]).format_map(fields)
     except (KeyError, ValueError, AttributeError, IndexError) as exc:
-        raise ValueError(f"bad destination template: {exc}") from exc
+        msg = f"bad destination template: {exc}"
+        raise ValueError(msg) from exc
     return absolute(directory) / path.name
 
 
@@ -543,7 +557,8 @@ def suffix_name(name: str, n: int) -> str:
     while len(os.fsencode(stem)) > limit:
         stem = stem[:-1]
     if not stem:
-        raise ValueError("cannot construct collision filename")
+        msg = "cannot construct collision filename"
+        raise ValueError(msg)
     return stem + addition + suffix
 
 
@@ -564,13 +579,15 @@ def choose_destination(target: Path, policy: str, reserved: set[str], state: Pat
         if available(candidate, reserved):
             reserved.add(str(candidate).casefold())
             return candidate
-    raise RuntimeError("too many naming collisions")
+    msg = "too many naming collisions"
+    raise RuntimeError(msg)
 
 
 def scan(root: Path, recursive: bool, follow_symlinks: bool, state: Path) -> Iterator[Path]:
     """Yield files in a stable order; never traverse symlink directories."""
     if not root.is_dir():
-        raise ValueError(f"not a directory: {root}")
+        msg = f"not a directory: {root}"
+        raise ValueError(msg)
 
     def visit(folder: Path) -> Iterator[Path]:
         with os.scandir(folder) as it:
@@ -641,11 +658,14 @@ def build_plan(
     root = absolute(root)
     state = absolute(state)
     if root == state:
-        raise ValueError("state directory cannot be the scan root")
+        msg = "state directory cannot be the scan root"
+        raise ValueError(msg)
     if keep not in ("oldest", "newest", "shallowest"):
-        raise ValueError("invalid keep policy")
+        msg = "invalid keep policy"
+        raise ValueError(msg)
     if budget_ms < 0:
-        raise ValueError("inspection budget must be nonnegative")
+        msg = "inspection budget must be nonnegative"
+        raise ValueError(msg)
     plan_id = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + uuid.uuid4().hex[:8]
     policy = config.get("general", {}).get("on_conflict", "rename")
     age = float(config.get("general", {}).get("min_age_days", 1)) * 86400
@@ -748,7 +768,8 @@ def append_record(journal: Path, record: Mapping[str, Any]) -> None:
         while remaining:
             written = os.write(fd, remaining)
             if written <= 0:
-                raise OSError("short journal write")
+                msg = "short journal write"
+                raise OSError(msg)
             remaining = remaining[written:]
         os.fsync(fd)
     finally:
@@ -767,7 +788,8 @@ def read_records(journal: Path) -> list[dict[str, Any]]:
         except (json.JSONDecodeError, UnicodeDecodeError):
             if i == len(lines) - 1 and not line.endswith(b"\n"):
                 break
-            raise ValueError(f"corrupt journal at line {i + 1}")
+            msg = f"corrupt journal at line {i + 1}"
+            raise ValueError(msg)
     return records
 
 
@@ -821,7 +843,8 @@ def move_noreplace(src: Path, dst: Path, expected: Mapping[str, Any]) -> None:
     """
     dst.parent.mkdir(parents=True, exist_ok=True)
     if not available(dst, set()):
-        raise FileExistsError(f"destination exists: {dst}")
+        msg = f"destination exists: {dst}"
+        raise FileExistsError(msg)
     try:
         os.link(src, dst, follow_symlinks=False)
     except OSError as exc:
@@ -829,10 +852,8 @@ def move_noreplace(src: Path, dst: Path, expected: Mapping[str, Any]) -> None:
             raise
         if expected["kind"] == "symlink":
             os.symlink(os.readlink(src), dst)
-            try:
+            with contextlib.suppress(OSError, NotImplementedError):
                 os.utime(dst, ns=(src.lstat().st_atime_ns, expected["mtime_ns"]), follow_symlinks=False)
-            except (OSError, NotImplementedError):
-                pass
         else:
             fd = os.open(dst, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
             try:
@@ -842,14 +863,16 @@ def move_noreplace(src: Path, dst: Path, expected: Mapping[str, Any]) -> None:
                     os.fsync(out.fileno())
                 shutil.copystat(src, dst, follow_symlinks=False)
                 if not same_content(dst, expected):
-                    raise RuntimeError("copied file failed verification")
+                    msg = "copied file failed verification"
+                    raise RuntimeError(msg)
             except BaseException:
                 with contextlib.suppress(OSError):
                     os.unlink(dst)
                 raise
     # Recheck immediately before removing source; never delete a changed source.
     if not same_content(src, expected, mtime=True) or not same_content(dst, expected):
-        raise RuntimeError("source or destination changed during move; both retained")
+        msg = "source or destination changed during move; both retained"
+        raise RuntimeError(msg)
     sync_dir(dst.parent)
     os.unlink(src)
     sync_dir(src.parent)
@@ -866,11 +889,13 @@ def _apply_plan_unlocked(plan_path: str | Path, *, yes: bool = False, fail_after
     is performed by this API; confirmation must be explicit via ``yes=True``.
     """
     if not yes:
-        raise PermissionError("apply requires explicit --yes")
+        msg = "apply requires explicit --yes"
+        raise PermissionError(msg)
     with open(plan_path, encoding="utf-8") as f:
         plan = json.load(f)
     if plan.get("version") != VERSION:
-        raise ValueError("unsupported plan version")
+        msg = "unsupported plan version"
+        raise ValueError(msg)
     state = absolute(plan["state_dir"])
     plan_id = safe_id(plan["id"])
     journal = _journal_path(state, plan_id)
@@ -893,11 +918,13 @@ def _apply_plan_unlocked(plan_path: str | Path, *, yes: bool = False, fail_after
     completed = 0
     errors: list[dict[str, str]] = []
     if fail_after is not None and fail_after <= 0:
-        raise RuntimeError("simulated interruption")
+        msg = "simulated interruption"
+        raise RuntimeError(msg)
     for i, item in enumerate(plan["moves"]):
         src, dst = Path(item["src"]), Path(item["dst"])
         if not src.is_absolute() or not dst.is_absolute():
-            raise ValueError("plan paths must be absolute")
+            msg = "plan paths must be absolute"
+            raise ValueError(msg)
         if not same_content(src, item, mtime=True):
             errors.append({"src": str(src), "error": "source missing or changed since planning"})
             continue
@@ -927,7 +954,8 @@ def _apply_plan_unlocked(plan_path: str | Path, *, yes: bool = False, fail_after
             errors.append({"src": str(src), "error": str(exc)})
             append_record(journal, {"ts": utc_now(), "op": "move_error", "index": i, "error": str(exc)})
         if fail_after is not None and completed >= fail_after:
-            raise RuntimeError("simulated interruption")
+            msg = "simulated interruption"
+            raise RuntimeError(msg)
     append_record(journal, {"ts": utc_now(), "op": "apply_end", "completed": completed, "errors": errors})
     return {"plan_id": plan_id, "journal": str(journal), "completed": completed, "errors": errors}
 
@@ -1005,7 +1033,8 @@ def operation_lock(state: Path, plan_id: str) -> Iterator[None]:
         try:
             fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError as exc:
-            raise RuntimeError("another operation is using this journal") from exc
+            msg = "another operation is using this journal"
+            raise RuntimeError(msg) from exc
         yield
     finally:
         os.close(fd)
@@ -1014,7 +1043,8 @@ def operation_lock(state: Path, plan_id: str) -> Iterator[None]:
 def apply_plan(plan_path: str | Path, *, yes: bool = False, fail_after: int | None = None) -> dict[str, Any]:
     """Lock and execute a plan; confirmation is mandatory."""
     if not yes:
-        raise PermissionError("apply requires explicit --yes")
+        msg = "apply requires explicit --yes"
+        raise PermissionError(msg)
     with open(plan_path, encoding="utf-8") as f:
         plan = json.load(f)
     state, plan_id = absolute(plan["state_dir"]), safe_id(plan["id"])
@@ -1034,7 +1064,8 @@ def last_plan_id(state: str | Path = DEFAULT_STATE) -> str:
     folder = absolute(state) / "journals"
     files = list(folder.glob("*.jsonl")) if folder.exists() else []
     if not files:
-        raise FileNotFoundError("no journals found")
+        msg = "no journals found"
+        raise FileNotFoundError(msg)
 
     def started(path: Path) -> tuple[int, str]:
         try:
@@ -1188,12 +1219,14 @@ def cmd_undo(
         ))
         > 1
     ):
-        raise typer.BadParameter("--last, --plan-id are mutually exclusive")
+        msg = "--last, --plan-id are mutually exclusive"
+        raise typer.BadParameter(msg)
     if not any((
         bool(last),
         plan_id is not None,
     )):
-        raise typer.BadParameter("one of --last, --plan-id is required")
+        msg = "one of --last, --plan-id is required"
+        raise typer.BadParameter(msg)
     _STATE.update(last=last, plan_id=plan_id, json=json, command="undo")
     _run()
 

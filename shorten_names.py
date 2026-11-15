@@ -75,6 +75,7 @@ from __future__ import annotations
 import ast
 import builtins
 from collections import Counter
+import contextlib
 from dataclasses import dataclass, field
 from itertools import count, product
 import keyword
@@ -496,10 +497,8 @@ class _Analyzer(cst.CSTVisitor):
             module_ref = bool(target_primary and raw_target and f"{raw_target}.{source_name}" in self.registry)
             binding_qnames: set[str] = set()
             if scope is not None and isinstance(alias.name, cst.Name):
-                try:
+                with contextlib.suppress(KeyError):
                     binding_qnames = {q.name for q in scope.get_qualified_names_for(alias.name)}
-                except KeyError:
-                    pass
             record = _AliasRecord(
                 node_id=id(node),
                 index=index,
@@ -661,7 +660,7 @@ class _Plan:
 
     def _precompute_force_keep(self) -> None:
         for module in self.facts.values():
-            for name, records in module.bindings_by_name.items():
+            for records in module.bindings_by_name.values():
                 plain = [r for r in records if r.target and not r.module_ref and not r.asname]
                 if plain and len(records) > 1:
                     # one name bound by several imports: cannot follow them
@@ -760,7 +759,7 @@ class _Plan:
                     if source_new != record.source_name:
                         edits[(record.node_id, record.index)] = source_new
                 for qname in record.binding_qnames:
-                    if qname != name and final != name:
+                    if name not in (qname, final):
                         decisions[qname] = final
 
         local_taken = set(facts.identifiers) | module_finals | set(RESERVED)
@@ -917,7 +916,8 @@ def shorten_names(
     """
     target = Path(path)
     if not target.exists():
-        raise FileNotFoundError(f"No such file or directory: {target}")
+        msg = f"No such file or directory: {target}"
+        raise FileNotFoundError(msg)
     files = _discover(target)
     if not files:
         return False
@@ -936,7 +936,8 @@ def shorten_names(
             facts[module_name] = _analyze(file_path, module_name, registry, primary)
         except Exception as exc:  # parse or read failure
             if target.is_file():
-                raise SyntaxError(f"Failed to parse {file_path}: {exc}") from exc
+                msg = f"Failed to parse {file_path}: {exc}"
+                raise SyntaxError(msg) from exc
             skipped += 1
             if verbose:
                 print(f"skipped {file_path}: {exc}", file=sys.stderr)

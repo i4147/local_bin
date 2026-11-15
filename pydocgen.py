@@ -2,9 +2,7 @@
 "Generate readable markdown documentation from Python sources (libcst, tree-sitter or ast backend)."
 
 from __future__ import annotations
-import argparse
 import ast
-from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass, field
 import importlib
 import inspect
@@ -12,10 +10,15 @@ from itertools import count
 from multiprocessing import get_context
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any
 
 import click
 import typer
+
+
+if TYPE_CHECKING:
+    import argparse
+    from collections.abc import Callable, Iterator, Sequence
 
 
 _STATE: dict[str, object] = {}
@@ -337,7 +340,7 @@ def _ts_decorators(node: Any, source: bytes) -> tuple[str, ...]:
     for child in node.children:
         if child.type == "decorator":
             text = _ts_text(child, source)
-            texts.append(text[1:] if text.startswith("@") else text)
+            texts.append(text.removeprefix("@"))
     return tuple(texts)
 
 
@@ -677,7 +680,8 @@ def cli(
 ) -> None:
     targets = targets or []
     if backend is not None and backend not in tuple(BACKENDS):
-        raise typer.BadParameter(f"invalid choice: {backend!r} (choose from {tuple(BACKENDS)})")
+        msg = f"invalid choice: {backend!r} (choose from {tuple(BACKENDS)})"
+        raise typer.BadParameter(msg)
     _STATE.update(targets=targets, backend=backend, out=out, workers=workers)
     _run()
 

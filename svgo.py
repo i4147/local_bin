@@ -102,7 +102,7 @@ def tools_to_fixed(value: float, precision: int) -> float:
     return _js_round(value * power) / power
 
 
-def js_number_string(value: float | int) -> str:
+def js_number_string(value: float) -> str:
     if isinstance(value, int):
         return str(value)
     if value != value:
@@ -130,7 +130,7 @@ def js_number_string(value: float | int) -> str:
     return text
 
 
-def remove_leading_zero(value: float | int) -> str:
+def remove_leading_zero(value: float) -> str:
     "Remove leading zero."
     text = js_number_string(value)
     if 0 < value < 1 and text.startswith("0"):
@@ -1942,7 +1942,7 @@ def _read_number(string: str, cursor: int) -> tuple[int, float | None]:
     state = "none"
     while i < len(string):
         c = string[i]
-        if c == "+" or c == "-":
+        if c in {"+", "-"}:
             if state == "none":
                 state = "sign"
                 value += c
@@ -1969,18 +1969,16 @@ def _read_number(string: str, cursor: int) -> tuple[int, float | None]:
                 value += c
                 i += 1
                 continue
-        if c == ".":
-            if state in ("none", "sign", "whole"):
-                state = "decimal_point"
-                value += c
-                i += 1
-                continue
-        if c == "E" or c == "e":
-            if state in ("whole", "decimal_point", "decimal"):
-                state = "e"
-                value += c
-                i += 1
-                continue
+        if c == "." and state in ("none", "sign", "whole"):
+            state = "decimal_point"
+            value += c
+            i += 1
+            continue
+        if (c in {"E", "e"}) and state in ("whole", "decimal_point", "decimal"):
+            state = "e"
+            value += c
+            i += 1
+            continue
         break
     try:
         number = float(value)
@@ -2024,7 +2022,7 @@ def parse_path_data(string: str) -> list[PathDataItem]:
             if had_comma:
                 return path_data
             if command is None:
-                if c != "M" and c != "m":
+                if c not in {"M", "m"}:
                     return path_data
             elif args:
                 return path_data
@@ -2738,7 +2736,8 @@ def transform_to_matrix(transform: TransformItem) -> list[float]:
         return [1.0, 0.0, _mth_tan(transform.data[0]), 1.0, 0.0, 0.0]
     if transform.name == "skewY":
         return [1.0, _mth_tan(transform.data[0]), 0.0, 1.0, 0.0, 0.0]
-    raise SvgoError(f"Unknown transform {transform.name}")
+    msg = f"Unknown transform {transform.name}"
+    raise SvgoError(msg)
 
 
 def transforms_multiply(transforms: Sequence[TransformItem]) -> TransformItem:
@@ -2902,7 +2901,7 @@ def _optimize(rounded: list[TransformItem], raw: list[TransformItem]) -> list[Tr
                     optimized.append(TransformItem(name="scale", data=[-1.0]))
                     index += 1
                 continue
-            count = 3 if (len(data) > 1 and data[1] or len(data) > 2 and data[2]) else 1
+            count = 3 if ((len(data) > 1 and data[1]) or (len(data) > 2 and data[2])) else 1
             optimized.append(TransformItem(name="rotate", data=data[:count]))
         elif transform.name == "scale":
             optimized.append(_create_scale_transform(data))
@@ -3264,7 +3263,7 @@ def _line_offset(source: str, line: int) -> int:
 
 
 _REG_DOCTYPE = re.compile(r"<!DOCTYPE[^>]*(?:\[[\s\S]*?\])?\s*>")
-_REG_XMLDECL = re.compile(r"^\s*<\?xml\s+(.*?)\?>", re.S)
+_REG_XMLDECL = re.compile(r"^\s*<\?xml\s+(.*?)\?>", re.DOTALL)
 
 
 def parse_svg(data: str, from_file: str | None = None) -> Document:
@@ -3336,8 +3335,9 @@ def parse_svg(data: str, from_file: str | None = None) -> Document:
                 line = data.count("\n", 0, byte_index) + 1
                 last_newline = data.rfind("\n", 0, byte_index)
                 column = end - last_newline
+                msg = f'Unbound namespace prefix: "{prefix}"'
                 raise SvgoParserError(
-                    f'Unbound namespace prefix: "{prefix}"',
+                    msg,
                     line,
                     column,
                     data,
@@ -3435,7 +3435,8 @@ def parse_svg(data: str, from_file: str | None = None) -> Document:
                 if text == expat.errors.XML_ERROR_UNCLOSED_TOKEN:
                     line = data.count("\n") + 1
                     column = len(data) - (data.rfind("\n") + 1)
-                raise SvgoParserError("Unclosed root tag", line, column, data, from_file) from None
+                msg = "Unclosed root tag"
+                raise SvgoParserError(msg, line, column, data, from_file) from None
             flush_text()
             return root
         reason, line, column = _expat_error_reason(exc, data, line, column + 1)
@@ -3626,7 +3627,7 @@ def detach_node_from_parent(node: Node, parent_node: Node) -> None:
 def map_nodes_to_parents(root: Document) -> dict[Node, Document | Element]:
     "Map nodes to parents."
     parents: dict[Node, Document | Element] = {}
-    visit(root, {"element": {"enter": lambda node, parent: parents.__setitem__(node, parent)}})
+    visit(root, {"element": {"enter": parents.__setitem__}})
     return parents
 
 
@@ -3768,10 +3769,10 @@ def _parse_compound(text: str) -> CompoundSelector:
     parts: list[SelectorPart] = []
     combinator = ""
     stripped = text.strip()
-    if stripped.startswith(">") or stripped.startswith("+") or stripped.startswith("~"):
+    if stripped.startswith((">", "+", "~")):
         combinator = stripped[0]
         stripped = stripped[1:].strip()
-    elif stripped == ">" or stripped == "+" or stripped == "~":
+    elif stripped in {">", "+", "~"}:
         combinator = stripped
     i = 0
     while i < len(stripped):
@@ -3855,12 +3856,12 @@ def parse_selector(selector: str) -> list[CompoundSelector] | None:
             buffer.append(c)
             i += 1
             continue
-        if c == "[" or c == "(":
+        if c in {"[", "("}:
             depth += 1
             buffer.append(c)
             i += 1
             continue
-        if c == "]" or c == ")":
+        if c in {"]", ")"}:
             depth -= 1
             buffer.append(c)
             i += 1
@@ -4212,7 +4213,7 @@ def encode_svg_datauri(data: str, kind: str | None) -> str:
 
 def decode_svg_datauri(data: str) -> str:
     "Decode svg datauri."
-    match = re.match(r"data:image/svg\+xml(;charset=[^;,]*)?(;base64)?,(.*)", data, re.S)
+    match = re.match(r"data:image/svg\+xml(;charset=[^;,]*)?(;base64)?,(.*)", data, re.DOTALL)
     if match is None:
         return data
     payload = match.group(3)
@@ -4275,7 +4276,7 @@ def is_executable_url(value: str) -> bool:
     import urllib.parse
 
     normalized = re.sub(r"[\t\n\r]", "", value).lstrip().lower()
-    if normalized.startswith("javascript:") or normalized.startswith("vbscript:"):
+    if normalized.startswith(("javascript:", "vbscript:")):
         return True
     if not normalized.startswith("data:"):
         return False
@@ -4292,9 +4293,8 @@ def has_scripts(node: Element) -> bool:
         return True
     if node.name == "a":
         for key, value in node.attributes.items():
-            if (key == "href" or key.endswith(":href")) and value is not None:
-                if is_executable_url(value):
-                    return True
+            if (key == "href" or key.endswith(":href")) and value is not None and is_executable_url(value):
+                return True
     return any(attr in node.attributes for attr in _HAS_SCRIPTS_EVENT_ATTRS)
 
 
@@ -4439,9 +4439,8 @@ def _remove_comments(root: Document, params: dict[str, Any], info: dict[str, Any
             return
         if preserve_patterns:
             if not isinstance(preserve_patterns, (list, tuple)):
-                raise SvgoError(
-                    f"Expected array in removeComments preservePatterns parameter but received {preserve_patterns}"
-                )
+                msg = f"Expected array in removeComments preservePatterns parameter but received {preserve_patterns}"
+                raise SvgoError(msg)
             for pattern in preserve_patterns:
                 if isinstance(pattern, str):
                     if re.search(pattern, node.value):
@@ -4682,7 +4681,7 @@ def _inline_styles(root: Document, params: dict[str, Any], info: dict[str, Any])
             selector["matched"] = matched_elements
             for selected in matched_elements:
                 inline = parse_declarations(selected.attributes.get("style", ""))
-                style_items: dict[str, CssDeclaration] = dict((d.name, d) for d in inline)
+                style_items: dict[str, CssDeclaration] = {d.name: d for d in inline}
                 for rule_declaration in selector["rule"].declarations:
                     property_name = rule_declaration.name
                     if property_name in ATTRS_GROUPS["presentation"] and not any(
@@ -4782,7 +4781,7 @@ def _minify_color_value(value: str) -> str:
         candidate = COLORS_NAMES[lowered]
         if len(candidate) < len(value):
             value = candidate
-    match = re.match(r"^rgb\(\s*([^)]*)\)$", value, re.I)
+    match = re.match(r"^rgb\(\s*([^)]*)\)$", value, re.IGNORECASE)
     if match is not None:
         numbers: list[int] = []
         parts = re.split(r"\s*,\s*|\s+", match.group(1).strip())
@@ -4872,15 +4871,12 @@ def _selector_cannot_match(
 ) -> bool:
     for compound in parse_selector(selector) or []:
         for part in compound.parts:
-            if part.kind == "type" and tags is not None:
-                if part.value not in tags and part.value != "*":
-                    return True
-            if part.kind == "id" and ids is not None:
-                if part.value not in ids:
-                    return True
-            if part.kind == "class" and classes is not None:
-                if part.value not in classes:
-                    return True
+            if part.kind == "type" and tags is not None and part.value not in tags and part.value != "*":
+                return True
+            if part.kind == "id" and ids is not None and part.value not in ids:
+                return True
+            if part.kind == "class" and classes is not None and part.value not in classes:
+                return True
     return False
 
 
@@ -5314,18 +5310,17 @@ def _apply_transforms_plugin(root: Document, params: dict[str, Any], info: dict[
             data = matrix.data
             if (data[0] != data[3] or data[1] != -data[2]) and (data[0] != -data[3] or data[1] != data[2]):
                 return
-            if scale != 1:
-                if element.attributes.get("vector-effect") != "non-scaling-stroke":
-                    base_stroke_width = stroke_width or ATTRS_GROUPS_DEFAULTS["presentation"]["stroke-width"]
-                    element.attributes["stroke-width"] = _scale_numeric_attr(base_stroke_width, scale)
-                    if element.attributes.get("stroke-dashoffset") is not None:
-                        element.attributes["stroke-dashoffset"] = _scale_numeric_attr(
-                            element.attributes["stroke-dashoffset"], scale
-                        )
-                    if element.attributes.get("stroke-dasharray") is not None:
-                        element.attributes["stroke-dasharray"] = _scale_numeric_attr(
-                            element.attributes["stroke-dasharray"], scale
-                        )
+            if scale != 1 and element.attributes.get("vector-effect") != "non-scaling-stroke":
+                base_stroke_width = stroke_width or ATTRS_GROUPS_DEFAULTS["presentation"]["stroke-width"]
+                element.attributes["stroke-width"] = _scale_numeric_attr(base_stroke_width, scale)
+                if element.attributes.get("stroke-dashoffset") is not None:
+                    element.attributes["stroke-dashoffset"] = _scale_numeric_attr(
+                        element.attributes["stroke-dashoffset"], scale
+                    )
+                if element.attributes.get("stroke-dasharray") is not None:
+                    element.attributes["stroke-dasharray"] = _scale_numeric_attr(
+                        element.attributes["stroke-dasharray"], scale
+                    )
         path_data = path2js(element)
         apply_matrix_to_path_data(path_data, matrix.data)
         del element.attributes["transform"]
@@ -5963,13 +5958,11 @@ def _filters(
                 params.get("convertToZ", True)
                 and (is_safe_to_use_z or (nxt is not None and nxt.command in ("Z", "z")))
                 and command in ("l", "h", "v")
+            ) and (
+                abs(path_base[0] - item.coords[0]) < state.error and abs(path_base[1] - item.coords[1]) < state.error
             ):
-                if (
-                    abs(path_base[0] - item.coords[0]) < state.error
-                    and abs(path_base[1] - item.coords[1]) < state.error
-                ):
-                    command = "z"
-                    data = []
+                command = "z"
+                data = []
         else:
             rel_subpoint[0] = path_base[0]
             rel_subpoint[1] = path_base[1]
@@ -6297,7 +6290,7 @@ def _remove_unknowns_and_defaults(root: Document, params: dict[str, Any], info: 
         return None
 
     return {
-        "instruction": {"enter": lambda node, parent: enter(node, parent)},
+        "instruction": {"enter": enter},
         "element": {"enter": enter},
     }
 
@@ -6354,8 +6347,9 @@ def _remove_useless_stroke_and_fill(
         fill_opacity = computed_style.get("fill-opacity")
         computed_parent_style = compute_style(stylesheet, parent) if parent.type == "element" else None
         parent_stroke = computed_parent_style.get("stroke") if computed_parent_style else None
-        if remove_stroke:
-            if (
+        if (
+            remove_stroke
+            and (
                 stroke is None
                 or (stroke["type"] == "static" and stroke.get("value") == "none")
                 or (
@@ -6364,34 +6358,35 @@ def _remove_useless_stroke_and_fill(
                     and stroke_opacity.get("value") == "0"
                 )
                 or (stroke_width is not None and stroke_width["type"] == "static" and stroke_width.get("value") == "0")
-            ):
-                if (
-                    stroke_width is not None and stroke_width["type"] == "static" and stroke_width.get("value") == "0"
-                ) or marker_end is None:
-                    for name in list(element.attributes):
-                        if name.startswith("stroke"):
-                            del element.attributes[name]
-                    if (
-                        parent_stroke is not None
-                        and parent_stroke["type"] == "static"
-                        and parent_stroke.get("value") != "none"
-                    ):
-                        element.attributes["stroke"] = "none"
-        if remove_fill:
-            if (fill is not None and fill["type"] == "static" and fill.get("value") == "none") or (
-                fill_opacity is not None and fill_opacity["type"] == "static" and fill_opacity.get("value") == "0"
-            ):
-                for name in list(element.attributes):
-                    if name.startswith("fill-"):
-                        del element.attributes[name]
-                if fill is None or (fill["type"] == "static" and fill.get("value") != "none"):
-                    element.attributes["fill"] = "none"
-        if remove_none:
-            if (stroke is None or element.attributes.get("stroke") == "none") and (
+            )
+            and (
+                (stroke_width is not None and stroke_width["type"] == "static" and stroke_width.get("value") == "0")
+                or marker_end is None
+            )
+        ):
+            for name in list(element.attributes):
+                if name.startswith("stroke"):
+                    del element.attributes[name]
+            if parent_stroke is not None and parent_stroke["type"] == "static" and parent_stroke.get("value") != "none":
+                element.attributes["stroke"] = "none"
+        if remove_fill and (
+            (fill is not None and fill["type"] == "static" and fill.get("value") == "none")
+            or (fill_opacity is not None and fill_opacity["type"] == "static" and fill_opacity.get("value") == "0")
+        ):
+            for name in list(element.attributes):
+                if name.startswith("fill-"):
+                    del element.attributes[name]
+            if fill is None or (fill["type"] == "static" and fill.get("value") != "none"):
+                element.attributes["fill"] = "none"
+        if (
+            remove_none
+            and (stroke is None or element.attributes.get("stroke") == "none")
+            and (
                 (fill is not None and fill["type"] == "static" and fill.get("value") == "none")
                 or element.attributes.get("fill") == "none"
-            ):
-                detach_node_from_parent(element, parent)
+            )
+        ):
+            detach_node_from_parent(element, parent)
         return None
 
     return {"element": {"enter": enter}}
@@ -6783,7 +6778,7 @@ def _convert_ellipse_to_circle(root: Document, params: dict[str, Any], info: dic
             return
         rx = node.attributes.get("rx", "0")
         ry = node.attributes.get("ry", "0")
-        if rx == ry or rx == "auto" or ry == "auto":
+        if rx in (ry, "auto") or ry == "auto":
             node.name = "circle"
             radius = ry if rx == "auto" else rx
             node.attributes.pop("rx", None)
@@ -6911,8 +6906,7 @@ def _collapse_groups(root: Document, params: dict[str, Any], info: dict[str, Any
                 and not node_has_filter
                 and (element.attributes.get("class") is None or first_child.attributes.get("class") is None)
                 and (
-                    element.attributes.get("clip-path") is None
-                    and element.attributes.get("mask") is None
+                    (element.attributes.get("clip-path") is None and element.attributes.get("mask") is None)
                     or (
                         first_child.name == "g"
                         and element.attributes.get("transform") is None
@@ -7904,7 +7898,7 @@ def _prefix_ids(root: Document, params: dict[str, Any], info: dict[str, Any]) ->
                     r"\burl\((['\"]?)(#.+?)\1\)",
                     lambda m: "url(" + (prefix_reference(m.group(2)) or m.group(2)) + ")",
                     value,
-                    flags=re.I,
+                    flags=re.IGNORECASE,
                 )
         for name in ("begin", "end"):
             value = element.attributes.get(name)
@@ -7912,7 +7906,7 @@ def _prefix_ids(root: Document, params: dict[str, Any], info: dict[str, Any]) ->
                 parts = re.split(r"\s*;\s+", value)
                 rebuilt = []
                 for part in parts:
-                    if part.endswith(".end") or part.endswith(".start"):
+                    if part.endswith((".end", ".start")):
                         identifier, _, postfix = part.partition(".")
                         rebuilt.append(f"{prefix_id(identifier)}.{postfix}")
                     else:
@@ -7983,7 +7977,7 @@ def _remove_attrs(root: Document, params: dict[str, Any], info: dict[str, Any]) 
             for value in pieces:
                 if value == "*":
                     value = ".*"
-                regexes.append(re.compile(f"^{value}$", re.I))
+                regexes.append(re.compile(f"^{value}$", re.IGNORECASE))
             if len(regexes) < 3:
                 continue
             if regexes[0].search(node.name):
@@ -8011,9 +8005,8 @@ def _remove_elements_by_attr(root: Document, params: dict[str, Any], info: dict[
     def enter(node: Node, parent: Node) -> None:
         if node.type != "element":
             return
-        if node.attributes.get("id") is not None and id_list:
-            if node.attributes["id"] in id_list:
-                detach_node_from_parent(node, parent)
+        if node.attributes.get("id") is not None and id_list and node.attributes["id"] in id_list:
+            detach_node_from_parent(node, parent)
         if node.attributes.get("class") and class_list:
             node_classes = node.attributes["class"].split(" ")
             for item in class_list:
@@ -8183,9 +8176,8 @@ def _remove_xlink(root: Document, params: dict[str, Any], info: dict[str, Any]) 
                         xlink_prefixes.remove(attr)
                     element.attributes.pop(key, None)
                     continue
-                if prefix in overridden_prefixes:
-                    if attr in overridden_prefixes:
-                        overridden_prefixes.remove(attr)
+                if prefix in overridden_prefixes and attr in overridden_prefixes:
+                    overridden_prefixes.remove(attr)
 
     return {"element": {"enter": enter, "exit": exit}}
 
@@ -8615,17 +8607,20 @@ def _resolve_plugin_config(plugin: Any) -> PluginConfig | None:
     if isinstance(plugin, str):
         builtin_plugin = _get_plugin(plugin)
         if builtin_plugin is None:
-            raise SvgoConfigError(f'Unknown builtin plugin "{plugin}" specified.')
+            msg = f'Unknown builtin plugin "{plugin}" specified.'
+            raise SvgoConfigError(msg)
         return PluginConfig(name=plugin, params={}, fn=builtin_plugin.fn)
     if isinstance(plugin, Mapping):
         name = plugin.get("name")
         if name is None:
-            raise SvgoConfigError("Plugin name must be specified")
+            msg = "Plugin name must be specified"
+            raise SvgoConfigError(msg)
         fn = plugin.get("fn")
         if fn is None:
             builtin_plugin = _get_plugin(str(name))
             if builtin_plugin is None:
-                raise SvgoConfigError(f'Unknown builtin plugin "{name}" specified.')
+                msg = f'Unknown builtin plugin "{name}" specified.'
+                raise SvgoConfigError(msg)
             fn = builtin_plugin.fn
         params = plugin.get("params") or {}
         if not isinstance(params, Mapping):
@@ -8637,13 +8632,16 @@ def _resolve_plugin_config(plugin: Any) -> PluginConfig | None:
 def _import_config(config_file: str) -> dict[str, Any]:
     resolved = Path(config_file)
     if not resolved.is_file():
-        raise SvgoConfigError(f"Cannot find module '{resolved.resolve()}'")
+        msg = f"Cannot find module '{resolved.resolve()}'"
+        raise SvgoConfigError(msg)
     try:
         config = json.loads(resolved.read_text(encoding="utf-8"))
     except (ValueError, OSError) as exc:
-        raise SvgoConfigError(f'Invalid config file "{config_file}"') from exc
+        msg = f'Invalid config file "{config_file}"'
+        raise SvgoConfigError(msg) from exc
     if not isinstance(config, dict):
-        raise SvgoConfigError(f'Invalid config file "{config_file}"')
+        msg = f'Invalid config file "{config_file}"'
+        raise SvgoConfigError(msg)
     return config
 
 
@@ -8676,7 +8674,8 @@ def optimize(input_svg: str, config: Mapping[str, Any] | None = None) -> dict[st
     if config is None:
         config = {}
     if not isinstance(config, Mapping):
-        raise SvgoError("Config should be an object")
+        msg = "Config should be an object"
+        raise SvgoError(msg)
     config = dict(config)
     js2svg = dict(config.get("js2svg") or {})
     js2svg.setdefault("eol", "lf")
@@ -8695,11 +8694,12 @@ def optimize(input_svg: str, config: Mapping[str, Any] | None = None) -> dict[st
         if plugins is None:
             plugins = ["preset-default"]
         if not isinstance(plugins, (list, tuple)):
-            raise SvgoConfigError(
+            msg = (
                 "malformed config, `plugins` property must be an array.\n"
                 "See more info here:"
                 " https://github.com/svg/svgo#configuration"
             )
+            raise SvgoConfigError(msg)
         resolved_plugins = [
             resolved for resolved in (_resolve_plugin_config(plugin) for plugin in plugins) if resolved is not None
         ]
@@ -8905,7 +8905,8 @@ def _unknown_option(token: str) -> None:
     suggestion = ""
     if token.startswith("--"):
         suggestion = _suggest_similar(token, [f"--{name}" for name in _LONG_FLAG_NAMES])
-    raise _CliUsageError(f"error: unknown option '{token}'{suggestion}")
+    msg = f"error: unknown option '{token}'{suggestion}"
+    raise _CliUsageError(msg)
 
 
 def _option_display(long_name: str) -> str:
@@ -8960,9 +8961,9 @@ def parse_cli_args(argv: Sequence[str]) -> _CliOptions:
             if "=" in body:
                 body, value = body.split("=", 1)
             if value is None and body == "help":
-                raise _HelpRequested()
+                raise _HelpRequested
             if value is None and body == "version":
-                raise _VersionRequested()
+                raise _VersionRequested
             if body == "no-color":
                 if value is not None:
                     _unknown_option(arg)
@@ -8976,7 +8977,8 @@ def parse_cli_args(argv: Sequence[str]) -> _CliOptions:
             if body in _VALUE_OPTIONS:
                 if value is None:
                     if index >= count:
-                        raise _CliUsageError(f"error: option '{_option_display(body)}' argument missing")
+                        msg = f"error: option '{_option_display(body)}' argument missing"
+                        raise _CliUsageError(msg)
                     value = argv[index]
                     index += 1
                 assign_value(body, value)
@@ -8988,9 +8990,9 @@ def parse_cli_args(argv: Sequence[str]) -> _CliOptions:
             while position < len(body):
                 short = body[position]
                 if short == "h":
-                    raise _HelpRequested()
+                    raise _HelpRequested
                 if short == "v":
-                    raise _VersionRequested()
+                    raise _VersionRequested
                 long_name = _SHORT_TO_LONG.get(short)
                 if long_name is None:
                     _unknown_option(f"-{short}")
@@ -8999,13 +9001,13 @@ def parse_cli_args(argv: Sequence[str]) -> _CliOptions:
                     position += 1
                     continue
                 attached = body[position + 1 :]
-                if attached.startswith("="):
-                    attached = attached[1:]
+                attached = attached.removeprefix("=")
                 if attached:
                     value = attached
                 else:
                     if index >= count:
-                        raise _CliUsageError(f"error: option '{_option_display(long_name)}' argument missing")
+                        msg = f"error: option '{_option_display(long_name)}' argument missing"
+                        raise _CliUsageError(msg)
                     value = argv[index]
                     index += 1
                 assign_value(long_name, value)

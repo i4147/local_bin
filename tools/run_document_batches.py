@@ -22,14 +22,13 @@ DEST = ROOT / "documented"
 def strip_docs_and_annotations(tree: ast.AST) -> ast.AST:
     """Remove documentation-only AST fields for behavior-preservation checks."""
     for node in ast.walk(tree):
-        if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
-            if (
-                node.body
-                and isinstance(node.body[0], ast.Expr)
-                and isinstance(node.body[0].value, ast.Constant)
-                and isinstance(node.body[0].value.value, str)
-            ):
-                node.body = node.body[1:]
+        if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)) and (
+            node.body
+            and isinstance(node.body[0], ast.Expr)
+            and isinstance(node.body[0].value, ast.Constant)
+            and isinstance(node.body[0].value.value, str)
+        ):
+            node.body = node.body[1:]
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             node.returns = None
             for arg in [*node.args.posonlyargs, *node.args.args, *node.args.kwonlyargs]:
@@ -63,7 +62,7 @@ def process_batch(paths: list[Path], batch_num: int) -> tuple[str, list[str]]:
         before_tree = ast.parse(original, filename=str(path))
         docs_before = public_documented_count(before_tree)
         module_doc_before = bool(ast.get_docstring(before_tree))
-        doc_count, annotation_count, unclear = document_sources.process(path)
+        _doc_count, annotation_count, unclear = document_sources.process(path)
         output_path = DEST / path.name
         output = output_path.read_text(encoding="utf-8")
         after_tree = ast.parse(output, filename=str(output_path))
@@ -73,7 +72,8 @@ def process_batch(paths: list[Path], batch_num: int) -> tuple[str, list[str]]:
             strip_docs_and_annotations(ast.parse(output)), include_attributes=False
         )
         if not unchanged:
-            raise RuntimeError(f"non-documentation AST change found in {path.name}")
+            msg = f"non-documentation AST change found in {path.name}"
+            raise RuntimeError(msg)
         details.append(
             f"- `{path.name}` — {docs_added} public symbols documented; {module_doc_added} module docstring(s); {annotation_count} annotations; 0 inline comments."
         )

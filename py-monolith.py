@@ -80,7 +80,6 @@ Design notes
 """
 
 from __future__ import annotations
-import argparse
 import base64
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -91,7 +90,7 @@ import re
 import ssl
 import sys
 from types import SimpleNamespace
-from typing import Annotated, Callable
+from typing import TYPE_CHECKING, Annotated, Callable
 import urllib.error
 from urllib.parse import urljoin
 import urllib.request
@@ -100,10 +99,14 @@ import click
 import typer
 
 
+if TYPE_CHECKING:
+    import argparse
+
+
 def _version_callback(value: bool) -> None:
     if value:
         typer.echo("monolith.py 2.0.0")
-        raise typer.Exit()
+        raise typer.Exit
 
 
 _STATE: dict[str, object] = {}
@@ -137,7 +140,7 @@ class _ParserShim:
         typer.echo(click.get_current_context().get_usage(), file=file)
 
 
-__all__ = ["Monolith", "FetchResult", "AssetFetchError", "default_fetcher"]
+__all__ = ["AssetFetchError", "FetchResult", "Monolith", "default_fetcher"]
 
 # Register a few MIME types that the stdlib doesn't know by default.
 mimetypes.add_type("font/woff", ".woff")

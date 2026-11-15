@@ -265,7 +265,8 @@ class Source:
         out, cur = [], 0
         for start, end, new in sorted(self.edits, key=lambda e: (e[0], e[1])):
             if start < cur:
-                raise ConversionError("internal error: overlapping edits")
+                msg = "internal error: overlapping edits"
+                raise ConversionError(msg)
             out.append(self.data[cur:start])
             out.append(new.encode())
             cur = end
@@ -599,9 +600,11 @@ def str_literal(node) -> str | None:
 def locate_parser(tree: ast.Module) -> Loc:
     total = sum(1 for n in ast.walk(tree) if is_parser_ctor(n))
     if total == 0:
-        raise ConversionError("no argparse.ArgumentParser(...) found - nothing to convert")
+        msg = "no argparse.ArgumentParser(...) found - nothing to convert"
+        raise ConversionError(msg)
     if total > 1:
-        raise ConversionError("more than one ArgumentParser is not supported")
+        msg = "more than one ArgumentParser is not supported"
+        raise ConversionError(msg)
     owners: list[ast.AST] = [tree]
     owners += [n for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
     owners += [n for n in tree.body if is_main_guard(n)]
@@ -614,10 +617,11 @@ def locate_parser(tree: ast.Module) -> Loc:
                 and isinstance(st.targets[0], ast.Name)
             ):
                 return Loc(owner, owner.body, st)
-    raise ConversionError(
+    msg = (
         "ArgumentParser(...) must be assigned to a plain variable at the top level of a function, "
         "the __main__ block or the module"
     )
+    raise ConversionError(msg)
 
 
 def analyze(loc: Loc, ctx: Ctx) -> Analysis:
@@ -661,7 +665,8 @@ def analyze(loc: Loc, ctx: Ctx) -> Analysis:
                     continue
                 if f.attr == "add_subparsers" and ref.kind == "parser":
                     if ref.cmd is not root:
-                        raise ConversionError("nested sub-parsers are not supported")
+                        msg = "nested sub-parsers are not supported"
+                        raise ConversionError(msg)
                     kws = {k.arg: k.value for k in call.keywords if k.arg}
                     an.sub_dest = str_literal(kws.get("dest"))
                     root.has_subparsers = True
@@ -672,7 +677,8 @@ def analyze(loc: Loc, ctx: Ctx) -> Analysis:
                     kws = {k.arg: k.value for k in call.keywords if k.arg}
                     name = str_literal(call.args[0]) if call.args else None
                     if name is None:
-                        raise ConversionError(f"line {st.lineno}: add_parser() needs a literal name")
+                        msg = f"line {st.lineno}: add_parser() needs a literal name"
+                        raise ConversionError(msg)
                     sub = Cmd(
                         name=name,
                         node=st,
@@ -873,7 +879,7 @@ def plan_inline(tree, src: Source, loc: Loc, an: Analysis) -> InlinePlan | str:
             and isinstance(e.value, ast.Call)
             and dotted(e.value.func) in {"sys.exit", "exit", "quit"}
         ) or (isinstance(e, ast.Raise) and isinstance(e.exc, ast.Call) and dotted(e.exc.func) == "SystemExit")
-        m = re.compile(r"(?:async\s+)?def\s+\w+\s*\([^)]*\)\s*(->[^:]*?)?\s*:", re.S).match(
+        m = re.compile(r"(?:async\s+)?def\s+\w+\s*\([^)]*\)\s*(->[^:]*?)?\s*:", re.DOTALL).match(
             src.data[src.start(owner) :].decode()
         )
         if not m:
@@ -1029,10 +1035,11 @@ def apply_bridge(tree, src: Source, ctx: Ctx, loc: Loc, an: Analysis, reason: st
     "Apply bridge."
     entry = find_entry(tree)
     if loc.owner is tree or entry is None:
-        raise ConversionError(
+        msg = (
             f"unsupported layout ({reason}). Move the parser into a function (or the __main__ block) "
             "so it can be converted."
         )
+        raise ConversionError(msg)
     ctx.need("SimpleNamespace", "click")
     ctx.extra_defs.append(BRIDGE_DEFS)
     creation = an.creation
@@ -1044,7 +1051,8 @@ def apply_bridge(tree, src: Source, ctx: Ctx, loc: Loc, an: Analysis, reason: st
     block = "\n\n" + render_bridge(ctx, an, run)
     if kind == "guard":
         if node.body[0].lineno <= node.lineno:
-            raise ConversionError("one-line __main__ block is not supported")
+            msg = "one-line __main__ block is not supported"
+            raise ConversionError(msg)
         src.replace(src.line_start(node.lineno), src.line_start(node.body[0].lineno), f"def {run}() -> None:\n")
         src.after_line(node.end_lineno, block)
     else:
@@ -1155,7 +1163,8 @@ def finalize(text: str, ctx: Ctx) -> str:
     try:
         ast.parse(result)
     except SyntaxError as exc:
-        raise ConversionError(f"internal error - generated code is not valid Python ({exc})") from exc
+        msg = f"internal error - generated code is not valid Python ({exc})"
+        raise ConversionError(msg) from exc
     return result
 
 
@@ -1163,7 +1172,8 @@ def convert(text: str) -> tuple[str, list[str]]:
     tree = ast.parse(text)
     for n in ast.walk(tree):
         if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and n.func.attr in UNSUPPORTED_PARSE:
-            raise ConversionError(f"line {n.lineno}: {n.func.attr}() has no Typer equivalent")
+            msg = f"line {n.lineno}: {n.func.attr}() has no Typer equivalent"
+            raise ConversionError(msg)
     src = Source(text)
     ctx = Ctx(src, tree)
     loc = locate_parser(tree)

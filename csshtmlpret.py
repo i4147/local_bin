@@ -21,7 +21,7 @@ import typer
 def _version_callback(value: bool) -> None:
     if value:
         typer.echo("1.4.7")
-        raise typer.Exit()
+        raise typer.Exit
 
 
 try:

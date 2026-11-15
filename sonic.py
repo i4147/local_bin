@@ -4,6 +4,7 @@
 
 import argparse
 from collections import Counter
+import contextlib
 import csv
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -45,7 +46,7 @@ class Output_format(StrEnum):
 def _version_callback(value: bool) -> None:
     if value:
         typer.echo(f"%(prog)s {VERSION}")
-        raise typer.Exit()
+        raise typer.Exit
 
 
 _STATE: dict[str, object] = {}
@@ -101,7 +102,7 @@ def fsz(size: float) -> str:
 
 
 class _CountingIterator(Iterator[str]):
-    __slots__ = ("count", "_iterator")
+    __slots__ = ("_iterator", "count")
 
     def __init__(self, iterator: Iterator[str]) -> None:
         "Initialize the instance state from the supplied arguments."
@@ -223,8 +224,9 @@ class SortKeyFactory:
             try:
                 _locale_module.setlocale(_locale_module.LC_COLLATE, locale_name)
             except _locale_module.Error as exc:
-                raise ValueError(f"invalid locale {locale_name!r}: {exc}") from exc
-        self._effective_field = dedupe_by_key if dedupe_by_key else field
+                msg = f"invalid locale {locale_name!r}: {exc}"
+                raise ValueError(msg) from exc
+        self._effective_field = dedupe_by_key or field
         self._has_modifiers = any((ignore_case, ignore_blanks, dictionary, self._effective_field))
 
     def _extract(self, line: str) -> str:
@@ -310,19 +312,18 @@ class LineReader(LineProcessor):
         if size == 0:
             return
         self.log(f"Reading {path} ({fsz(size)}) via mmap")
-        with path.open("rb") as handle:
-            with mmap.mmap(handle.fileno(), 0, access=mmap.ACCESS_READ) as mapped:
-                offset = 0
-                length = len(mapped)
-                while offset < length:
-                    newline = mapped.find(b"\n", offset)
-                    end = length if newline < 0 else newline
-                    raw = mapped[offset:end]
-                    offset = length if newline < 0 else newline + 1
-                    try:
-                        yield raw.decode(encoding).rstrip("\r\n")
-                    except UnicodeDecodeError as exc:
-                        self.log(f"Encoding error near offset {offset}: {exc}")
+        with path.open("rb") as handle, mmap.mmap(handle.fileno(), 0, access=mmap.ACCESS_READ) as mapped:
+            offset = 0
+            length = len(mapped)
+            while offset < length:
+                newline = mapped.find(b"\n", offset)
+                end = length if newline < 0 else newline
+                raw = mapped[offset:end]
+                offset = length if newline < 0 else newline + 1
+                try:
+                    yield raw.decode(encoding).rstrip("\r\n")
+                except UnicodeDecodeError as exc:
+                    self.log(f"Encoding error near offset {offset}: {exc}")
 
     def _read_regular(self, path: Path, encoding: str) -> Iterator[str]:
         self.log(f"Reading {path} (regular mode)")
@@ -338,7 +339,8 @@ class LineReader(LineProcessor):
             else:
                 yield from self._read_regular(path, encoding)
         except OSError as exc:
-            raise OSError(f"unable to read {path}") from exc
+            msg = f"unable to read {path}"
+            raise OSError(msg) from exc
 
     def read_stdin(self, encoding: str = "utf-8") -> Iterator[str]:
         "Read stdin."
@@ -512,10 +514,8 @@ class LineSorter(LineProcessor):
     @staticmethod
     def cleanup_temp_files(temp_files: Iterable[Path]) -> None:
         for temp_file in temp_files:
-            try:
+            with contextlib.suppress(OSError):
                 temp_file.unlink(missing_ok=True)
-            except OSError:
-                pass
 
 
 def _format_group_line(line: str, count: int, show_count: bool) -> str:
@@ -865,7 +865,8 @@ class FileSorter(LineProcessor):
         "Process file."
         input_path = Path(path) if path != "-" else None
         if input_path is not None and not input_path.exists():
-            raise FileNotFoundError(f"input file not found: {input_path}")
+            msg = f"input file not found: {input_path}"
+            raise FileNotFoundError(msg)
         output = output_path or ("-" if path == "-" else path)
         original_size = self.get_file_size(input_path) if input_path else 0
         start_time = time.monotonic()
@@ -999,17 +1000,15 @@ class FileSorter(LineProcessor):
             )
         finally:
             if merge_gen is not None:
-                try:
+                with contextlib.suppress(Exception):
                     merge_gen.close()
-                except Exception:
-                    pass
             if temp_files:
                 LineSorter.cleanup_temp_files(temp_files)
         elapsed = time.monotonic() - start_time
 
         stats.update({
             "final_lines": final_counter.count,
-            "after_bytes": written_bytes if written_bytes >= 0 else 0,
+            "after_bytes": max(written_bytes, 0),
             "after": fsz(written_bytes) if written_bytes >= 0 else "n/a",
             "processing_time": elapsed,
         })
@@ -1334,8 +1333,7 @@ class FileAnalyzer(LineProcessor):
             total += 1
             length = len(line)
             total_length += length
-            if length > max_length:
-                max_length = length
+            max_length = max(max_length, length)
         duplicates = total - len(counter)
         return {
             "file": str(path),

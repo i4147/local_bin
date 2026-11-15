@@ -25,7 +25,7 @@ import typer
 def _version_callback(value: bool) -> None:
     if value:
         typer.echo(f"scaffold {SCAFFOLD_VERSION}")
-        raise typer.Exit()
+        raise typer.Exit
 
 
 class Readme_format(StrEnum):
@@ -305,14 +305,16 @@ def github_request(
             return json.loads(body) if body else {}
     except urllib.error.HTTPError as e:
         detail: str = e.read().decode(errors="replace")
-        raise SystemExit(f"GitHub API error {e.code} on {method} {url}:\n{detail}") from e
+        msg = f"GitHub API error {e.code} on {method} {url}:\n{detail}"
+        raise SystemExit(msg) from e
 
 
 def get_github_token(env_var: str) -> str:
     "Return github token."
     token: str | None = os.environ.get(env_var)
     if not token:
-        raise SystemExit(f"{env_var} not found. Add it to {ENV_PATH} or export it, e.g.\n    {env_var}=ghp_xxx")
+        msg = f"{env_var} not found. Add it to {ENV_PATH} or export it, e.g.\n    {env_var}=ghp_xxx"
+        raise SystemExit(msg)
     return token
 
 
@@ -676,9 +678,9 @@ def render_test(cfg: ProjectConfig) -> str:
 
 def render_license(cfg: ProjectConfig) -> str:
     "Render license."
-    import datetime
+    import datetime as dt
 
-    year = datetime.date.today().year
+    year = dt.date.today().year
     author = cfg.author or "The Authors"
     if cfg.license == "MIT":
         return MIT_LICENSE.format(year=year, author=author)
@@ -881,9 +883,11 @@ def render_files(cfg: ProjectConfig) -> dict[Path, str]:
 def validate_name(name: str, *, strict: bool = True) -> None:
     "Validate name."
     if not name.isidentifier():
-        raise SystemExit(f"Error: {name!r} is not a valid Python identifier")
+        msg = f"Error: {name!r} is not a valid Python identifier"
+        raise SystemExit(msg)
     if strict and name.lower() in RESERVED_NAMES:
-        raise SystemExit(f"Error: {name!r} is a reserved name; choose another")
+        msg = f"Error: {name!r} is a reserved name; choose another"
+        raise SystemExit(msg)
 
 
 def check_pypi_availability(name: str) -> bool:
@@ -912,7 +916,8 @@ def check_git_clean(cwd: Path) -> None:
             text=True,
         )
     except FileNotFoundError:
-        raise SystemExit("Error: git not installed")
+        msg = "Error: git not installed"
+        raise SystemExit(msg)
     if out.returncode == 0 and out.stdout.strip() == "true":
         status = subprocess.run(
             ["git", "status", "--porcelain"],
@@ -922,7 +927,8 @@ def check_git_clean(cwd: Path) -> None:
             check=True,
         ).stdout
         if status.strip():
-            raise SystemExit("Error: git working tree is not clean")
+            msg = "Error: git working tree is not clean"
+            raise SystemExit(msg)
 
 
 def scaffold_project(cfg: ProjectConfig, *, force: bool, dry_run: bool, quiet: bool) -> dict[str, Any]:
@@ -932,7 +938,7 @@ def scaffold_project(cfg: ProjectConfig, *, force: bool, dry_run: bool, quiet: b
     skipped: list[Path] = []
     if dry_run:
         print(f"[dry-run] Would create project at {root}")
-        for rel, _ in files.items():
+        for rel in files:
             print(f"[dry-run]   + {rel}")
         return {"root": str(root), "created": [], "skipped": [], "github_url": None}
     root.mkdir(parents=True, exist_ok=True)
@@ -1000,7 +1006,8 @@ def rename_tree(root: Path, old: str, new: str) -> None:
             target = entry.with_name(f"{new}{entry.suffix}")
         if target is not None:
             if target.exists():
-                raise SystemExit(f"Error: cannot rename {entry} -> {target}: target exists")
+                msg = f"Error: cannot rename {entry} -> {target}: target exists"
+                raise SystemExit(msg)
             entry.rename(target)
             entry = target
         if entry.is_dir():
@@ -1341,18 +1348,20 @@ def main(argv: list[str] | None = None) -> int:
     validate_name(args.pkgname)
     if args.require_git_clean:
         check_git_clean(Path.cwd())
-    if args.check_pypi:
-        if not check_pypi_availability(args.pkgname):
-            print(f"Warning: PyPI name {args.pkgname!r} is already taken", file=sys.stderr)
+    if args.check_pypi and not check_pypi_availability(args.pkgname):
+        print(f"Warning: PyPI name {args.pkgname!r} is already taken", file=sys.stderr)
 
     cfg: ProjectConfig = build_config_from_args(args)
 
     if cfg.layout == "cython" and cfg.backend != "setuptools":
-        raise SystemExit("Error: cython layouts require --build-backend setuptools")
+        msg = "Error: cython layouts require --build-backend setuptools"
+        raise SystemExit(msg)
     if cfg.layout == "single" and cfg.backend not in VALID_BACKENDS:
-        raise SystemExit(f"Error: unknown backend {cfg.backend!r}")
+        msg = f"Error: unknown backend {cfg.backend!r}"
+        raise SystemExit(msg)
     if cfg.initial_tag and not cfg.do_git:
-        raise SystemExit("Error: --initial-tag requires -g/--git")
+        msg = "Error: --initial-tag requires -g/--git"
+        raise SystemExit(msg)
 
     if args.interactive and not cfg.do_git:
         pass
@@ -1384,6 +1393,7 @@ def main(argv: list[str] | None = None) -> int:
     if cfg.do_git:
         token = get_github_token(cfg.token_env)
         user = get_
+    return None
 
 
 def _run() -> None:
@@ -1486,7 +1496,8 @@ def cli(
         ))
         > 1
     ):
-        raise typer.BadParameter("-s, -c, --cython-package are mutually exclusive")
+        msg = "-s, -c, --cython-package are mutually exclusive"
+        raise typer.BadParameter(msg)
     if (
         sum((
             bool(cli),
@@ -1494,7 +1505,8 @@ def cli(
         ))
         > 1
     ):
-        raise typer.BadParameter("--cli, --no-cli are mutually exclusive")
+        msg = "--cli, --no-cli are mutually exclusive"
+        raise typer.BadParameter(msg)
     if (
         sum((
             bool(tests),
@@ -1502,7 +1514,8 @@ def cli(
         ))
         > 1
     ):
-        raise typer.BadParameter("--tests, --no-tests are mutually exclusive")
+        msg = "--tests, --no-tests are mutually exclusive"
+        raise typer.BadParameter(msg)
     if (
         sum((
             bool(pre_commit),
@@ -1510,21 +1523,29 @@ def cli(
         ))
         > 1
     ):
-        raise typer.BadParameter("--pre-commit, --no-pre-commit are mutually exclusive")
+        msg = "--pre-commit, --no-pre-commit are mutually exclusive"
+        raise typer.BadParameter(msg)
     if license is not None and license not in VALID_LICENSES:
-        raise typer.BadParameter(f"invalid choice: {license!r} (choose from {VALID_LICENSES})")
+        msg = f"invalid choice: {license!r} (choose from {VALID_LICENSES})"
+        raise typer.BadParameter(msg)
     if backend is not None and backend not in VALID_BACKENDS:
-        raise typer.BadParameter(f"invalid choice: {backend!r} (choose from {VALID_BACKENDS})")
+        msg = f"invalid choice: {backend!r} (choose from {VALID_BACKENDS})"
+        raise typer.BadParameter(msg)
     if layout is not None and layout not in VALID_LAYOUTS:
-        raise typer.BadParameter(f"invalid choice: {layout!r} (choose from {VALID_LAYOUTS})")
+        msg = f"invalid choice: {layout!r} (choose from {VALID_LAYOUTS})"
+        raise typer.BadParameter(msg)
     if cli_framework is not None and cli_framework not in VALID_CLI:
-        raise typer.BadParameter(f"invalid choice: {cli_framework!r} (choose from {VALID_CLI})")
+        msg = f"invalid choice: {cli_framework!r} (choose from {VALID_CLI})"
+        raise typer.BadParameter(msg)
     if tests_framework is not None and tests_framework not in VALID_TEST_FRAMEWORKS:
-        raise typer.BadParameter(f"invalid choice: {tests_framework!r} (choose from {VALID_TEST_FRAMEWORKS})")
+        msg = f"invalid choice: {tests_framework!r} (choose from {VALID_TEST_FRAMEWORKS})"
+        raise typer.BadParameter(msg)
     if docs is not None and docs not in VALID_DOCS:
-        raise typer.BadParameter(f"invalid choice: {docs!r} (choose from {VALID_DOCS})")
+        msg = f"invalid choice: {docs!r} (choose from {VALID_DOCS})"
+        raise typer.BadParameter(msg)
     if ci is not None and ci not in VALID_CI:
-        raise typer.BadParameter(f"invalid choice: {ci!r} (choose from {VALID_CI})")
+        msg = f"invalid choice: {ci!r} (choose from {VALID_CI})"
+        raise typer.BadParameter(msg)
     _STATE.update(
         pkgname=pkgname,
         rename=rename,

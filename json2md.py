@@ -66,7 +66,8 @@ def parse_header(value: str) -> tuple[str, str]:
     """Parse a --header argument in PATH=LABEL form."""
     path, separator, label = value.partition("=")
     if not separator or not path or not label:
-        raise argparse.ArgumentTypeError("headers must use PATH=LABEL, for example user.name=User")
+        msg = "headers must use PATH=LABEL, for example user.name=User"
+        raise argparse.ArgumentTypeError(msg)
     return path, label
 
 

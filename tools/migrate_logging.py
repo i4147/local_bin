@@ -28,9 +28,8 @@ def main() -> None:
     for p in sorted(ROOT.glob("*.py")):
         if p.is_symlink() or not p.is_file():
             continue
-        if "import logging" in p.read_text(encoding="utf-8", errors="ignore"):
-            if migrate_logging_in_file(p):
-                changed.append(p.name)
+        if "import logging" in p.read_text(encoding="utf-8", errors="ignore") and migrate_logging_in_file(p):
+            changed.append(p.name)
     print(f"Migrated logging in {len(changed)} files: {', '.join(changed)}")
 
 

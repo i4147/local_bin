@@ -62,7 +62,6 @@ Typical usage::
 """
 
 from __future__ import annotations
-import argparse
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass, replace
 from datetime import datetime
@@ -78,17 +77,21 @@ import tarfile
 import textwrap
 import time
 from types import ModuleType, SimpleNamespace
-from typing import Annotated, Callable, Iterable, Iterator, Sequence
+from typing import TYPE_CHECKING, Annotated, Callable, Iterable, Iterator, Sequence
 
 import click
 from loguru import logger
 import typer
 
 
+if TYPE_CHECKING:
+    import argparse
+
+
 def _version_callback(value: bool) -> None:
     if value:
         typer.echo(f"%(prog)s {__version__}")
-        raise typer.Exit()
+        raise typer.Exit
 
 
 class Report(StrEnum):
@@ -624,7 +627,8 @@ def _lzma_dechunk(data: bytes, count: int) -> bytes:
         parts.append(lzma.decompress(data[offset : offset + length]))
         offset += length
     if offset != len(data):
-        raise ValueError("trailing bytes after last chunk")
+        msg = "trailing bytes after last chunk"
+        raise ValueError(msg)
     return b"".join(parts)
 
 
@@ -657,14 +661,16 @@ SEVEN_Z_FILTERS: dict[str, int] = {
 def compress_bytes_7z(data: bytes) -> bytes:
     """Compress *data* with ``pylzma`` (7-Zip LZMA), raising if unavailable."""
     if _PYLZMA is None:
-        raise BackendUnavailableError("backend '7z' requires the optional 'pylzma' package (pip install pylzma)")
+        msg = "backend '7z' requires the optional 'pylzma' package (pip install pylzma)"
+        raise BackendUnavailableError(msg)
     return _PYLZMA.compress(data, **SEVEN_Z_FILTERS)
 
 
 def decompress_bytes_7z(data: bytes) -> bytes:
     """Decompress ``pylzma`` produced data, raising if unavailable."""
     if _PYLZMA is None:
-        raise BackendUnavailableError("decompressing '.7z' requires the optional 'pylzma' package (pip install pylzma)")
+        msg = "decompressing '.7z' requires the optional 'pylzma' package (pip install pylzma)"
+        raise BackendUnavailableError(msg)
     return _PYLZMA.decompress(data)
 
 
@@ -699,7 +705,8 @@ def verify_tar_xz(archive: Path) -> list[str]:
             if member.isfile():
                 handle = tar.extractfile(member)
                 if handle is None:
-                    raise OSError(f"cannot read member: {member.name}")
+                    msg = f"cannot read member: {member.name}"
+                    raise OSError(msg)
                 while handle.read(COPY_CHUNK):
                     pass
         return names
@@ -803,7 +810,8 @@ def compress_file(path: Path, opts: Options) -> FileResult:
             target.write_bytes(payload)
             result_size = len(payload)
         else:
-            raise ValueError(f"unknown backend: {opts.backend}")
+            msg = f"unknown backend: {opts.backend}"
+            raise ValueError(msg)
     except BackendUnavailableError as exc:
         return result("error", str(exc))
     except Exception as exc:  # noqa: BLE001 - reported per file, like the originals
@@ -889,7 +897,8 @@ def decompress_file(path: Path, opts: Options) -> FileResult:
         elif kind in ("7z", "tar.7z"):
             payload = decompress_bytes_7z(path.read_bytes())
         else:  # pragma: no cover - kind is always one of the above
-            raise ValueError(f"unknown kind: {kind}")
+            msg = f"unknown kind: {kind}"
+            raise ValueError(msg)
         if to_dir:
             _extract_tar_dir(payload, stem, parent)
         else:
@@ -943,15 +952,18 @@ def _archive_job(args: tuple[Path, Options]) -> SubdirResult:
     original = 0
     try:
         if not subdir.is_dir():
-            raise NotADirectoryError(f"source directory missing: {subdir}")
+            msg = f"source directory missing: {subdir}"
+            raise NotADirectoryError(msg)
         if target.exists():
-            raise FileExistsError(f"refusing to overwrite existing archive: {target.name}")
+            msg = f"refusing to overwrite existing archive: {target.name}"
+            raise FileExistsError(msg)
         original = dir_size(subdir)
         make_tar_xz(subdir, target, preset=opts.preset)
         created = True
         compressed = target.stat().st_size
         if compressed <= 0:
-            raise OSError("created archive is empty")
+            msg = "created archive is empty"
+            raise OSError(msg)
         if opts.verify:
             verify_tar_xz(target)
         if not opts.keep_original:
@@ -1157,12 +1169,15 @@ def pack_directory(root: Path, opts: Options) -> Path:
     """
     root = root.resolve()
     if not root.is_dir():
-        raise NotADirectoryError(f"not a directory: {root}")
+        msg = f"not a directory: {root}"
+        raise NotADirectoryError(msg)
     if root == root.parent:
-        raise ValueError("refusing to pack the filesystem root")
+        msg = "refusing to pack the filesystem root"
+        raise ValueError(msg)
     archive = root.parent / (root.name + ".tar.xz")
     if archive.exists():
-        raise FileExistsError(f"archive already exists: {archive}")
+        msg = f"archive already exists: {archive}"
+        raise FileExistsError(msg)
 
     files: list[Path] = []
     for path in root.rglob("*"):
@@ -1173,7 +1188,8 @@ def pack_directory(root: Path, opts: Options) -> Path:
         if path.is_file():
             files.append(path)
     if not files:
-        raise RuntimeError(f"no files found to archive in: {root}")
+        msg = f"no files found to archive in: {root}"
+        raise RuntimeError(msg)
     files.sort()
 
     prefix = root.name
@@ -1186,15 +1202,18 @@ def pack_directory(root: Path, opts: Options) -> Path:
 
     try:
         if archive.stat().st_size <= 0:
-            raise OSError("created archive is empty")
+            msg = "created archive is empty"
+            raise OSError(msg)
         with tarfile.open(archive, "r:xz") as tar:
             names = tar.getnames()
         expected_prefix = f"{prefix}/"
         outsiders = [n for n in names if not n.startswith(expected_prefix)]
         if outsiders:
-            raise RuntimeError(f"archive contains members outside '{expected_prefix}': {outsiders[:5]}")
+            msg = f"archive contains members outside '{expected_prefix}': {outsiders[:5]}"
+            raise RuntimeError(msg)
         if len(names) != len(files):
-            raise RuntimeError(f"archive member count mismatch: expected {len(files)}, found {len(names)}")
+            msg = f"archive member count mismatch: expected {len(files)}, found {len(names)}"
+            raise RuntimeError(msg)
     except Exception:
         archive.unlink(missing_ok=True)
         raise
@@ -1526,9 +1545,11 @@ def cmd_compress(
     verbose: Annotated[bool, typer.Option("-v", "--verbose", help="chatty output")] = False,
 ) -> None:
     if backend is not None and backend not in sorted(BACKEND_SUFFIX):
-        raise typer.BadParameter(f"invalid choice: {backend!r} (choose from {sorted(BACKEND_SUFFIX)})")
+        msg = f"invalid choice: {backend!r} (choose from {sorted(BACKEND_SUFFIX)})"
+        raise typer.BadParameter(msg)
     if preset is not None and preset not in range(10):
-        raise typer.BadParameter(f"invalid choice: {preset!r} (choose from {range(10)})")
+        msg = f"invalid choice: {preset!r} (choose from {range(10)})"
+        raise typer.BadParameter(msg)
     _STATE.update(
         root=root,
         backend=backend,
@@ -1605,7 +1626,8 @@ def cmd_archive(
     verbose: Annotated[bool, typer.Option("-v", "--verbose", help="chatty output")] = False,
 ) -> None:
     if preset is not None and preset not in range(10):
-        raise typer.BadParameter(f"invalid choice: {preset!r} (choose from {range(10)})")
+        msg = f"invalid choice: {preset!r} (choose from {range(10)})"
+        raise typer.BadParameter(msg)
     _STATE.update(
         root=root,
         preset=preset,
@@ -1628,7 +1650,8 @@ def cmd_pack(
     verbose: Annotated[bool, typer.Option("-v", "--verbose", help="chatty output")] = False,
 ) -> None:
     if preset is not None and preset not in range(10):
-        raise typer.BadParameter(f"invalid choice: {preset!r} (choose from {range(10)})")
+        msg = f"invalid choice: {preset!r} (choose from {range(10)})"
+        raise typer.BadParameter(msg)
     _STATE.update(root=root, preset=preset, verbose=verbose, command="pack", handler=_cmd_pack)
     _run()
 

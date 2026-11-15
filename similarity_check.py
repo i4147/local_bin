@@ -9,6 +9,7 @@ import difflib
 import hashlib
 import html
 import io
+import itertools
 import json
 import keyword
 import math
@@ -25,51 +26,475 @@ import typer
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
-STOPWORDS = frozenset(
-    """a about above after again against all also am an and any are as at be
-    because been before being below between both but by can cannot could did do
-    does doing down during each few for from further had has have having he her
-    here hers herself him himself his how i if in into is it its itself just me
-    more most my myself no nor not now of off on once only or other our ours
-    ourselves out over own same she should so some such than that the their
-    theirs them themselves then there these they this those through to too under
-    until up very was we were what when where which while who whom why will with
-    would you your yours yourself yourselves
-    args argv arg argument arguments call called code command commands data
-    default defaults file filename files function functions get help import
-    input line lines list main module name names none null option options output
-    path paths print program return returns run script scripts self set str
-    string strings sys true false type types use used user value values var
-    version versions via working work your cli tool tools utility utils
-    com termux usr local home data files env python3 python env bin sbin opt tmp
-    etc dev var coding utf indent expandtab tabstop shiftwidth fileencoding
-    http https www html wwwwww newline endcode operator todo note fixme
-    """.split()
-)
+STOPWORDS = frozenset([
+    "a",
+    "about",
+    "above",
+    "after",
+    "again",
+    "against",
+    "all",
+    "also",
+    "am",
+    "an",
+    "and",
+    "any",
+    "are",
+    "as",
+    "at",
+    "be",
+    "because",
+    "been",
+    "before",
+    "being",
+    "below",
+    "between",
+    "both",
+    "but",
+    "by",
+    "can",
+    "cannot",
+    "could",
+    "did",
+    "do",
+    "does",
+    "doing",
+    "down",
+    "during",
+    "each",
+    "few",
+    "for",
+    "from",
+    "further",
+    "had",
+    "has",
+    "have",
+    "having",
+    "he",
+    "her",
+    "here",
+    "hers",
+    "herself",
+    "him",
+    "himself",
+    "his",
+    "how",
+    "i",
+    "if",
+    "in",
+    "into",
+    "is",
+    "it",
+    "its",
+    "itself",
+    "just",
+    "me",
+    "more",
+    "most",
+    "my",
+    "myself",
+    "no",
+    "nor",
+    "not",
+    "now",
+    "of",
+    "off",
+    "on",
+    "once",
+    "only",
+    "or",
+    "other",
+    "our",
+    "ours",
+    "ourselves",
+    "out",
+    "over",
+    "own",
+    "same",
+    "she",
+    "should",
+    "so",
+    "some",
+    "such",
+    "than",
+    "that",
+    "the",
+    "their",
+    "theirs",
+    "them",
+    "themselves",
+    "then",
+    "there",
+    "these",
+    "they",
+    "this",
+    "those",
+    "through",
+    "to",
+    "too",
+    "under",
+    "until",
+    "up",
+    "very",
+    "was",
+    "we",
+    "were",
+    "what",
+    "when",
+    "where",
+    "which",
+    "while",
+    "who",
+    "whom",
+    "why",
+    "will",
+    "with",
+    "would",
+    "you",
+    "your",
+    "yours",
+    "yourself",
+    "yourselves",
+    "args",
+    "argv",
+    "arg",
+    "argument",
+    "arguments",
+    "call",
+    "called",
+    "code",
+    "command",
+    "commands",
+    "data",
+    "default",
+    "defaults",
+    "file",
+    "filename",
+    "files",
+    "function",
+    "functions",
+    "get",
+    "help",
+    "import",
+    "input",
+    "line",
+    "lines",
+    "list",
+    "main",
+    "module",
+    "name",
+    "names",
+    "none",
+    "null",
+    "option",
+    "options",
+    "output",
+    "path",
+    "paths",
+    "print",
+    "program",
+    "return",
+    "returns",
+    "run",
+    "script",
+    "scripts",
+    "self",
+    "set",
+    "str",
+    "string",
+    "strings",
+    "sys",
+    "true",
+    "false",
+    "type",
+    "types",
+    "use",
+    "used",
+    "user",
+    "value",
+    "values",
+    "var",
+    "version",
+    "versions",
+    "via",
+    "working",
+    "work",
+    "your",
+    "cli",
+    "tool",
+    "tools",
+    "utility",
+    "utils",
+    "com",
+    "termux",
+    "usr",
+    "local",
+    "home",
+    "data",
+    "files",
+    "env",
+    "python3",
+    "python",
+    "env",
+    "bin",
+    "sbin",
+    "opt",
+    "tmp",
+    "etc",
+    "dev",
+    "var",
+    "coding",
+    "utf",
+    "indent",
+    "expandtab",
+    "tabstop",
+    "shiftwidth",
+    "fileencoding",
+    "http",
+    "https",
+    "www",
+    "html",
+    "wwwwww",
+    "newline",
+    "endcode",
+    "operator",
+    "todo",
+    "note",
+    "fixme",
+])
 
-GENERIC_STEM_TOKENS = frozenset(
-    """to from into and the a an of for with by on in at is are new old v1 v2 v3
-    py python simple fast auto mini test tests tools tool utils util utility
-    cli x xx extra super better best small big my run runner file files dir dirs
-    the2 s es er ing ed 2 3 4 5 10 one two three
-    """.split()
-)
+GENERIC_STEM_TOKENS = frozenset([
+    "to",
+    "from",
+    "into",
+    "and",
+    "the",
+    "a",
+    "an",
+    "of",
+    "for",
+    "with",
+    "by",
+    "on",
+    "in",
+    "at",
+    "is",
+    "are",
+    "new",
+    "old",
+    "v1",
+    "v2",
+    "v3",
+    "py",
+    "python",
+    "simple",
+    "fast",
+    "auto",
+    "mini",
+    "test",
+    "tests",
+    "tools",
+    "tool",
+    "utils",
+    "util",
+    "utility",
+    "cli",
+    "x",
+    "xx",
+    "extra",
+    "super",
+    "better",
+    "best",
+    "small",
+    "big",
+    "my",
+    "run",
+    "runner",
+    "file",
+    "files",
+    "dir",
+    "dirs",
+    "the2",
+    "s",
+    "es",
+    "er",
+    "ing",
+    "ed",
+    "2",
+    "3",
+    "4",
+    "5",
+    "10",
+    "one",
+    "two",
+    "three",
+])
 
-STEM_SEED = frozenset(
-    """to md js ts rs c cpp cc cc py ipynb txt csv json xml yaml yml toml ini cfg
-    sql sqlite db pdf png jpg jpeg gif webp svg img image images html htm css
-    lua rst srt vcf pkl whl tar zip xz gz bz2 rar 7z ttf otf woff woff2
-    url uri http https www web api cli gui ai ml nlp ocr tts wav mp3 mp4 mkv
-    avi mov vid video audio font fonts doc docs docx xls xlsx ppt pptx
-    git gh repo repos pip pypi pkg pkgs lib libs env venv req reqs txt
-    github gitlab gist ghpy dh log logs hash dup dedup dups dir size sizes
-    b64 base64 hex bin oct elf elf64 qr qrc em emoji utf ascii unicode
-    trans transwords translate translator langdict dic dict word words list
-    clean cleaner cleanup fmt format formatter pretty min minify strip stripper
-    rmc rmcts rmca rmcst eximports imports importz importtools
-    csv2json pkl2json sqltojson sqlite2json xml_yaml2json vcf2json
-    """.split()
-)
+STEM_SEED = frozenset([
+    "to",
+    "md",
+    "js",
+    "ts",
+    "rs",
+    "c",
+    "cpp",
+    "cc",
+    "cc",
+    "py",
+    "ipynb",
+    "txt",
+    "csv",
+    "json",
+    "xml",
+    "yaml",
+    "yml",
+    "toml",
+    "ini",
+    "cfg",
+    "sql",
+    "sqlite",
+    "db",
+    "pdf",
+    "png",
+    "jpg",
+    "jpeg",
+    "gif",
+    "webp",
+    "svg",
+    "img",
+    "image",
+    "images",
+    "html",
+    "htm",
+    "css",
+    "lua",
+    "rst",
+    "srt",
+    "vcf",
+    "pkl",
+    "whl",
+    "tar",
+    "zip",
+    "xz",
+    "gz",
+    "bz2",
+    "rar",
+    "7z",
+    "ttf",
+    "otf",
+    "woff",
+    "woff2",
+    "url",
+    "uri",
+    "http",
+    "https",
+    "www",
+    "web",
+    "api",
+    "cli",
+    "gui",
+    "ai",
+    "ml",
+    "nlp",
+    "ocr",
+    "tts",
+    "wav",
+    "mp3",
+    "mp4",
+    "mkv",
+    "avi",
+    "mov",
+    "vid",
+    "video",
+    "audio",
+    "font",
+    "fonts",
+    "doc",
+    "docs",
+    "docx",
+    "xls",
+    "xlsx",
+    "ppt",
+    "pptx",
+    "git",
+    "gh",
+    "repo",
+    "repos",
+    "pip",
+    "pypi",
+    "pkg",
+    "pkgs",
+    "lib",
+    "libs",
+    "env",
+    "venv",
+    "req",
+    "reqs",
+    "txt",
+    "github",
+    "gitlab",
+    "gist",
+    "ghpy",
+    "dh",
+    "log",
+    "logs",
+    "hash",
+    "dup",
+    "dedup",
+    "dups",
+    "dir",
+    "size",
+    "sizes",
+    "b64",
+    "base64",
+    "hex",
+    "bin",
+    "oct",
+    "elf",
+    "elf64",
+    "qr",
+    "qrc",
+    "em",
+    "emoji",
+    "utf",
+    "ascii",
+    "unicode",
+    "trans",
+    "transwords",
+    "translate",
+    "translator",
+    "langdict",
+    "dic",
+    "dict",
+    "word",
+    "words",
+    "list",
+    "clean",
+    "cleaner",
+    "cleanup",
+    "fmt",
+    "format",
+    "formatter",
+    "pretty",
+    "min",
+    "minify",
+    "strip",
+    "stripper",
+    "rmc",
+    "rmcts",
+    "rmca",
+    "rmcst",
+    "eximports",
+    "imports",
+    "importz",
+    "importtools",
+    "csv2json",
+    "pkl2json",
+    "sqltojson",
+    "sqlite2json",
+    "xml_yaml2json",
+    "vcf2json",
+])
 
 FEATURE_WEIGHTS = {
     "lex": 1.0,
@@ -127,7 +552,7 @@ def build_stem_lexicon(names: Iterable[str]) -> set[str]:
     "Build stem lexicon."
     counts: collections.Counter[str] = collections.Counter()
     for name in names:
-        stem = (name[:-3] if name.endswith(".py") else name).lower()
+        stem = (name.removesuffix(".py")).lower()
         for tok in re.findall(r"[a-z]{2,}", re.sub(r"[0-9]+", " ", stem)):
             counts[tok] += 1
         for tok in re.findall(r"[a-z]{2,}", stem):
@@ -139,7 +564,7 @@ def build_stem_lexicon(names: Iterable[str]) -> set[str]:
 
 
 def normalise_stem(name: str, lexicon: set[str]) -> tuple[str, tuple[str, ...], tuple[str, ...]]:
-    stem = (name[:-3] if name.endswith(".py") else name).lower()
+    stem = (name.removesuffix(".py")).lower()
     letters = re.sub(r"[^a-z]", "", stem)
     best: list[tuple[float, list[str]]] = [(0.0, [])] + [(-1e9, [])] * len(letters)
     for i in range(len(letters)):
@@ -769,7 +1194,7 @@ def build_report(root: pathlib.Path, threshold: float) -> dict[str, Any]:
         "root": str(root),
         "method": {
             "goal": "group scripts that do nearly the same job",
-            "signals": {k: v for k, v in FEATURE_WEIGHTS.items()},
+            "signals": dict(FEATURE_WEIGHTS.items()),
             "score_formula": (
                 "0.52*(0.55*cos_all + 0.30*containment + 0.15*cos_api) + "
                 "0.48*(0.50*cos_purpose + 0.25*cos_api + 0.25*name_sim); "
@@ -860,23 +1285,29 @@ def render_markdown(rep: dict[str, Any], out: pathlib.Path) -> None:
     L = [
         "# Python script similarity report",
         "",
-        f"Generated {rep['generated_at']} · **{s['files_analyzed']} scripts** · "
-        f"**{s['groups']} groups** · {s['files_in_groups']} scripts belong to a group "
-        f"({s['singletons']} singletons).",
+        (
+            f"Generated {rep['generated_at']} · **{s['files_analyzed']} scripts** · "
+            f"**{s['groups']} groups** · {s['files_in_groups']} scripts belong to a group "
+            f"({s['singletons']} singletons)."
+        ),
         "",
-        "Scripts that do nearly the same job are placed in the same group. "
-        "The machine-readable version is `similarity_report.json`; the visual "
-        "version is `similarity_report.svg`.",
+        (
+            "Scripts that do nearly the same job are placed in the same group. "
+            "The machine-readable version is `similarity_report.json`; the visual "
+            "version is `similarity_report.svg`."
+        ),
         "",
         "## Method (short)",
         "",
-        "Each script is turned into a weighted feature vector built from normalised "
-        "token 5-grams, an AST node-type skeleton, imports, called APIs, CLI flags, "
-        "function names and documentation/filename vocabulary. Features are IDF "
-        "weighted so that boilerplate does not create false matches. Pairs are scored "
-        f"with `{rep['method']['score_formula']}`, and pairs at or above "
-        f"`{rep['method']['group_threshold']}` are grouped by density-based leader "
-        "clustering around a medoid script.",
+        (
+            "Each script is turned into a weighted feature vector built from normalised "
+            "token 5-grams, an AST node-type skeleton, imports, called APIs, CLI flags, "
+            "function names and documentation/filename vocabulary. Features are IDF "
+            "weighted so that boilerplate does not create false matches. Pairs are scored "
+            f"with `{rep['method']['score_formula']}`, and pairs at or above "
+            f"`{rep['method']['group_threshold']}` are grouped by density-based leader "
+            "clustering around a medoid script."
+        ),
         "",
         "## Overview",
         "",
@@ -894,8 +1325,10 @@ def render_markdown(rep: dict[str, Any], out: pathlib.Path) -> None:
         L += [
             f"### {g['id']} — {g['label']}",
             "",
-            f"- **{g['size']} scripts**, avg similarity **{g['avg_similarity']:.3f}** "
-            f"(range {g['min_similarity']:.3f}–{g['max_similarity']:.3f})",
+            (
+                f"- **{g['size']} scripts**, avg similarity **{g['avg_similarity']:.3f}** "
+                f"(range {g['min_similarity']:.3f}–{g['max_similarity']:.3f})"
+            ),
             f"- **Suggested keeper:** `{g['medoid']}`",
             f"- **Basis:** {g['basis']} (confidence: {g['confidence']}, cohesion {g['cohesion']:.2f})",
             f"- **Recommendation:** {g['recommendation']}",
@@ -921,8 +1354,10 @@ def render_markdown(rep: dict[str, Any], out: pathlib.Path) -> None:
         "",
         "## Functional domains",
         "",
-        "Broad filename-derived job keywords, including scripts that remained "
-        "singletons (useful for deciding where to start consolidating).",
+        (
+            "Broad filename-derived job keywords, including scripts that remained "
+            "singletons (useful for deciding where to start consolidating)."
+        ),
         "",
         "| Keyword | Scripts | In a group | Examples |",
         "|---|---:|---:|---|",
@@ -977,7 +1412,7 @@ def score_color(s: float) -> str:
         (1.0, (248, 113, 113)),
     ]
     s = max(0.0, min(1.0, s))
-    for (a, ca), (b, cb) in zip(stops, stops[1:]):
+    for (a, ca), (b, cb) in itertools.pairwise(stops):
         if s <= b:
             t = (s - a) / (b - a) if b > a else 0
             c = tuple(round(ca[k] + t * (cb[k] - ca[k])) for k in range(3))
@@ -1027,11 +1462,15 @@ def render_svg(rep: dict[str, Any], out: pathlib.Path) -> None:
     s = rep["summary"]
     W, H = 1920, 1980
     svg: list[str] = [
-        f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}" '
-        'font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,DejaVu Sans Mono,monospace">',
-        '<defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">'
-        '<stop offset="0%" stop-color="#080e1d"/><stop offset="100%" stop-color="#101a30"/>'
-        "</linearGradient></defs>",
+        (
+            f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}" '
+            'font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,DejaVu Sans Mono,monospace">'
+        ),
+        (
+            '<defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">'
+            '<stop offset="0%" stop-color="#080e1d"/><stop offset="100%" stop-color="#101a30"/>'
+            "</linearGradient></defs>"
+        ),
         rect(0, 0, W, H, "url(#bg)"),
     ]
     svg += [

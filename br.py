@@ -161,9 +161,11 @@ class ParallelBrotliCompressor:
     ) -> None:
         "Initialize the instance state from the supplied arguments."
         if not 0 <= quality <= 11:
-            raise ValueError("quality must be between 0 and 11")
+            msg = "quality must be between 0 and 11"
+            raise ValueError(msg)
         if chunk_size < 64 * 1024:
-            raise ValueError("chunk_size should be at least 64KB")
+            msg = "chunk_size should be at least 64KB"
+            raise ValueError(msg)
         self.quality: int = quality
         self.chunk_size: int = chunk_size
         self.workers: int = workers or cpu_count()
@@ -204,14 +206,16 @@ class ParallelBrotliCompressor:
         with open(input_path, "rb") as f_in, open(output_path, "wb") as f_out:
             magic: bytes = f_in.read(len(ParallelBrotliCompressor.MAGIC))
             if magic != ParallelBrotliCompressor.MAGIC:
-                raise ValueError("Not a ParallelBrotli container")
+                msg = "Not a ParallelBrotli container"
+                raise ValueError(msg)
             (chunk_count,) = struct.unpack("<I", f_in.read(4))
             for _ in range(chunk_count):
                 (comp_len,) = struct.unpack("<I", f_in.read(4))
-                (orig_len,) = struct.unpack("<I", f_in.read(4))
+                (_orig_len,) = struct.unpack("<I", f_in.read(4))
                 payload: bytes = f_in.read(comp_len)
                 if len(payload) != comp_len:
-                    raise IOError("Truncated chunk payload")
+                    msg = "Truncated chunk payload"
+                    raise IOError(msg)
                 f_out.write(brotli.decompress(payload))
 
     def compress_bytes(self, data: bytes) -> bytes:
@@ -1376,7 +1380,8 @@ def cli(
     ] = False,
 ) -> None:
     if quality is not None and quality not in range(12):
-        raise typer.BadParameter(f"invalid choice: {quality!r} (choose from {range(12)})")
+        msg = f"invalid choice: {quality!r} (choose from {range(12)})"
+        raise typer.BadParameter(msg)
     _STATE.update(
         compress=compress,
         decompress=decompress,

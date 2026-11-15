@@ -12,14 +12,13 @@ DOCUMENTED = ROOT / "documented"
 def strip_docs_annotations(tree: ast.AST) -> ast.AST:
     """Remove docstrings and function annotations before AST comparison."""
     for node in ast.walk(tree):
-        if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
-            if (
-                node.body
-                and isinstance(node.body[0], ast.Expr)
-                and isinstance(node.body[0].value, ast.Constant)
-                and isinstance(node.body[0].value.value, str)
-            ):
-                node.body = node.body[1:]
+        if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)) and (
+            node.body
+            and isinstance(node.body[0], ast.Expr)
+            and isinstance(node.body[0].value, ast.Constant)
+            and isinstance(node.body[0].value.value, str)
+        ):
+            node.body = node.body[1:]
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             node.returns = None
             args = [*node.args.posonlyargs, *node.args.args, *node.args.kwonlyargs]

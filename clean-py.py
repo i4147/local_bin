@@ -291,7 +291,7 @@ def _split_header(source: str, config: Config) -> tuple[str, str]:
         nl = source.find("\n")
         if nl != -1:
             return source[: nl + 1], source[nl + 1 :]
-    if source.startswith("# -*- coding:") or source.startswith("# coding:"):
+    if source.startswith(("# -*- coding:", "# coding:")):
         nl = source.find("\n")
         if nl != -1:
             return source[: nl + 1], source[nl + 1 :]

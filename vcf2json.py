@@ -2,17 +2,20 @@
 "Convert a vCard (.vcf) file to JSON or CSV."
 
 from __future__ import annotations
-import argparse
 import csv
 import json
-from pathlib import Path
 import re
 import sys
 from types import SimpleNamespace
-from typing import Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any
 
 import click
 import typer
+
+
+if TYPE_CHECKING:
+    import argparse
+    from pathlib import Path
 
 
 _STATE: dict[str, object] = {}
@@ -99,14 +102,16 @@ def parse_parameters(tokens: list[str]) -> dict[str, list[str]]:
 def parse_property(line: str, line_number: int) -> tuple[str, dict[str, list[str]], str]:
     "Parse property."
     if ":" not in line:
-        raise ValueError(f"Malformed property on line {line_number}: missing ':'")
+        msg = f"Malformed property on line {line_number}: missing ':'"
+        raise ValueError(msg)
 
     header, value = line.split(":", 1)
     tokens = split_unquoted(header, ";")
     property_name = tokens[0].strip().upper()
 
     if not property_name:
-        raise ValueError(f"Malformed property on line {line_number}: empty name")
+        msg = f"Malformed property on line {line_number}: empty name"
+        raise ValueError(msg)
 
     return property_name, parse_parameters(tokens[1:]), decode_text(value)
 
@@ -129,13 +134,15 @@ def parse_vcards(text: str) -> list[dict[str, list[dict[str, Any]]]]:
 
         if marker == "BEGIN:VCARD":
             if current_card is not None:
-                raise ValueError(f"Nested BEGIN:VCARD on line {line_number}")
+                msg = f"Nested BEGIN:VCARD on line {line_number}"
+                raise ValueError(msg)
             current_card = {}
             continue
 
         if marker == "END:VCARD":
             if current_card is None:
-                raise ValueError(f"END:VCARD without BEGIN:VCARD on line {line_number}")
+                msg = f"END:VCARD without BEGIN:VCARD on line {line_number}"
+                raise ValueError(msg)
             cards.append(current_card)
             current_card = None
             continue
@@ -147,10 +154,12 @@ def parse_vcards(text: str) -> list[dict[str, list[dict[str, Any]]]]:
         current_card.setdefault(property_name, []).append({"value": value, "parameters": parameters})
 
     if current_card is not None:
-        raise ValueError("Input ended before END:VCARD")
+        msg = "Input ended before END:VCARD"
+        raise ValueError(msg)
 
     if not cards:
-        raise ValueError("No vCard records found")
+        msg = "No vCard records found"
+        raise ValueError(msg)
 
     return cards
 
@@ -261,7 +270,8 @@ def cli(
         ))
         > 1
     ):
-        raise typer.BadParameter("--json, --csv are mutually exclusive")
+        msg = "--json, --csv are mutually exclusive"
+        raise typer.BadParameter(msg)
     format = "json" if format else None
     format = "csv" if format else None
     _STATE.update(input=input, format=format, remove=remove, output=output, encoding=encoding, compact=compact)

@@ -27,9 +27,8 @@ child-language accounting (Markdown code blocks), and extra CSV/TOML outputs.
 """
 
 from __future__ import annotations
-import argparse
-from collections.abc import Iterable, Iterator, Sequence
 from concurrent.futures import ProcessPoolExecutor
+import contextlib
 import csv
 from dataclasses import dataclass, replace
 from enum import StrEnum
@@ -41,10 +40,15 @@ import re
 import shutil
 import sys
 from types import SimpleNamespace
-from typing import Annotated, Literal
+from typing import TYPE_CHECKING, Annotated, Literal
 
 import click
 import typer
+
+
+if TYPE_CHECKING:
+    import argparse
+    from collections.abc import Iterable, Iterator, Sequence
 
 
 class Sort(StrEnum):
@@ -70,7 +74,7 @@ class Output(StrEnum):
 def _version_callback(value: bool) -> None:
     if value:
         typer.echo(f"tokei.py {__version__} (single-file Python tokei)")
-        raise typer.Exit()
+        raise typer.Exit
 
 
 _STATE: dict[str, object] = {}
@@ -214,7 +218,7 @@ class Parser:
     block-comment ends.
     """
 
-    __slots__ = ("syn", "_tok_re", "_tok_map", "_ends")
+    __slots__ = ("_ends", "_tok_map", "_tok_re", "syn")
 
     def __init__(self, syn: Syntax) -> None:
         "Initialize the instance state from the supplied arguments."
@@ -249,8 +253,7 @@ class Parser:
 
         st = _ParseState()
         for ln in _split_lines(text):
-            if ln.endswith("\r"):
-                ln = ln[:-1]
+            ln = ln.removesuffix("\r")
             has_code, has_comment = self._scan_line(ln, st)
             if has_code:
                 code += 1
@@ -978,14 +981,10 @@ class ExcludePatterns:
     def excluded(self, p: Path, is_dir: bool, roots: Sequence[Path]) -> bool:
         candidates = [p.name, p.as_posix()]
         for root in roots:
-            try:
+            with contextlib.suppress(ValueError):
                 candidates.append(p.relative_to(root).as_posix())
-            except ValueError:
-                pass
-        try:
+        with contextlib.suppress(ValueError):
             candidates.append(p.relative_to(Path.cwd()).as_posix())
-        except ValueError:
-            pass
         for rule in self.rules:
             if rule.dir_only and not is_dir:
                 continue
@@ -1304,16 +1303,14 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
 
     for stream in (sys.stdout, sys.stderr):
-        try:
+        with contextlib.suppress(AttributeError, ValueError, OSError):
             stream.reconfigure(errors="replace")
-        except (AttributeError, ValueError, OSError):
-            pass
 
     if args.languages:
         _print_languages()
         return 0
 
-    paths = args.input or [Path(".")]
+    paths = args.input or [Path()]
     for p in paths:
         if not p.exists():
             print(f"error: path does not exist: {p}", file=sys.stderr)

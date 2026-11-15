@@ -279,7 +279,8 @@ def ppmd_decoder(path: Path) -> Codec:
     with path.open("rb") as f:
         magic, order, mem, _ = PPMD_HEADER.unpack(f.read(PPMD_HEADER.size))
     if magic != PPMD_MAGIC:
-        raise ValueError("invalid ppmd header")
+        msg = "invalid ppmd header"
+        raise ValueError(msg)
     dec = pyppmd.Ppmd7Decoder(order, mem)
     return Codec(dec.decode, dec.flush, skip=PPMD_HEADER.size)
 
@@ -325,7 +326,8 @@ def verify_output(job: Job, path: Path, report: Reporter) -> bool:
     "Verify output."
     expected = job.digest
     if expected is None:
-        raise ValueError("no digest available for verification")
+        msg = "no digest available for verification"
+        raise ValueError(msg)
     if job.name == "py7zr":
         import py7zr
 
@@ -367,7 +369,8 @@ def run_job(job: Job) -> Result:
             verified = False
             verified = verify_output(job, part, report)
             if not verified:
-                raise ValueError("verification failed: checksum mismatch")
+                msg = "verification failed: checksum mismatch"
+                raise ValueError(msg)
         os.replace(part, job.dst)
         return Result(job.name, str(job.dst), job.dst.stat().st_size, elapsed, verified, None)
     except Exception:
@@ -470,7 +473,8 @@ def ensure_space(directory: Path, needed: int) -> None:
     "Ensure space."
     free = shutil.disk_usage(directory).free
     if free < needed + (needed >> 5) + (1 << 20):
-        raise CliError(f"not enough free space in {directory}: need ~{needed / 1e6:,.0f} MB, have {free / 1e6:,.0f} MB")
+        msg = f"not enough free space in {directory}: need ~{needed / 1e6:,.0f} MB, have {free / 1e6:,.0f} MB"
+        raise CliError(msg)
 
 
 def build_tar(folder: Path, dest: Path, root_name: str, console: Console) -> list[str]:
@@ -520,7 +524,8 @@ def resolve_algos(requested: Sequence[str], console: Console) -> list[str]:
         else:
             available.append(name)
     if not available:
-        raise CliError("no usable algorithms")
+        msg = "no usable algorithms"
+        raise CliError(msg)
     return available
 
 
@@ -578,11 +583,14 @@ def parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
 def run(args: argparse.Namespace, console: Console) -> int:
     src: Path = args.path.expanduser().resolve()
     if not src.exists():
-        raise CliError(f"not found: {src}")
+        msg = f"not found: {src}"
+        raise CliError(msg)
     if not (src.is_file() or src.is_dir()):
-        raise CliError(f"unsupported path type: {src}")
+        msg = f"unsupported path type: {src}"
+        raise CliError(msg)
     if MAX_WORKERS < 1:
-        raise CliError("--workers must be >= 1")
+        msg = "--workers must be >= 1"
+        raise CliError(msg)
     out_dir: Path = args.out_dir.expanduser().resolve() if args.out_dir else src.parent
     out_dir.mkdir(parents=True, exist_ok=True)
     names = resolve_algos(args.algos, console)
@@ -683,7 +691,8 @@ def cli(
     json_path: Annotated[Path | None, typer.Option("--json")] = None,
 ) -> None:
     if preset is not None and preset not in list(LEVELS):
-        raise typer.BadParameter(f"invalid choice: {preset!r} (choose from {list(LEVELS)})")
+        msg = f"invalid choice: {preset!r} (choose from {list(LEVELS)})"
+        raise typer.BadParameter(msg)
     _STATE.update(
         path=path,
         out_dir=out_dir,

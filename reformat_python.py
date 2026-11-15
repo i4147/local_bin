@@ -67,19 +67,22 @@ import ast
 import builtins
 from dataclasses import dataclass, field
 import io
-from pathlib import Path
 import re
 import sys
 import tokenize
-from typing import Annotated, Sequence
+from typing import TYPE_CHECKING, Annotated, Sequence
 
 import typer
+
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def _version_callback(value: bool) -> None:
     if value:
         typer.echo(__version__)
-        raise typer.Exit()
+        raise typer.Exit
 
 
 __version__ = "1.0.0"
@@ -167,7 +170,8 @@ def _logical_lines(source: str) -> list[LogicalLine]:
     try:
         tokens = list(tokenize.generate_tokens(io.StringIO(source).readline))
     except (tokenize.TokenError, IndentationError) as exc:  # pragma: no cover
-        raise ReformatError(f"cannot tokenize input: {exc}") from exc
+        msg = f"cannot tokenize input: {exc}"
+        raise ReformatError(msg) from exc
 
     physical = source.splitlines()
     result: list[LogicalLine] = []
@@ -403,10 +407,7 @@ class Indenter:
             return False
         # ``else``/``elif``/``finally``/``case`` must really start the
         # statement, not be used as a plain name inside an expression.
-        if len(ll.tokens) >= 2 and ll.tokens[1].type == tokenize.OP:
-            if ll.tokens[1].string not in ("(", ":"):
-                return False
-        return True
+        return not (len(ll.tokens) >= 2 and ll.tokens[1].type == tokenize.OP and ll.tokens[1].string not in ("(", ":"))
 
     @staticmethod
     def _is_terminator(ll: LogicalLine) -> bool:
@@ -1027,7 +1028,7 @@ def check_syntax(source: str) -> SyntaxError | None:
 class _Scope:
     """One lexical scope."""
 
-    __slots__ = ("parent", "kind", "names", "globals", "nonlocals")
+    __slots__ = ("globals", "kind", "names", "nonlocals", "parent")
 
     def __init__(self, parent: "_Scope | None" = None, kind: str = "module"):
         "Initialize the instance state from the supplied arguments."
@@ -1672,7 +1673,7 @@ def reformat(source: str) -> str:
                     continue
                 escaped.add(index)
                 trial_levels = indenter.run(nested, clause_of, sibling, escaped)
-                trial_text, trial_mapping = render_with_map(lines, trial_levels)
+                trial_text, _trial_mapping = render_with_map(lines, trial_levels)
                 score = None
                 if check_syntax(trial_text) is None and _depth(trial_levels) <= depth_limit:
                     score = len(undefined_names(trial_text))
@@ -1714,7 +1715,7 @@ def reformat(source: str) -> str:
         cursor = 0
 
         while True:
-            levels, error, mapping = attempt_error()
+            _levels, error, mapping = attempt_error()
             if error is None:
                 return True
             baseline = failing_index(error, mapping)
@@ -1852,11 +1853,13 @@ def reformat(source: str) -> str:
         # The greedy pass got stuck: fall back to the exhaustive search,
         # which explores the remaining possibilities.
         if not _exhaustive_search():
-            raise ReformatError("could not find an indentation that produces valid Python")
+            msg = "could not find an indentation that produces valid Python"
+            raise ReformatError(msg)
 
     levels, error, _mapping = attempt_error()
     if error is not None:
-        raise ReformatError("could not find an indentation that produces valid Python")
+        msg = "could not find an indentation that produces valid Python"
+        raise ReformatError(msg)
 
     # -- the scope pass --------------------------------------------------
     # The parser is happy with many readings of a flattened file, but
@@ -1867,7 +1870,8 @@ def reformat(source: str) -> str:
 
     levels, error, _mapping = attempt_error()
     if error is not None:
-        raise ReformatError("could not find an indentation that produces valid Python")
+        msg = "could not find an indentation that produces valid Python"
+        raise ReformatError(msg)
     return render(lines, levels)
 
 
@@ -1898,7 +1902,8 @@ def main(
     "Run the command-line interface."
 
     if source is None:
-        raise typer.BadParameter("a source file is required")
+        msg = "a source file is required"
+        raise typer.BadParameter(msg)
 
     text = source.read_text(encoding="utf-8")
     try:

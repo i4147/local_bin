@@ -11,7 +11,7 @@ import os
 from pathlib import Path
 
 
-def audit_repo(root: Path = Path(".")) -> dict[str, list[str]]:
+def audit_repo(root: Path = Path()) -> dict[str, list[str]]:
     results = {
         "argparse": [],
         "os_path": [],

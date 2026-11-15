@@ -47,10 +47,8 @@ The repair pipeline operates in three compiler-validated stages:
 """
 
 from __future__ import annotations
-import argparse
 import ast
 import builtins
-from collections.abc import Sequence
 from dataclasses import asdict, dataclass, replace
 import functools
 import io
@@ -61,10 +59,15 @@ import sys
 import time
 import tokenize
 from types import SimpleNamespace
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 
 import click
 import typer
+
+
+if TYPE_CHECKING:
+    import argparse
+    from collections.abc import Sequence
 
 
 _STATE: dict[str, object] = {}
@@ -716,28 +719,30 @@ def _is_valid_simple_line(
         return False
 
     for node in body:
-        if not isinstance(
-            node,
-            (
-                ast.Assign,
-                ast.AugAssign,
-                ast.AnnAssign,
-                ast.Expr,
-                ast.Import,
-                ast.ImportFrom,
-                ast.Return,
-                ast.Raise,
-                ast.Assert,
-                ast.Delete,
-                ast.Pass,
-                ast.Break,
-                ast.Continue,
-                ast.Global,
-                ast.Nonlocal,
-            ),
+        if (
+            not isinstance(
+                node,
+                (
+                    ast.Assign,
+                    ast.AugAssign,
+                    ast.AnnAssign,
+                    ast.Expr,
+                    ast.Import,
+                    ast.ImportFrom,
+                    ast.Return,
+                    ast.Raise,
+                    ast.Assert,
+                    ast.Delete,
+                    ast.Pass,
+                    ast.Break,
+                    ast.Continue,
+                    ast.Global,
+                    ast.Nonlocal,
+                ),
+            )
+            and type(node).__name__ != "TypeAlias"
         ):
-            if type(node).__name__ != "TypeAlias":
-                return False
+            return False
 
         if from_comment and isinstance(node, ast.AnnAssign) and node.value is None:
             return False
@@ -908,12 +913,13 @@ def segment_code_chunk(code: str, *, from_comment: bool = False) -> list[str] | 
                             ):
                                 header_colon = c
                         elif (
-                            c + 1 < n and toks[c + 1].type == tokenize.NAME and toks[c + 1].string == "case"
-                        ) or c == n - 1:
-                            if i == simple_start or flush_simple_possible(
-                                code, toks, after, simple_start, i, from_comment and not out
-                            ):
-                                header_colon = c
+                            (c + 1 < n and toks[c + 1].type == tokenize.NAME and toks[c + 1].string == "case")
+                            or c == n - 1
+                        ) and (
+                            i == simple_start
+                            or flush_simple_possible(code, toks, after, simple_start, i, from_comment and not out)
+                        ):
+                            header_colon = c
 
         if header_colon is not None:
             if not flush_simple(i):
@@ -1046,14 +1052,13 @@ def extract_logical_chunks(
                 h_idx += 1
                 if h_idx < len(hashes):
                     span_start = hashes[h_idx]
+            # If another `#` follows on the same physical line without valid code
+            # in between (e.g. `# issue #42: fix bug x = 1`), merge into one span.
+            elif h_idx + 1 < len(hashes):
+                h_idx += 1
             else:
-                # If another `#` follows on the same physical line without valid code
-                # in between (e.g. `# issue #42: fix bug x = 1`), merge into one span.
-                if h_idx + 1 < len(hashes):
-                    h_idx += 1
-                else:
-                    chunks.append(LogicalChunk(code=span.strip()))
-                    h_idx += 1
+                chunks.append(LogicalChunk(code=span.strip()))
+                h_idx += 1
 
     return chunks, comments_split
 
@@ -1123,21 +1128,21 @@ def _extract_expr_reads_and_attrs(
                 loads.add(node.id)
             return
 
-        if isinstance(node, ast.Attribute) and isinstance(node.ctx, ast.Load):
-            if (
+        if (
+            isinstance(node, ast.Attribute)
+            and isinstance(node.ctx, ast.Load)
+            and (
                 isinstance(node.value, ast.Name)
                 and node.value.id not in local_bound
                 and node.value.id not in BUILTIN_NAMES
-            ):
-                attrs.add((node.value.id, node.attr))
+            )
+        ):
+            attrs.add((node.value.id, node.attr))
 
-        if isinstance(node, ast.Call):
-            if (
-                isinstance(node.func, ast.Name)
-                and node.func.id not in local_bound
-                and node.func.id not in BUILTIN_NAMES
-            ):
-                calls.add(node.func.id)
+        if isinstance(node, ast.Call) and (
+            isinstance(node.func, ast.Name) and node.func.id not in local_bound and node.func.id not in BUILTIN_NAMES
+        ):
+            calls.add(node.func.id)
 
         for child in ast.iter_child_nodes(node):
             visit(child, local_bound)
@@ -1333,7 +1338,7 @@ def analyze_chunk(chunk: LogicalChunk) -> ParsedLine:
             needs_async = False
             if kw == "async":
                 assert isinstance(stmt, ast.AsyncFunctionDef)
-                if text.startswith("async def ") or text.startswith("async def\n"):
+                if text.startswith(("async def ", "async def\n")):
                     subkind = "async_def"
                 else:
                     stmt = stmt.body[0]
@@ -1598,9 +1603,7 @@ def _can_pop_frame(frame: BlockFrame) -> bool:
     """Return ``True`` if ``frame`` can legally close at the current point."""
     if frame.stmt_count == 0:
         return False
-    if frame.kind == "try" and frame.clause == "body":
-        return False
-    return True
+    return not (frame.kind == "try" and frame.clause == "body")
 
 
 def _pop_frames_with_try_lift(
@@ -2043,14 +2046,18 @@ def infer_indents(
                             compatible = True
                             new_had_exc = True
                             bonus += 30.0
-                    elif kw == "finally":
-                        if target.kind == "try" and target.clause in (
+                    elif (
+                        kw == "finally"
+                        and target.kind == "try"
+                        and target.clause
+                        in (
                             "body",
                             "except",
                             "else",
-                        ):
-                            compatible = True
-                            bonus += 30.0
+                        )
+                    ):
+                        compatible = True
+                        bonus += 30.0
 
                     if not compatible:
                         continue
@@ -2187,12 +2194,11 @@ def infer_indents(
                     ):
                         delta -= 120.0
 
-                    if kf.kind in ("def", "async_def", "class") and kf.name:
-                        if kf.name in pl.calls:
-                            if all(inner.kind not in ("if", "try", "case") for inner in kept[m + 1 :]):
-                                delta -= 120.0
-                            elif kf.params and not (pl.reads & (kf.params | kf.local_vars)):
-                                delta -= 60.0
+                    if kf.kind in ("def", "async_def", "class") and kf.name and kf.name in pl.calls:
+                        if all(inner.kind not in ("if", "try", "case") for inner in kept[m + 1 :]):
+                            delta -= 120.0
+                        elif kf.params and not (pl.reads & (kf.params | kf.local_vars)):
+                            delta -= 60.0
                     if kf.kind in ("def", "async_def") and kf.params and kf.stmt_count >= 1:
                         if (pl.writes & kf.params) and not (pl.reads & (kf.params | kf.local_vars)):
                             delta -= 45.0
@@ -2574,7 +2580,8 @@ def reformat_source(
             break
 
     if chosen_chunks is None or chosen_indents is None:
-        raise ReformatterError(f"Unable to reconstruct valid Python syntax for {filename}.")
+        msg = f"Unable to reconstruct valid Python syntax for {filename}."
+        raise ReformatterError(msg)
 
     repaired = render_chunks(chosen_chunks, chosen_indents)
     tree = ast.parse(repaired, filename=filename)
@@ -2828,7 +2835,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 print(f"error: path does not exist: {mp}", file=sys.stderr)
             return 2
     else:
-        target_paths = sorted(pathlib.Path(".").glob("broken*.py"), key=_natural_sort_key)
+        target_paths = sorted(pathlib.Path().glob("broken*.py"), key=_natural_sort_key)
         if not target_paths:
             print(
                 "No paths specified and no broken*.py files found in current directory.",

@@ -6,7 +6,7 @@ import argparse
 import ast
 from collections.abc import Callable, Iterable, Iterator
 import concurrent.futures as cf
-from contextlib import nullcontext
+from contextlib import nullcontext, suppress
 import dataclasses
 from dataclasses import dataclass
 import difflib
@@ -34,10 +34,11 @@ from atomicio import atomic_write
 from dh import MAX_WORKERS, SKIP_DIRS
 import libcst as cst
 from loguru import logger
+from rich.progress import Progress
 
 
 if TYPE_CHECKING:
-    from rich.progress import Progress, TaskID
+    from rich.progress import TaskID
 
     _CSTTypes = tuple[type[cst.CSTTransformer], type[cst.CSTTransformer]]
 
@@ -54,7 +55,7 @@ _DIRECTIVE_RE: Final = re.compile(
     r"nosec|bandit|isort|yapf|autopep8|flake8|black|pyre|pytype|"
     r"pragma|coverage|doctest|pytest|cython|distutils|numba|"
     r"region|endregion|uv)\b|^#\s*(?:%%|</?editor-fold\b)",
-    re.I,
+    re.IGNORECASE,
 )
 _COOKIE_RE_STR: Final = re.compile(r"^[ \t\f]*#.*?coding[:=][ \t]*[-\w.]+")
 _COOKIE_RE_BYTES: Final = re.compile(rb"coding[:=]\s*[-\w.]+")
@@ -303,19 +304,22 @@ class Stripper(cst.CSTTransformer):
         result = StripFileResult(path)
         try:
             if path.is_symlink():
-                raise ValueError("Refusing to replace a symbolic link")
+                msg = "Refusing to replace a symbolic link"
+                raise ValueError(msg)
             original = path.read_bytes()
             try:
                 encoding, _ = tokenize.detect_encoding(io.BytesIO(original).readline)
                 source = original.decode(encoding)
             except (SyntaxError, UnicodeDecodeError, LookupError) as exc:
-                raise SkipFile(f"{type(exc).__name__}: {exc}") from None
+                msg = f"{type(exc).__name__}: {exc}"
+                raise SkipFile(msg) from None
             stripped = self.strip(source)
             if stripped != source:
                 data = stripped.encode(encoding)
                 actual_encoding, _ = tokenize.detect_encoding(io.BytesIO(data).readline)
                 if data.decode(actual_encoding) != stripped:
-                    raise ValueError("Output encoding declaration does not match serialized source")
+                    msg = "Output encoding declaration does not match serialized source"
+                    raise ValueError(msg)
                 result.saved = len(original) - len(data)
                 result.modified = True
                 if show_diff:
@@ -323,7 +327,8 @@ class Stripper(cst.CSTTransformer):
                 if not dryrun:
                     if backup:
                         if path.is_symlink() or path.read_bytes() != original:
-                            raise RuntimeError("File changed while processing; not replaced")
+                            msg = "File changed while processing; not replaced"
+                            raise RuntimeError(msg)
                         result.backup = create_backup(path, original)
                     atomic_write(path, data)
         except SkipFile as exc:
@@ -386,7 +391,8 @@ def remove_blank_lines(source: str) -> str:
     before = ast.dump(ast.parse(source), include_attributes=False)
     after = ast.dump(ast.parse(result), include_attributes=False)
     if before != after:
-        raise ValueError("Blank-line removal would change the AST; not written")
+        msg = "Blank-line removal would change the AST; not written"
+        raise ValueError(msg)
     return result
 
 
@@ -412,10 +418,8 @@ class Task:
 
 def _init_worker() -> None:
     logger.remove()
-    try:
+    with suppress(ValueError, OSError):
         signal.signal(signal.SIGINT, signal.SIG_IGN)
-    except (ValueError, OSError):
-        pass
 
 
 def process_file(task: Task) -> StripFileResult:
@@ -571,7 +575,7 @@ def pathlib_walk_files(
 
 def _fastwalk_parent_ok(parent: Path, root: Path, exclude_dirs: frozenset[str], excludes: tuple[str, ...]) -> bool:
     current = parent
-    while current != root and current != current.parent:
+    while current not in (root, current.parent):
         if (
             is_skip_dir(current)
             or current.name in exclude_dirs
@@ -601,9 +605,10 @@ def iter_python_files(
             yield root_dir
         return
     if not stat.S_ISDIR(mode):
-        raise ValueError(f"Input is not a regular file or directory: {root_dir}")
+        msg = f"Input is not a regular file or directory: {root_dir}"
+        raise ValueError(msg)
     if use_fastwalk:
-        walk_files = cast(WalkFiles, importlib.import_module("fastwalk").walk_files)
+        walk_files = cast("WalkFiles", importlib.import_module("fastwalk").walk_files)
         safe_parents: dict[Path, bool] = {root_dir: True}
         for found in walk_files(root_dir):
             path = found if found.is_absolute() else root_dir / found
@@ -882,9 +887,11 @@ def main() -> int:
         for input_path in inputs:
             expanded = input_path.expanduser()
             if not Path(expanded).exists() or Path(expanded).is_symlink():
-                raise FileNotFoundError(f"Input does not exist: {input_path}")
+                msg = f"Input does not exist: {input_path}"
+                raise FileNotFoundError(msg)
         if args.fastwalk and not callable(getattr(importlib.import_module("fastwalk"), "walk_files", None)):
-            raise AttributeError("fastwalk.walk_files is missing or is not callable")
+            msg = "fastwalk.walk_files is missing or is not callable"
+            raise AttributeError(msg)
         outputs = {
             Path(Path(output).absolute())
             for output in (args.error_log, args.log_file, args.report_json)

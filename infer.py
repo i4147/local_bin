@@ -78,7 +78,7 @@ def _last_is_exit(body) -> bool:
 
 def infer_return(func) -> str | None:
     """Return an annotation string for the function, or None if unsure."""
-    if func.returns is not None or func.asynchronous is None and False:
+    if func.returns is not None or False:
         return None
     collector = _ReturnCollector()
     func.body.visit(collector)

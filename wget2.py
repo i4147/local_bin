@@ -1,5 +1,4 @@
 #!/data/data/com.termux/files/usr/bin/env python
-"Utilities for wget2."
 
 from __future__ import annotations
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
@@ -207,7 +206,8 @@ class InterruptFlag:
 
     def check(self) -> None:
         if self._event.is_set():
-            raise Interrupted("interrupted by user")
+            msg = "interrupted by user"
+            raise Interrupted(msg)
 
 
 def redact_url(url: str) -> str:
@@ -249,7 +249,8 @@ class Logger:
             try:
                 self._handle = path.open("a", encoding="utf-8")
             except OSError as exc:
-                raise FilesystemError(f"cannot open log file {path}: {exc}") from exc
+                msg = f"cannot open log file {path}: {exc}"
+                raise FilesystemError(msg) from exc
 
     def close(self) -> None:
         if self._handle is not None:
@@ -299,7 +300,7 @@ class Logger:
         self.emit(40, message, **fields)
 
 
-def human_size(value: float | int | None) -> str:
+def human_size(value: float | None) -> str:
     if value is None:
         return "unknown"
     size = float(value)
@@ -318,12 +319,13 @@ def parse_size(value: str | int | None) -> int | None:
         return value
     match = _SIZE_RE.match(str(value))
     if not match:
-        raise UsageError(f"invalid size: {value!r}")
+        msg = f"invalid size: {value!r}"
+        raise UsageError(msg)
     number, unit, _ = match.groups()
     return int(float(number) * (1024 ** _UNITS[unit.lower()]))
 
 
-def parse_rate(value: str | float | int | None) -> float | None:
+def parse_rate(value: str | float | None) -> float | None:
     "Parse rate."
     if value is None:
         return None
@@ -331,7 +333,8 @@ def parse_rate(value: str | float | int | None) -> float | None:
         return float(value) or None
     match = _RATE_RE.match(str(value))
     if not match:
-        raise UsageError(f"invalid rate: {value!r}")
+        msg = f"invalid rate: {value!r}"
+        raise UsageError(msg)
     number, unit, _ = match.groups()
     rate = float(number) * (1024 ** _UNITS[(unit or "").lower()])
     return rate or None
@@ -448,22 +451,27 @@ def validate_url(url: str, *, allow_extra_schemes: bool = False) -> str:
     "Validate url."
     text = (url or "").strip()
     if not text:
-        raise UsageError("empty URL")
+        msg = "empty URL"
+        raise UsageError(msg)
     try:
         parsed = urlparse(text)
     except ValueError as exc:
-        raise UsageError(f"invalid URL {text!r}: {exc}") from exc
+        msg = f"invalid URL {text!r}: {exc}"
+        raise UsageError(msg) from exc
     scheme = (parsed.scheme or "").lower()
     if not scheme:
-        raise UsageError(f"URL without a scheme: {text!r}")
+        msg = f"URL without a scheme: {text!r}"
+        raise UsageError(msg)
     allowed = ALLOWED_SCHEMES | (OPT_IN_SCHEMES if allow_extra_schemes else frozenset())
     if scheme not in allowed:
+        msg = f"scheme '{scheme}://' is not allowed (allowed: {', '.join(sorted(allowed))})"
         raise PolicyError(
-            f"scheme '{scheme}://' is not allowed (allowed: {', '.join(sorted(allowed))})",
+            msg,
             url=redact_url(text),
         )
     if not parsed.netloc:
-        raise UsageError(f"URL without a host: {text!r}")
+        msg = f"URL without a host: {text!r}"
+        raise UsageError(msg)
     return text
 
 
@@ -477,7 +485,8 @@ def ensure_directory(path: Path) -> None:
     try:
         path.mkdir(parents=True, exist_ok=True)
     except OSError as exc:
-        raise FilesystemError(f"cannot create directory {path}: {exc}") from exc
+        msg = f"cannot create directory {path}: {exc}"
+        raise FilesystemError(msg) from exc
 
 
 def fsync_dir(path: Path) -> None:
@@ -499,7 +508,8 @@ def preallocate(path: Path, size: int) -> None:
             if size > 0:
                 handle.truncate(size)
     except OSError as exc:
-        raise FilesystemError(f"cannot allocate {path}: {exc}") from exc
+        msg = f"cannot allocate {path}: {exc}"
+        raise FilesystemError(msg) from exc
 
 
 def atomic_finalize(part_path: Path, final_path: Path) -> None:
@@ -507,7 +517,8 @@ def atomic_finalize(part_path: Path, final_path: Path) -> None:
     try:
         part_path.replace(final_path)
     except OSError as exc:
-        raise FilesystemError(f"cannot finalise {final_path}: {exc}") from exc
+        msg = f"cannot finalise {final_path}: {exc}"
+        raise FilesystemError(msg) from exc
     fsync_dir(final_path.parent)
 
 
@@ -527,7 +538,8 @@ def unique_path(path: Path) -> Path:
         candidate = path.with_name(f"{stem}.{counter}{suffix}")
         if not candidate.exists():
             return candidate
-    raise FilesystemError(f"cannot find a free filename for {path}")
+    msg = f"cannot find a free filename for {path}"
+    raise FilesystemError(msg)
 
 
 def ensure_free_space(directory: Path, needed: int, *, factor: float = 1.05) -> None:
@@ -540,9 +552,8 @@ def ensure_free_space(directory: Path, needed: int, *, factor: float = 1.05) -> 
         return
     required = int(needed * factor)
     if usage.free < required:
-        raise FilesystemError(
-            f"not enough free space in {directory}: {human_size(usage.free)} available, {human_size(required)} needed"
-        )
+        msg = f"not enough free space in {directory}: {human_size(usage.free)} available, {human_size(required)} needed"
+        raise FilesystemError(msg)
 
 
 def parse_netrc(path: Path | None = None) -> dict[str, tuple[str, str]]:
@@ -551,7 +562,8 @@ def parse_netrc(path: Path | None = None) -> dict[str, tuple[str, str]]:
     try:
         text = candidate.read_text(encoding="utf-8", errors="replace")
     except OSError as exc:
-        raise ConfigError(f"cannot read netrc file {candidate}: {exc}") from exc
+        msg = f"cannot read netrc file {candidate}: {exc}"
+        raise ConfigError(msg) from exc
     entries: dict[str, tuple[str, str]] = {}
     tokens = text.split()
     index = 0
@@ -723,7 +735,8 @@ class PartState:
             tmp.write_text(payload, encoding="utf-8")
             tmp.replace(state_path)
         except OSError as exc:
-            raise FilesystemError(f"cannot write resume state {state_path}: {exc}") from exc
+            msg = f"cannot write resume state {state_path}: {exc}"
+            raise FilesystemError(msg) from exc
         finally:
             safe_unlink(tmp)
 
@@ -852,7 +865,8 @@ class TokenBucket:
     def __init__(self, rate: float, burst: float | None = None) -> None:
         "Initialize the instance state from the supplied arguments."
         if rate <= 0:
-            raise UsageError("rate limit must be positive")
+            msg = "rate limit must be positive"
+            raise UsageError(msg)
         self.rate = float(rate)
         self.capacity = float(burst if burst is not None else max(rate, 1.0))
         self._tokens = self.capacity
@@ -949,7 +963,8 @@ def parse_checksum(value: str, *, source: str = "cli") -> ChecksumSpec:
     "Parse checksum."
     text = (value or "").strip()
     if not text:
-        raise UsageError("empty checksum value")
+        msg = "empty checksum value"
+        raise UsageError(msg)
     algorithm = "sha256"
     digest = text
     for separator in (":", "="):
@@ -960,10 +975,12 @@ def parse_checksum(value: str, *, source: str = "cli") -> ChecksumSpec:
                 break
     digest = digest.strip().lower()
     if not _HEX_RE.match(digest):
-        raise UsageError(f"invalid checksum digest (expected hex): {value!r}")
+        msg = f"invalid checksum digest (expected hex): {value!r}"
+        raise UsageError(msg)
     expected_length = hashlib.new(algorithm).digest_size * 2
     if len(digest) != expected_length:
-        raise UsageError(f"{algorithm} digest must be {expected_length} hex chars, got {len(digest)}")
+        msg = f"{algorithm} digest must be {expected_length} hex chars, got {len(digest)}"
+        raise UsageError(msg)
     return ChecksumSpec(algorithm=algorithm, expected=digest, source=source)
 
 
@@ -977,7 +994,8 @@ def load_checksum_file(path: Path) -> dict[str, list[ChecksumSpec]]:
     try:
         text = path.read_text(encoding="utf-8", errors="replace")
     except OSError as exc:
-        raise ConfigError(f"cannot read checksum file {path}: {exc}") from exc
+        msg = f"cannot read checksum file {path}: {exc}"
+        raise ConfigError(msg) from exc
     table: dict[str, list[ChecksumSpec]] = {}
     for line in text.splitlines():
         stripped = line.strip()
@@ -1010,7 +1028,8 @@ def digest_file(path: Path, algorithm: str) -> str:
             for chunk in iter(lambda: handle.read(1024 * 1024), b""):
                 digest.update(chunk)
     except OSError as exc:
-        raise FilesystemError(f"cannot read {path} for checksumming: {exc}") from exc
+        msg = f"cannot read {path} for checksumming: {exc}"
+        raise FilesystemError(msg) from exc
     return digest.hexdigest()
 
 
@@ -1021,7 +1040,8 @@ def verify_file(path: Path, specs: Sequence[ChecksumSpec]) -> dict[str, str]:
         actual = digest_file(path, spec.algorithm)
         results[spec.algorithm] = actual
         if actual != spec.expected:
-            raise ChecksumError(f"{spec.algorithm} mismatch for {path.name}: expected {spec.expected}, got {actual}")
+            msg = f"{spec.algorithm} mismatch for {path.name}: expected {spec.expected}, got {actual}"
+            raise ChecksumError(msg)
     return results
 
 
@@ -1098,7 +1118,7 @@ class CookieJar:
             entries = dict(self._cookies)
         values: list[str] = []
         for domain, cookies in entries.items():
-            if host == domain or host.endswith("." + domain) or host.endswith(domain):
+            if host == domain or host.endswith(("." + domain, domain)):
                 values.extend(f"{name}={value}" for name, value in cookies.items())
         return "; ".join(values) if values else None
 
@@ -1107,7 +1127,8 @@ class CookieJar:
         try:
             text = path.read_text(encoding="utf-8", errors="replace")
         except OSError as exc:
-            raise ConfigError(f"cannot read cookie file {path}: {exc}") from exc
+            msg = f"cannot read cookie file {path}: {exc}"
+            raise ConfigError(msg) from exc
         for line in text.splitlines():
             if not line.strip() or line.startswith("#"):
                 continue
@@ -1129,7 +1150,8 @@ class CookieJar:
         try:
             path.write_text("\n".join(lines) + "\n", encoding="utf-8")
         except OSError as exc:
-            raise FilesystemError(f"cannot write cookie jar {path}: {exc}") from exc
+            msg = f"cannot write cookie jar {path}: {exc}"
+            raise FilesystemError(msg) from exc
 
 
 @dataclass(frozen=True)
@@ -1352,8 +1374,9 @@ class HttpClient:
             if self.cookies is not None and set_cookies:
                 self.cookies.update(final_url, set_cookies)
             if status >= 400 and status not in allow_status:
+                msg = f"HTTP {status} for {response.header('content-type', 'unknown content type')}"
                 raise HTTPStatusError(
-                    f"HTTP {status} for {response.header('content-type', 'unknown content type')}",
+                    msg,
                     status_code=status,
                     url=redact_url(final_url),
                     retryable=status in self.retry_status,
@@ -1445,7 +1468,8 @@ class DiskSink:
             while sent < len(view):
                 sent += os.pwrite(self.fd, view[sent:], self.offset + sent)
         except OSError as exc:
-            raise FilesystemError(f"write failed at offset {self.offset}: {exc}") from exc
+            msg = f"write failed at offset {self.offset}: {exc}"
+            raise FilesystemError(msg) from exc
         self.offset += len(view)
         self.written += len(view)
         self._state.mark(self.start, self.offset)
@@ -1581,7 +1605,7 @@ class ProgressReporter:
                     self._rich.update(task, status=status, completed=size or done)
             return
         if not sys.stderr.isatty():
-            print("", file=sys.stderr)
+            print(file=sys.stderr)
         label = f"{name}: {status}"
         if size:
             label += f" {human_size(size)}"
@@ -1714,9 +1738,8 @@ def validate_template(template: str) -> None:
             continue
         base = re.split(r"[.\[{]", field_name, maxsplit=1)[0]
         if base and base not in TEMPLATE_FIELDS:
-            raise UsageError(
-                f"unknown field '{base}' in --output-template (available: {', '.join(sorted(TEMPLATE_FIELDS))})"
-            )
+            msg = f"unknown field '{base}' in --output-template (available: {', '.join(sorted(TEMPLATE_FIELDS))})"
+            raise UsageError(msg)
 
 
 def render_template(template: str, values: Mapping[str, Any]) -> str:
@@ -1724,7 +1747,8 @@ def render_template(template: str, values: Mapping[str, Any]) -> str:
     try:
         return string.Formatter().vformat(template, (), _SafeDict(values))
     except (ValueError, IndexError) as exc:
-        raise UsageError(f"invalid --output-template {template!r}: {exc}") from exc
+        msg = f"invalid --output-template {template!r}: {exc}"
+        raise UsageError(msg) from exc
 
 
 def template_values(url: str, filename: str, index: int, size: int | None) -> dict[str, Any]:
@@ -1761,10 +1785,12 @@ def resolve_output(options: OutputOptions, probe: ProbeResult, url: str, *, inde
         rendered = rendered.replace("\\", "/").lstrip("/")
         raw_parts = [part for part in rendered.split("/") if part not in {"", "."}]
         if any(part == ".." for part in raw_parts):
-            raise UsageError(f"--output-template must not contain '..': {options.template!r}")
+            msg = f"--output-template must not contain '..': {options.template!r}"
+            raise UsageError(msg)
         parts = [sanitize_filename(part) for part in raw_parts]
         if not parts:
-            raise UsageError(f"--output-template produced an empty path: {options.template!r}")
+            msg = f"--output-template produced an empty path: {options.template!r}"
+            raise UsageError(msg)
         candidate = options.directory.joinpath(*parts)
     elif options.output is not None:
         candidate = options.output
@@ -1816,7 +1842,8 @@ def write_manifest(
     try:
         manifest_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     except OSError as exc:
-        raise FilesystemError(f"cannot write manifest {manifest_path}: {exc}") from exc
+        msg = f"cannot write manifest {manifest_path}: {exc}"
+        raise FilesystemError(msg) from exc
     return manifest_path
 
 
@@ -2039,12 +2066,14 @@ class Downloader:
         settings = self.settings
         size = probe.size
         if settings.max_filesize and size is not None and size > settings.max_filesize:
+            msg = f"resource is {human_size(size)}, above --max-filesize ({human_size(settings.max_filesize)})"
             raise PolicyError(
-                f"resource is {human_size(size)}, above --max-filesize ({human_size(settings.max_filesize)})",
+                msg,
                 url=redact_url(url),
             )
         if size == 0:
-            raise PolicyError(f"refusing to download empty resource: {redact_url(url)}")
+            msg = f"refusing to download empty resource: {redact_url(url)}"
+            raise PolicyError(msg)
         if settings.spider or settings.dry_run:
             planned = resolve_output(settings.output, probe, name_url, index=index)
             result.path = planned.path
@@ -2157,7 +2186,8 @@ class Downloader:
             try:
                 fd = os.open(str(part_path), os.O_WRONLY)
             except OSError as exc:
-                raise FilesystemError(f"cannot open {part_path} for writing: {exc}") from exc
+                msg = f"cannot open {part_path} for writing: {exc}"
+                raise FilesystemError(msg) from exc
             bytes_before = state.done_bytes()
             if size is None:
                 self._download_single(client, url, state, size, fd, handle)
@@ -2341,8 +2371,9 @@ class Downloader:
                 self._check_ranged_response(info, offset, end, size)
                 expected = end - offset
                 if sink.written < expected:
+                    msg = f"short read for bytes {offset}-{end - 1}: expected {expected} bytes, got {sink.written}"
                     raise IntegrityError(
-                        f"short read for bytes {offset}-{end - 1}: expected {expected} bytes, got {sink.written}",
+                        msg,
                         url=redact_url(url),
                     )
                 if buffered:
@@ -2377,7 +2408,8 @@ class Downloader:
                 written += os.pwrite(fd, data[written:], offset + written)
             os.fsync(fd)
         except OSError as exc:
-            raise FilesystemError(f"write failed at offset {offset}: {exc}") from exc
+            msg = f"write failed at offset {offset}: {exc}"
+            raise FilesystemError(msg) from exc
         state.mark(offset, offset + len(data))
         state.save()
 
@@ -2423,8 +2455,9 @@ class Downloader:
                         state.size = size
                         state.plan = [(0, size)]
                     if size is not None and sink.written < size - offset:
+                        msg = f"incomplete body: expected {size - offset} bytes, got {sink.written}"
                         raise IntegrityError(
-                            f"incomplete body: expected {size - offset} bytes, got {sink.written}",
+                            msg,
                             url=redact_url(url),
                         )
                 return
@@ -2459,22 +2492,26 @@ class Downloader:
     def _check_ranged_response(self, info: Response, start: int, end: int, size: int | None) -> None:
         if info.status == 200:
             if start > 0 or (size is not None and end < size):
-                raise RangeNotSupportedError("server ignored the Range header (answered 200)", url=redact_url(info.url))
+                msg = "server ignored the Range header (answered 200)"
+                raise RangeNotSupportedError(msg, url=redact_url(info.url))
             return
         if info.status != 206:
             return
         parsed = parse_content_range(info.header("content-range"))
         if not parsed:
-            raise IntegrityError("206 response without a valid Content-Range header", url=redact_url(info.url))
+            msg = "206 response without a valid Content-Range header"
+            raise IntegrityError(msg, url=redact_url(info.url))
         range_start, _range_end, total = parsed
         if range_start != start:
+            msg = f"server returned range starting at {range_start}, expected {start}"
             raise IntegrityError(
-                f"server returned range starting at {range_start}, expected {start}",
+                msg,
                 url=redact_url(info.url),
             )
         if total is not None and size is not None and total != size:
+            msg = f"resource size changed during download ({size} -> {total})"
             raise IntegrityError(
-                f"resource size changed during download ({size} -> {total})",
+                msg,
                 url=redact_url(info.url),
             )
 
@@ -2483,14 +2520,17 @@ class Downloader:
             return
         done = state.done_bytes()
         if done < size:
-            raise IntegrityError(f"incomplete download: {done} of {size} bytes", url=redact_url(state.url))
+            msg = f"incomplete download: {done} of {size} bytes"
+            raise IntegrityError(msg, url=redact_url(state.url))
         try:
             actual = part_path.stat().st_size
         except OSError as exc:
-            raise FilesystemError(f"cannot stat {part_path}: {exc}") from exc
+            msg = f"cannot stat {part_path}: {exc}"
+            raise FilesystemError(msg) from exc
         if actual != size:
+            msg = f"size mismatch for {part_path.name}: expected {size}, got {actual}"
             raise IntegrityError(
-                f"size mismatch for {part_path.name}: expected {size}, got {actual}",
+                msg,
                 url=redact_url(state.url),
             )
 
@@ -2738,7 +2778,8 @@ def _read_input(sources: Sequence[str], input_format: str, base_url: str | None)
             try:
                 text = path.read_text(encoding="utf-8", errors="replace")
             except OSError as exc:
-                raise ConfigError(f"cannot read input file {source}: {exc}") from exc
+                msg = f"cannot read input file {source}: {exc}"
+                raise ConfigError(msg) from exc
         fmt = input_format
         if fmt == "auto":
             stripped = text.lstrip()
@@ -2752,7 +2793,8 @@ def _read_input(sources: Sequence[str], input_format: str, base_url: str | None)
             try:
                 payload = json.loads(text)
             except ValueError as exc:
-                raise ConfigError(f"invalid JSON input: {exc}") from exc
+                msg = f"invalid JSON input: {exc}"
+                raise ConfigError(msg) from exc
             items: Any = payload.get("urls") or payload.get("files") or [] if isinstance(payload, dict) else payload
             for item in items or ():
                 if isinstance(item, str):
@@ -2794,7 +2836,8 @@ def _parse_method_data(method: str | None, data: str | None) -> tuple[str, bytes
             try:
                 payload = path.read_bytes()
             except OSError as exc:
-                raise ConfigError(f"cannot read data file {path}: {exc}") from exc
+                msg = f"cannot read data file {path}: {exc}"
+                raise ConfigError(msg) from exc
         else:
             payload = data.encode()
     effective = (method or ("POST" if payload is not None else "GET")).upper()
