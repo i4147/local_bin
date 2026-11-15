@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/data/data/com.termux/files/usr/bin/env python
 """Verify documented copies preserve executable AST and report coverage."""
 
 import ast

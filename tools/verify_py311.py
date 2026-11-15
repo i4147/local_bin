@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/data/data/com.termux/files/usr/bin/env python
 """Verify all root .py files parse and run on Python 3.11.
 
 Checks:

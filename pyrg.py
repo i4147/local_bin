@@ -20,23 +20,25 @@ Example::
 """
 
 from __future__ import annotations
-
 import bisect
+from concurrent.futures import ProcessPoolExecutor, as_completed
+from dataclasses import dataclass, field
 import fnmatch
 import json
 import os
+from pathlib import Path
 import re
 import sys
 import time
-from collections.abc import Iterator
-from concurrent.futures import ProcessPoolExecutor, as_completed
-from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Any, Optional, TextIO
+from typing import TYPE_CHECKING, Any, Optional, TextIO
 
-import typer
 from dh import MAX_WORKERS, SKIP_DIRS, is_binary
 from loguru import logger
+import typer
+
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 
 # ---------------------------------------------------------------------------

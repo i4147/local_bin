@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/data/data/com.termux/files/usr/bin/env python
 """Find non-English lines in text files and save a JSON report.
 
 With no input paths, recursively scans the current directory. Findings are

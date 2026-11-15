@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/data/data/com.termux/files/usr/bin/env python
 """Build per-symbol documentation audit tables for root Python scripts.
 
 The Markdown report records the pre-edit docstring/comment state for each

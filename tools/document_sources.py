@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/data/data/com.termux/files/usr/bin/env python
 """Create documentation-enriched copies of root Python scripts.
 
 Only docstrings and statically certain annotations are added. Original files

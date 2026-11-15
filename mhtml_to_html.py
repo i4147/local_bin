@@ -59,6 +59,7 @@ import json
 from pathlib import Path
 import re
 import socket
+import sys
 import threading
 import time
 from types import SimpleNamespace

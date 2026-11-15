@@ -1,12 +1,14 @@
 #!/data/data/com.termux/files/usr/bin/env python
 from __future__ import annotations
-
 import concurrent.futures
+import contextlib
+from dataclasses import dataclass, field
 import difflib
 import fnmatch
 import hashlib
 import json
 import os
+from pathlib import Path
 import re
 import shutil
 import stat
@@ -15,14 +17,12 @@ import sys
 import tempfile
 import threading
 import time
-from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Callable, Iterator, List, Optional, Sequence
-
-import typer
 
 from dh import SKIP_DIRS
 from isbinary import is_binary
+import typer
+
 
 try:
     from charset_normalizer import from_bytes as _detect_encoding_fn
@@ -85,15 +85,15 @@ class Options:
     remove: bool = False
     dry_run: bool = False
     apply: bool = False
-    files: List[str] = field(default_factory=list)
-    globs: List[str] = field(default_factory=list)
-    excludes: List[str] = field(default_factory=list)
+    files: list[str] = field(default_factory=list)
+    globs: list[str] = field(default_factory=list)
+    excludes: list[str] = field(default_factory=list)
     include_hidden: bool = True
     follow_symlinks: bool = False
     symlink_policy: str = "skip"
     max_depth: Optional[int] = None
     max_filesize: int = 10 * 1024 * 1024
-    types: List[str] = field(default_factory=list)
+    types: list[str] = field(default_factory=list)
     ignore_file: Optional[str] = None
     no_ignore: bool = False
     preserve_case: bool = False
@@ -153,9 +153,8 @@ class FileResult:
 def _colorize(text: str, color: str, when: str) -> str:
     if when == "never":
         return text
-    if when == "auto":
-        if not sys.stdout.isatty() or os.environ.get("NO_COLOR"):
-            return text
+    if when == "auto" and (not sys.stdout.isatty() or os.environ.get("NO_COLOR")):
+        return text
     codes = {
         "red": "31",
         "green": "32",
@@ -192,10 +191,8 @@ def _make_replacement_fn(rule: Rule, literal: bool) -> Callable[[re.Match[str]],
     def fn(m: re.Match[str]) -> str:
         text = rule.replacement
         if not literal:
-            try:
+            with contextlib.suppress(re.error):
                 text = m.expand(text)
-            except re.error:
-                pass
         if rule.preserve_case:
             text = _apply_case(m.group(0), text)
         if rule.upper:
@@ -253,16 +250,12 @@ def _atomic_write(path: Path, data: bytes) -> None:
     try:
         with os.fdopen(fd, "wb") as f:
             f.write(data)
-        try:
+        with contextlib.suppress(OSError):
             shutil.copystat(path, tmp)
-        except OSError:
-            pass
         os.replace(tmp, path)
     except Exception:
-        try:
+        with contextlib.suppress(OSError):
             os.unlink(tmp)
-        except OSError:
-            pass
         raise
 
 
@@ -305,18 +298,16 @@ def _file_allowed(path: Path, opts: Options, root: Path) -> bool:
                 break
         if not ok:
             return False
-    if is_binary(path):
-        return False
-    return True
+    return not is_binary(path)
 
 
-def _load_ignore_patterns(opts: Options) -> List[str]:
+def _load_ignore_patterns(opts: Options) -> list[str]:
     if opts.no_ignore or not opts.ignore_file:
         return []
     p = Path(opts.ignore_file)
     if not p.is_file():
         return []
-    out: List[str] = []
+    out: list[str] = []
     for line in p.read_text(encoding="utf-8").splitlines():
         line = line.strip()
         if not line or line.startswith("#"):
@@ -325,7 +316,7 @@ def _load_ignore_patterns(opts: Options) -> List[str]:
     return out
 
 
-def _is_ignored(path: Path, patterns: List[str], root: Path) -> bool:
+def _is_ignored(path: Path, patterns: list[str], root: Path) -> bool:
     if not patterns:
         return False
     try:
@@ -342,8 +333,8 @@ def _is_ignored(path: Path, patterns: List[str], root: Path) -> bool:
     return ignored
 
 
-def _walk_dir(root: Path, opts: Options, ignore_patterns: List[str], start_depth: int) -> Iterator[Path]:
-    stack: List[tuple[Path, int]] = [(root, start_depth)]
+def _walk_dir(root: Path, opts: Options, ignore_patterns: list[str], start_depth: int) -> Iterator[Path]:
+    stack: list[tuple[Path, int]] = [(root, start_depth)]
     seen_dirs: set[str] = set()
     while stack:
         d, depth = stack.pop()
@@ -440,7 +431,7 @@ def _save_for_undo(journal_path: Path, file_path: Path, original: bytes, new_has
         "new_hash": new_hash,
         "ts": time.time(),
     }
-    entries: List[dict] = []
+    entries: list[dict] = []
     if journal_path.is_file():
         try:
             entries = json.loads(journal_path.read_text(encoding="utf-8"))
@@ -518,7 +509,7 @@ def _process_one(
         res.skipped = True
         res.reason = "unreadable"
         return res
-    text, enc, bom, raw = meta
+    text, enc, _bom, raw = meta
     original_text = text
     total_matches = 0
     for rule in rules:
@@ -532,7 +523,7 @@ def _process_one(
             return "" if opts.remove else fn(m)
 
         if opts.prompt and not prompt_state.get("all"):
-            chunks: List[str] = []
+            chunks: list[str] = []
             last = 0
             quit_now = False
             auto_all = False
@@ -659,27 +650,25 @@ def _load_config(path: Optional[Path]) -> dict:
     if path is None or not path.is_file():
         return {}
     text = path.read_text(encoding="utf-8")
-    if path.suffix in (".toml", ""):
-        if _toml is not None:
-            try:
-                return _normalize_config(_toml.loads(text))
-            except Exception:
-                pass
+    if path.suffix in (".toml", "") and _toml is not None:
+        try:
+            return _normalize_config(_toml.loads(text))
+        except Exception:
+            pass
     try:
         return _normalize_config(json.loads(text))
     except json.JSONDecodeError:
         return {}
 
 
-def _load_rules_file(path: Path) -> List[Rule]:
+def _load_rules_file(path: Path) -> list[Rule]:
     text = path.read_text(encoding="utf-8")
     data: dict = {}
-    if path.suffix in (".toml", ""):
-        if _toml is not None:
-            try:
-                data = _toml.loads(text)
-            except Exception:
-                data = {}
+    if path.suffix in (".toml", "") and _toml is not None:
+        try:
+            data = _toml.loads(text)
+        except Exception:
+            data = {}
     if not data:
         try:
             data = json.loads(text)
@@ -688,7 +677,7 @@ def _load_rules_file(path: Path) -> List[Rule]:
     rules_data = data.get("rules", data.get("rule", []))
     if isinstance(rules_data, dict):
         rules_data = [rules_data]
-    out: List[Rule] = []
+    out: list[Rule] = []
     for rd in rules_data:
         search = rd.get("search") or rd.get("pattern")
         if not search:
@@ -713,7 +702,7 @@ def _load_rules_file(path: Path) -> List[Rule]:
     return out
 
 
-def _build_rules(opts: Options) -> List[Rule]:
+def _build_rules(opts: Options) -> list[Rule]:
     if opts.rules_file:
         return _load_rules_file(Path(opts.rules_file))
     replacement = opts.replace
@@ -739,7 +728,7 @@ def _build_rules(opts: Options) -> List[Rule]:
 def _version_callback(value: bool) -> None:
     if value:
         typer.echo("replacer 2.0")
-        raise typer.Exit()
+        raise typer.Exit
 
 
 def _fail(msg: str, code: int = EXIT_USAGE) -> None:
@@ -761,11 +750,11 @@ def main(
     remove: bool = typer.Option(False, "-r", "--remove", help="Remove the search text"),
     dry_run: bool = typer.Option(False, "--dry-run", help="Preview changes without applying"),
     apply: bool = typer.Option(False, "--apply", help="Invert --dry-run default"),
-    files: List[str] = typer.Option([], "-f", "--file", help="Process only these files (repeatable)"),
+    files: list[str] = typer.Option([], "-f", "--file", help="Process only these files (repeatable)"),
     files_from: Optional[str] = typer.Option(None, "--files-from", help="Read file list from a file or '-'"),
-    globs: List[str] = typer.Option([], "-g", "--glob", help="Include files matching glob (repeatable)"),
-    excludes: List[str] = typer.Option([], "--exclude", help="Exclude files matching glob (repeatable)"),
-    types: List[str] = typer.Option([], "--type", help="Only process files of these types (repeatable)"),
+    globs: list[str] = typer.Option([], "-g", "--glob", help="Include files matching glob (repeatable)"),
+    excludes: list[str] = typer.Option([], "--exclude", help="Exclude files matching glob (repeatable)"),
+    types: list[str] = typer.Option([], "--type", help="Only process files of these types (repeatable)"),
     include_hidden: Optional[bool] = typer.Option(None, "--include-hidden/--no-hidden", help="Include dotfiles"),
     follow_symlinks: Optional[bool] = typer.Option(
         None, "--follow-symlinks/--no-follow-symlinks", help="Follow symlinks"
@@ -852,7 +841,7 @@ def main(
             return val
         return cfg.get(key, default)
 
-    def _l(val: List[str], key: str) -> List[str]:
+    def _l(val: list[str], key: str) -> list[str]:
         if val:
             return val
         return list(cfg.get(key, []))
@@ -888,8 +877,7 @@ def main(
             effective_ignore_file = str(default_ignore)
 
     effective_jobs = _i(jobs, "jobs", 1) or 1
-    if effective_jobs < 1:
-        effective_jobs = 1
+    effective_jobs = max(effective_jobs, 1)
     if prompt and effective_jobs > 1:
         typer.echo("--prompt with --jobs>1 unsupported; forcing jobs=1", err=True)
         effective_jobs = 1
@@ -909,7 +897,7 @@ def main(
 
     opts = Options(
         search=effective_search,
-        replace=replace if replace else cfg.get("replace", ""),
+        replace=replace or cfg.get("replace", ""),
         regex=regex or cfg.get("regex", False),
         ignore_case=ignore_case or cfg.get("ignore_case", False),
         smart_case=smart_case or cfg.get("smart_case", False),
@@ -983,7 +971,7 @@ def main(
         _safe_print(_colorize("--- DRY RUN (no files will be modified) ---", "yellow", opts.color))
 
     root = Path.cwd()
-    results: List[FileResult] = []
+    results: list[FileResult] = []
     prompt_state: dict = {"all": False, "quit": False}
     t0 = time.time()
     files_scanned = 0

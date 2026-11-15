@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/data/data/com.termux/files/usr/bin/env python
 """sortplan: plan, apply and undo rule-based file organization (Python 3.12+).
 
 The standard-library-only core never deletes duplicate content: duplicates are

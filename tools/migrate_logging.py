@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/data/data/com.termux/files/usr/bin/env python
 """Run batch migration from standard library logging to loguru across root Python scripts."""
 
 from __future__ import annotations

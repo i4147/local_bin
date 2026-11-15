@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/data/data/com.termux/files/usr/bin/env python
 """Batch migration runner to convert argparse-based CLI scripts to Typer.
 
 Runs in batches, baselines CLI --help invocations, converts files,

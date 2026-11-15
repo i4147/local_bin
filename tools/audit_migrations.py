@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/data/data/com.termux/files/usr/bin/env python
 """Audit helper to check migration status for:
 - argparse -> typer
 - os.path -> pathlib

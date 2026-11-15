@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/data/data/com.termux/files/usr/bin/env python
 """Process all root Python scripts in the required five-file batches.
 
 Creates copies under documented/, writes pre-edit declaration tables to

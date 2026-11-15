@@ -1,39 +1,42 @@
-import os
-import sys
-import json
-import time
-import shutil
-import hashlib
-import tarfile
+#!/data/data/com.termux/files/usr/bin/env python
 import argparse
-import datetime
-import threading
-import subprocess
+import contextlib
+import datetime as dt
+import hashlib
+import json
+import os
 from pathlib import Path
+import shutil
+import subprocess
+import sys
+import tarfile
+import threading
+import time
 from typing import Optional
 
+
 try:
+    from rich import box
+    from rich.align import Align
+    from rich.columns import Columns
     from rich.console import Console
+    from rich.live import Live
     from rich.panel import Panel
     from rich.progress import (
+        BarColumn,
+        FileSizeColumn,
         Progress,
         SpinnerColumn,
-        BarColumn,
+        TaskProgressColumn,
         TextColumn,
         TimeElapsedColumn,
-        FileSizeColumn,
         TransferSpeedColumn,
-        TaskProgressColumn,
     )
-    from rich.table import Table
-    from rich.prompt import Prompt, Confirm
-    from rich.text import Text
-    from rich import box
-    from rich.live import Live
-    from rich.columns import Columns
+    from rich.prompt import Confirm, Prompt
     from rich.rule import Rule
     from rich.syntax import Syntax
-    from rich.align import Align
+    from rich.table import Table
+    from rich.text import Text
 
     RICH_AVAILABLE = True
 except ImportError:
@@ -69,7 +72,7 @@ BANNER = r"""
 
 def log(level: str, message: str):
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    ts = dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     with open(LOG_FILE, "a") as f:
         f.write(f"[{ts}] [{level.upper()}] {message}\n")
 
@@ -197,10 +200,8 @@ def install_packages(pkg_list: list[str], console: Console):
     ) as progress:
         task = progress.add_task("[cyan]Installing packages…", total=len(pkg_list))
         for pkg in pkg_list:
-            try:
+            with contextlib.suppress(Exception):
                 subprocess.run(["pkg", "install", "-y", pkg], capture_output=True, check=True)
-            except Exception:
-                pass
             progress.advance(task)
 
 
@@ -260,10 +261,8 @@ def create_archive(
 
     def _relock():
         for path, orig in reversed(unlocked):
-            try:
+            with contextlib.suppress(Exception):
                 path.chmod(orig)
-            except Exception:
-                pass
 
     try:
         if source_path.is_dir():
@@ -284,29 +283,35 @@ def _safe_extract_member(member: tarfile.TarInfo, dest_path: Path):
     dest_root = dest_path.resolve()
 
     member_name = member.name
-    if member_name.startswith("/") or member_name.startswith("\\"):
-        raise ValueError(f"Unsafe absolute path in archive: {member_name!r}")
+    if member_name.startswith(("/", "\\")):
+        msg = f"Unsafe absolute path in archive: {member_name!r}"
+        raise ValueError(msg)
     if any(part == ".." for part in Path(member_name).parts):
-        raise ValueError(f"Path traversal attempt in archive: {member_name!r}")
+        msg = f"Path traversal attempt in archive: {member_name!r}"
+        raise ValueError(msg)
 
     target = (dest_path / member_name).resolve()
     try:
         target.relative_to(dest_root)
     except ValueError:
-        raise ValueError(f"Archive member escapes destination: {member_name!r} -> {target}")
+        msg = f"Archive member escapes destination: {member_name!r} -> {target}"
+        raise ValueError(msg)
 
     if member.issym() or member.islnk():
         link_target = member.linkname
         if os.path.isabs(link_target):
-            raise ValueError(f"Unsafe absolute link target in archive: {member_name!r} -> {link_target!r}")
+            msg = f"Unsafe absolute link target in archive: {member_name!r} -> {link_target!r}"
+            raise ValueError(msg)
         resolved_link = (target.parent / link_target).resolve()
         try:
             resolved_link.relative_to(dest_root)
         except ValueError:
-            raise ValueError(f"Archive link escapes destination: {member_name!r} -> {link_target!r}")
+            msg = f"Archive link escapes destination: {member_name!r} -> {link_target!r}"
+            raise ValueError(msg)
 
     if member.ischr() or member.isblk() or member.isfifo():
-        raise ValueError(f"Refusing device/fifo entry in archive: {member_name!r}")
+        msg = f"Refusing device/fifo entry in archive: {member_name!r}"
+        raise ValueError(msg)
 
 
 def extract_archive(archive_path: Path, dest_path: Path, label: str, progress: Progress):
@@ -387,7 +392,8 @@ class LocalStorage:
     def download(self, backup_name: str, dest: Path, progress: Progress):
         src = self.root / backup_name
         if not src.exists():
-            raise FileNotFoundError(f"Backup not found: {src}")
+            msg = f"Backup not found: {src}"
+            raise FileNotFoundError(msg)
         task = progress.add_task("[cyan]Loading from local storage…", total=None)
         dest.mkdir(parents=True, exist_ok=True)
         for f in src.iterdir():
@@ -408,7 +414,8 @@ class LocalStorage:
     def delete_backup(self, backup_name: str):
         target = self.root / backup_name
         if not target.exists():
-            raise FileNotFoundError(f"Backup not found: {target}")
+            msg = f"Backup not found: {target}"
+            raise FileNotFoundError(msg)
         shutil.rmtree(target)
 
 
@@ -473,10 +480,8 @@ class GDriveStorage:
             items = json.loads(result.stdout)
             items.sort(key=lambda x: x.get("ModTime", ""), reverse=True)
             for old in items[max_keep:]:
-                try:
+                with contextlib.suppress(Exception):
                     subprocess.run(["rclone", "purge", self._remote_path(old["Name"])], capture_output=True, check=True)
-                except Exception:
-                    pass
         except Exception:
             pass
 
@@ -484,7 +489,8 @@ class GDriveStorage:
         try:
             subprocess.run(["rclone", "purge", self._remote_path(backup_name)], check=True, capture_output=True)
         except subprocess.CalledProcessError as e:
-            raise RuntimeError(f"Failed to delete backup from Google Drive: {e}") from e
+            msg = f"Failed to delete backup from Google Drive: {e}"
+            raise RuntimeError(msg) from e
 
 
 class GitHubStorage:
@@ -514,7 +520,8 @@ class GitHubStorage:
         return f"{self.API}/repos/{self.repo}/releases/assets/{asset_id}"
 
     def _api(self, method: str, endpoint: str, **kwargs):
-        import urllib.request, urllib.error
+        import urllib.error
+        import urllib.request
 
         url = f"{self.API}{endpoint}"
         data = json.dumps(kwargs.get("json", {})).encode() if "json" in kwargs else None
@@ -529,7 +536,8 @@ class GitHubStorage:
                 return json.loads(body)
         except urllib.error.HTTPError as e:
             body = e.read().decode()
-            raise RuntimeError(f"GitHub API error {e.code}: {body}") from e
+            msg = f"GitHub API error {e.code}: {body}"
+            raise RuntimeError(msg) from e
 
     def _push_file(self, local_path: Path, remote_path: str, message: str):
         import base64
@@ -599,7 +607,9 @@ class GitHubStorage:
         return chunks
 
     def _upload_one_asset(self, release_id: int, local_path: Path, progress_task, progress: Progress):
-        import urllib.request, urllib.error, time as _time
+        import time as _time
+        import urllib.error
+        import urllib.request
 
         upload_url = f"https://uploads.github.com/repos/{self.repo}/releases/{release_id}/assets?name={local_path.name}"
         file_size = local_path.stat().st_size
@@ -634,9 +644,11 @@ class GitHubStorage:
                         description=f"[yellow]{local_path.name} already uploaded, skipping",
                     )
                     return {}
-                raise RuntimeError(f"Asset upload failed {e.code}: {body}") from e
+                msg = f"Asset upload failed {e.code}: {body}"
+                raise RuntimeError(msg) from e
 
-        raise RuntimeError(f"Failed to upload {local_path.name} after {self.MAX_RETRIES} attempts: {last_err}")
+        msg = f"Failed to upload {local_path.name} after {self.MAX_RETRIES} attempts: {last_err}"
+        raise RuntimeError(msg)
 
     def upload(self, backup_dir: Path, backup_name: str, progress: Progress) -> str:
         task = progress.add_task("[cyan]Creating GitHub Release...", total=None)
@@ -701,11 +713,14 @@ class GitHubStorage:
         return backups
 
     def download(self, backup_name: str, dest: Path, progress: Progress):
-        import urllib.request, re as _re, time as _time
+        import re as _re
+        import time as _time
+        import urllib.request
 
         release = self._get_release_by_tag(backup_name)
         if not release:
-            raise RuntimeError(f"No GitHub Release found for tag: {backup_name}")
+            msg = f"No GitHub Release found for tag: {backup_name}"
+            raise RuntimeError(msg)
         assets = sorted(release.get("assets", []), key=lambda a: a["name"])
         dest.mkdir(parents=True, exist_ok=True)
 
@@ -731,7 +746,8 @@ class GitHubStorage:
                     progress.update(f_task, description=f"[yellow]Retry {attempt + 1}/8 ({asset['name']})...")
                     _time.sleep(15 * (attempt + 1))
             if last_err:
-                raise RuntimeError(f"Failed to download {asset['name']} after 8 attempts: {last_err}")
+                msg = f"Failed to download {asset['name']} after 8 attempts: {last_err}"
+                raise RuntimeError(msg)
             progress.advance(dl_task)
 
         chunk_re = _re.compile(r"^(.+)\.part(\d{4})$")
@@ -768,12 +784,14 @@ class GitHubStorage:
     def delete_backup(self, backup_name: str):
         release = self._get_release_by_tag(backup_name)
         if not release:
-            raise FileNotFoundError(f"Backup '{backup_name}' not found in GitHub Releases.")
+            msg = f"Backup '{backup_name}' not found in GitHub Releases."
+            raise FileNotFoundError(msg)
         try:
             self._api("DELETE", f"/repos/{self.repo}/releases/{release['id']}")
             self._api("DELETE", f"/repos/{self.repo}/git/refs/tags/{backup_name}")
         except Exception as e:
-            raise RuntimeError(f"Failed to delete backup from GitHub: {e}") from e
+            msg = f"Failed to delete backup from GitHub: {e}"
+            raise RuntimeError(msg) from e
 
 
 def get_storage(cfg: dict):
@@ -788,7 +806,7 @@ def get_storage(cfg: dict):
 def cmd_backup(cfg: dict, label: str = ""):
     print_section("BACKUP", "Creating a full snapshot of your Termux environment")
 
-    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    timestamp = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
     backup_name = f"termux_backup_{timestamp}"
     if label:
         backup_name += f"_{label.replace(' ', '_')}"
@@ -809,7 +827,7 @@ def cmd_backup(cfg: dict, label: str = ""):
 
     meta = {
         "name": backup_name,
-        "date": datetime.datetime.now().isoformat(),
+        "date": dt.datetime.now().isoformat(),
         "label": label,
         "termux_home": str(TERMUX_FILES),
         "termux_usr": str(TERMUX_HOME),
@@ -1013,10 +1031,9 @@ def cmd_restore(cfg: dict, backup_name: str = ""):
         if not ok:
             all_ok = False
 
-    if not all_ok:
-        if not Confirm.ask("  [yellow]Some checksums failed. Continue anyway?[/yellow]"):
-            shutil.rmtree(tmp_dir, ignore_errors=True)
-            return
+    if not all_ok and not Confirm.ask("  [yellow]Some checksums failed. Continue anyway?[/yellow]"):
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+        return
 
     console.print()
     console.print(
@@ -1382,10 +1399,10 @@ def cmd_daemon(cfg: dict):
     log("INFO", "Daemon started")
 
     while True:
-        now = datetime.datetime.now()
+        now = dt.datetime.now()
         target = now.replace(hour=sched["hour"], minute=sched["minute"], second=0, microsecond=0)
         if target <= now:
-            target += datetime.timedelta(days=1)
+            target += dt.timedelta(days=1)
         sleep_sec = (target - now).total_seconds()
         log("INFO", f"Next backup in {sleep_sec / 3600:.1f}h at {target.strftime('%H:%M')}")
         time.sleep(sleep_sec)
