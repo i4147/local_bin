@@ -2,17 +2,20 @@
 "Convert archives and compressed files between formats with auto-detected input."
 
 from __future__ import annotations
-
 import argparse
 import bz2
+from collections.abc import Sequence
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
+from enum import Enum
 import gzip
 import hashlib
 import importlib
 import importlib.util
 import io
-from loguru import logger
 import lzma
 import os
+from pathlib import Path, PurePosixPath, PureWindowsPath
 import shutil
 import stat
 import sys
@@ -20,17 +23,12 @@ import tarfile
 import tempfile
 import threading
 import time
-import zipfile
-from collections.abc import Sequence
-from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
-from enum import Enum
-from pathlib import Path, PurePosixPath, PureWindowsPath
-from typing import IO, Any, Literal, cast
 from types import SimpleNamespace
-from typing import Annotated
+from typing import IO, Annotated, Any, Literal, cast
+import zipfile
 
 import click
+from loguru import logger
 import typer
 
 
@@ -50,18 +48,18 @@ class _ParserShim:
     """Stand-in for the removed argparse parser; hands back what Typer parsed."""
 
     def parse_args(self, args=None, namespace=None):
-        'Parse args.'
+        "Parse args."
         return _Args(**_STATE)
 
     def error(self, message):
         raise typer.BadParameter(message)
 
     def print_help(self, file=None):
-        'Print help.'
+        "Print help."
         typer.echo(click.get_current_context().get_help(), file=file)
 
     def print_usage(self, file=None):
-        'Print usage.'
+        "Print usage."
         typer.echo(click.get_current_context().get_usage(), file=file)
 
 
@@ -858,9 +856,18 @@ app = typer.Typer(
 @app.command(help="Convert archives and compressed files between formats with auto-detected input.")
 def cli(
     inputs: Annotated[list[Path] | None, typer.Argument(help="files to convert")] = None,
-    to: Annotated[str | None, typer.Option("--to", help="target: zip whl 7z tar gz bz2 xz zst br lz4 tar.<codec> tgz txz ...", metavar="FORMAT")] = None,
-    remove: Annotated[bool, typer.Option("-r", "--remove", help="remove the original after a verified successful conversion")] = False,
-    output_dir: Annotated[Path | None, typer.Option("-o", "--output-dir", help="write outputs here instead of next to the input")] = None,
+    to: Annotated[
+        str | None,
+        typer.Option(
+            "--to", help="target: zip whl 7z tar gz bz2 xz zst br lz4 tar.<codec> tgz txz ...", metavar="FORMAT"
+        ),
+    ] = None,
+    remove: Annotated[
+        bool, typer.Option("-r", "--remove", help="remove the original after a verified successful conversion")
+    ] = False,
+    output_dir: Annotated[
+        Path | None, typer.Option("-o", "--output-dir", help="write outputs here instead of next to the input")
+    ] = None,
     force: Annotated[bool, typer.Option("-f", "--force", help="overwrite existing outputs")] = False,
     level: Annotated[int | None, typer.Option("-l", "--level", help="compression level for the target format")] = None,
     dry_run: Annotated[bool, typer.Option("-n", "--dry-run", help="show what would happen without writing")] = False,
@@ -868,14 +875,37 @@ def cli(
     verify: Annotated[bool, typer.Option("--verify", help="integrity-check the output (implied by -r)")] = False,
     strict: Annotated[bool, typer.Option("--strict", help="fail when extension and magic bytes disagree")] = False,
     tmpdir: Annotated[Path | None, typer.Option("--tmpdir", help="scratch directory for staged conversions")] = None,
-    list_formats: Annotated[bool, typer.Option("--list-formats", help="show supported formats and dependency status")] = False,
+    list_formats: Annotated[
+        bool, typer.Option("--list-formats", help="show supported formats and dependency status")
+    ] = False,
     verbose: Annotated[bool, typer.Option("-v", "--verbose")] = False,
     quiet: Annotated[bool, typer.Option("-q", "--quiet")] = False,
 ) -> None:
-    if sum((bool(verbose), bool(quiet),)) > 1:
+    if (
+        sum((
+            bool(verbose),
+            bool(quiet),
+        ))
+        > 1
+    ):
         raise typer.BadParameter("-v, -q are mutually exclusive")
     inputs = inputs or []
-    _STATE.update(inputs=inputs, to=to, remove=remove, output_dir=output_dir, force=force, level=level, dry_run=dry_run, jobs=jobs, verify=verify, strict=strict, tmpdir=tmpdir, list_formats=list_formats, verbose=verbose, quiet=quiet)
+    _STATE.update(
+        inputs=inputs,
+        to=to,
+        remove=remove,
+        output_dir=output_dir,
+        force=force,
+        level=level,
+        dry_run=dry_run,
+        jobs=jobs,
+        verify=verify,
+        strict=strict,
+        tmpdir=tmpdir,
+        list_formats=list_formats,
+        verbose=verbose,
+        quiet=quiet,
+    )
     _run()
 
 

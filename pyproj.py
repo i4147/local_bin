@@ -3,24 +3,22 @@
 "Scaffold a new Python project or rename an existing one. Dry-run by default; use --apply / -g for side effects."
 
 import argparse
+from dataclasses import dataclass, field
+from enum import StrEnum
 import json
 import os
+from pathlib import Path
 import re
 import subprocess
 import sys
 import tomllib
+from types import SimpleNamespace
+from typing import Annotated, Any, Final
 import urllib.error
 import urllib.request
-from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Any, Final
-
-from dotenv import load_dotenv
-from enum import StrEnum
-from types import SimpleNamespace
-from typing import Annotated
 
 import click
+from dotenv import load_dotenv
 import typer
 
 
@@ -31,7 +29,8 @@ def _version_callback(value: bool) -> None:
 
 
 class Readme_format(StrEnum):
-    'Enumerate the supported Readme format values.'
+    "Enumerate the supported Readme format values."
+
     md = "md"
     rst = "rst"
 
@@ -52,18 +51,18 @@ class _ParserShim:
     """Stand-in for the removed argparse parser; hands back what Typer parsed."""
 
     def parse_args(self, args=None, namespace=None):
-        'Parse args.'
+        "Parse args."
         return _Args(**_STATE)
 
     def error(self, message):
         raise typer.BadParameter(message)
 
     def print_help(self, file=None):
-        'Print help.'
+        "Print help."
         typer.echo(click.get_current_context().get_help(), file=file)
 
     def print_usage(self, file=None):
-        'Print usage.'
+        "Print usage."
         typer.echo(click.get_current_context().get_usage(), file=file)
 
 
@@ -1290,7 +1289,6 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     "Parse args."
     parser = _ParserShim()
 
-
     return parser.parse_args(argv)
 
 
@@ -1399,11 +1397,24 @@ app = typer.Typer(
 )
 
 
-@app.command(help="Scaffold a new Python project or rename an existing one. Dry-run by default; use --apply / -g for side effects.")
+@app.command(
+    help="Scaffold a new Python project or rename an existing one. Dry-run by default; use --apply / -g for side effects."
+)
 def cli(
     pkgname: Annotated[str | None, typer.Argument(help="Package name (or old name for --rename)")] = None,
-    scaffold_version: Annotated[bool, typer.Option("-V", "--scaffold-version", callback=_version_callback, is_eager=True, help="show program's version number and exit")] = False,
-    rename: Annotated[str | None, typer.Option("--rename", help="Rename the current (or given) project to NEW", metavar="NEW")] = None,
+    scaffold_version: Annotated[
+        bool,
+        typer.Option(
+            "-V",
+            "--scaffold-version",
+            callback=_version_callback,
+            is_eager=True,
+            help="show program's version number and exit",
+        ),
+    ] = False,
+    rename: Annotated[
+        str | None, typer.Option("--rename", help="Rename the current (or given) project to NEW", metavar="NEW")
+    ] = None,
     single_file: Annotated[bool, typer.Option("-s", "--single-file")] = False,
     cython: Annotated[bool, typer.Option("-c", "--cython")] = False,
     cython_package: Annotated[bool, typer.Option("--cython-package")] = False,
@@ -1467,13 +1478,38 @@ def cli(
     save_config: Annotated[bool, typer.Option("--save-config")] = False,
     profile: Annotated[str | None, typer.Option("--profile")] = None,
 ) -> None:
-    if sum((bool(single_file), bool(cython), bool(cython_package),)) > 1:
+    if (
+        sum((
+            bool(single_file),
+            bool(cython),
+            bool(cython_package),
+        ))
+        > 1
+    ):
         raise typer.BadParameter("-s, -c, --cython-package are mutually exclusive")
-    if sum((bool(cli), bool(no_cli),)) > 1:
+    if (
+        sum((
+            bool(cli),
+            bool(no_cli),
+        ))
+        > 1
+    ):
         raise typer.BadParameter("--cli, --no-cli are mutually exclusive")
-    if sum((bool(tests), bool(no_tests),)) > 1:
+    if (
+        sum((
+            bool(tests),
+            bool(no_tests),
+        ))
+        > 1
+    ):
         raise typer.BadParameter("--tests, --no-tests are mutually exclusive")
-    if sum((bool(pre_commit), bool(no_pre_commit),)) > 1:
+    if (
+        sum((
+            bool(pre_commit),
+            bool(no_pre_commit),
+        ))
+        > 1
+    ):
         raise typer.BadParameter("--pre-commit, --no-pre-commit are mutually exclusive")
     if license is not None and license not in VALID_LICENSES:
         raise typer.BadParameter(f"invalid choice: {license!r} (choose from {VALID_LICENSES})")
@@ -1489,7 +1525,72 @@ def cli(
         raise typer.BadParameter(f"invalid choice: {docs!r} (choose from {VALID_DOCS})")
     if ci is not None and ci not in VALID_CI:
         raise typer.BadParameter(f"invalid choice: {ci!r} (choose from {VALID_CI})")
-    _STATE.update(pkgname=pkgname, rename=rename, single_file=single_file, cython=cython, cython_package=cython_package, cli=cli, no_cli=no_cli, tests=tests, no_tests=no_tests, pre_commit=pre_commit, no_pre_commit=no_pre_commit, git=git, author=author, email=email, description=description, version=version, python=python, license=license, url=url, keywords=keywords, readme_format=readme_format, backend=backend, layout=layout, cli_framework=cli_framework, tests_framework=tests_framework, docs=docs, ci=ci, docker=docker, py_typed=py_typed, executable=executable, module_vars=module_vars, cython_annotate=cython_annotate, cython_directives=cython_directives, cython_include_dirs=cython_include_dirs, cython_pure_python=cython_pure_python, repo_templates=repo_templates, git_message=git_message, initial_tag=initial_tag, git_user_name=git_user_name, git_user_email=git_user_email, ssh_remote=ssh_remote, no_scrub=no_scrub, public=public, github_description=github_description, github_topics=github_topics, github_org=github_org, env_file=env_file, token_env=token_env, no_dotenv=no_dotenv, check_auth=check_auth, dry_run=dry_run, force=force, check_pypi=check_pypi, require_git_clean=require_git_clean, quiet=quiet, verbose=verbose, json_output=json_output, no_color=no_color, tree=tree, next_steps=next_steps, interactive=interactive, config=config, save_config=save_config, profile=profile)
+    _STATE.update(
+        pkgname=pkgname,
+        rename=rename,
+        single_file=single_file,
+        cython=cython,
+        cython_package=cython_package,
+        cli=cli,
+        no_cli=no_cli,
+        tests=tests,
+        no_tests=no_tests,
+        pre_commit=pre_commit,
+        no_pre_commit=no_pre_commit,
+        git=git,
+        author=author,
+        email=email,
+        description=description,
+        version=version,
+        python=python,
+        license=license,
+        url=url,
+        keywords=keywords,
+        readme_format=readme_format,
+        backend=backend,
+        layout=layout,
+        cli_framework=cli_framework,
+        tests_framework=tests_framework,
+        docs=docs,
+        ci=ci,
+        docker=docker,
+        py_typed=py_typed,
+        executable=executable,
+        module_vars=module_vars,
+        cython_annotate=cython_annotate,
+        cython_directives=cython_directives,
+        cython_include_dirs=cython_include_dirs,
+        cython_pure_python=cython_pure_python,
+        repo_templates=repo_templates,
+        git_message=git_message,
+        initial_tag=initial_tag,
+        git_user_name=git_user_name,
+        git_user_email=git_user_email,
+        ssh_remote=ssh_remote,
+        no_scrub=no_scrub,
+        public=public,
+        github_description=github_description,
+        github_topics=github_topics,
+        github_org=github_org,
+        env_file=env_file,
+        token_env=token_env,
+        no_dotenv=no_dotenv,
+        check_auth=check_auth,
+        dry_run=dry_run,
+        force=force,
+        check_pypi=check_pypi,
+        require_git_clean=require_git_clean,
+        quiet=quiet,
+        verbose=verbose,
+        json_output=json_output,
+        no_color=no_color,
+        tree=tree,
+        next_steps=next_steps,
+        interactive=interactive,
+        config=config,
+        save_config=save_config,
+        profile=profile,
+    )
     _run()
 
 

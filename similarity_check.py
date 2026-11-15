@@ -16,12 +16,12 @@ import pathlib
 import re
 import subprocess
 import tokenize
-import zlib
-from typing import Any, Sequence
 from types import SimpleNamespace
-from typing import Annotated
+from typing import Annotated, Any, Sequence
+import zlib
 
 import typer
+
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
@@ -1345,7 +1345,9 @@ app = typer.Typer(
 def main(
     root: Annotated[pathlib.Path, typer.Option("--root", help="repository root")] = ROOT,
     out_dir: Annotated[pathlib.Path, typer.Option("--out-dir")] = pathlib.Path(__file__).resolve().parent,
-    threshold: Annotated[float, typer.Option("--threshold", help="minimum score for two scripts to share a group")] = 0.55,
+    threshold: Annotated[
+        float, typer.Option("--threshold", help="minimum score for two scripts to share a group")
+    ] = 0.55,
     no_svg: Annotated[bool, typer.Option("--no-svg")] = False,
     no_md: Annotated[bool, typer.Option("--no-md")] = False,
 ) -> int:

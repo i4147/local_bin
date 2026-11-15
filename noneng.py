@@ -8,20 +8,20 @@ other detectors are optional and provide install hints when selected.
 """
 
 from __future__ import annotations
-
-import json
-import os
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
+import json
+import os
 from pathlib import Path
 from typing import Literal
 
-import typer
 from dh import SKIP_DIRS
 from rich.console import Console, Group
 from rich.live import Live
 from rich.table import Table
 from rich.text import Text
+import typer
+
 
 Backend = Literal["langdetect", "lingua", "pycld2", "gcld3", "py3langid", "langid"]
 

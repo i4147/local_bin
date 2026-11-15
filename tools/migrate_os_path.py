@@ -2,9 +2,9 @@
 """Run batch migration from os.path to pathlib across root Python scripts."""
 
 from __future__ import annotations
-
-import re
 from pathlib import Path
+import re
+
 
 ROOT = Path(__file__).resolve().parent.parent
 

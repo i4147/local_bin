@@ -62,29 +62,26 @@ Typical usage::
 """
 
 from __future__ import annotations
-
 import argparse
+from concurrent.futures import ProcessPoolExecutor
+from dataclasses import dataclass, replace
+from datetime import datetime
+from enum import StrEnum
 import importlib
 import io
-from loguru import logger
 import lzma
 import os
+from pathlib import Path
 import shutil
 import sys
 import tarfile
 import textwrap
 import time
-from concurrent.futures import ProcessPoolExecutor
-from dataclasses import dataclass, replace
-from datetime import datetime
-from pathlib import Path
-from types import ModuleType
-from typing import Callable, Iterable, Iterator, Sequence
-from enum import StrEnum
-from types import SimpleNamespace
-from typing import Annotated
+from types import ModuleType, SimpleNamespace
+from typing import Annotated, Callable, Iterable, Iterator, Sequence
 
 import click
+from loguru import logger
 import typer
 
 
@@ -95,14 +92,16 @@ def _version_callback(value: bool) -> None:
 
 
 class Report(StrEnum):
-    'Enumerate the supported Report values.'
+    "Enumerate the supported Report values."
+
     plain = "plain"
     rich = "rich"
     auto = "auto"
 
 
 class Report2(StrEnum):
-    'Enumerate the supported Report2 values.'
+    "Enumerate the supported Report2 values."
+
     plain = "plain"
     rich = "rich"
     auto = "auto"
@@ -124,18 +123,18 @@ class _ParserShim:
     """Stand-in for the removed argparse parser; hands back what Typer parsed."""
 
     def parse_args(self, args=None, namespace=None):
-        'Parse args.'
+        "Parse args."
         return _Args(**_STATE)
 
     def error(self, message):
         raise typer.BadParameter(message)
 
     def print_help(self, file=None):
-        'Print help.'
+        "Print help."
         typer.echo(click.get_current_context().get_help(), file=file)
 
     def print_usage(self, file=None):
-        'Print usage.'
+        "Print usage."
         typer.echo(click.get_current_context().get_usage(), file=file)
 
 
@@ -1334,7 +1333,6 @@ def build_parser() -> argparse.ArgumentParser:
     """Build the ``xztool`` argument parser (subcommand based)."""
     parser = _ParserShim()
 
-
     return parser
 
 
@@ -1473,7 +1471,12 @@ app = typer.Typer(
 
 @app.callback()
 def _root(
-    version: Annotated[bool, typer.Option("--version", callback=_version_callback, is_eager=True, help="show program's version number and exit")] = False,
+    version: Annotated[
+        bool,
+        typer.Option(
+            "--version", callback=_version_callback, is_eager=True, help="show program's version number and exit"
+        ),
+    ] = False,
 ) -> None:
     pass
 
@@ -1483,19 +1486,41 @@ def cmd_compress(
     root: Annotated[str, typer.Argument(help="root directory (default: cwd)")] = ".",
     backend: Annotated[str, typer.Option("-f", "--backend", help="compression backend (default: xz)")] = "xz",
     preset: Annotated[int, typer.Option("-p", "--preset", help="LZMA preset 0-9 (default: 9)")] = 9,
-    tar_subdirs: Annotated[bool, typer.Option("-t", "--tar-subdirs", help="tar top-level subdirectories first, then compress them")] = False,
-    threads: Annotated[int, typer.Option("--threads", help="threads per file for the lzma_mt backend (default: 4)")] = 4,
+    tar_subdirs: Annotated[
+        bool, typer.Option("-t", "--tar-subdirs", help="tar top-level subdirectories first, then compress them")
+    ] = False,
+    threads: Annotated[
+        int, typer.Option("--threads", help="threads per file for the lzma_mt backend (default: 4)")
+    ] = 4,
     workers: Annotated[int, typer.Option("-w", "--workers", help="parallel worker processes (default: auto)")] = 0,
-    keep_original: Annotated[bool, typer.Option("-k", "--keep-original", help="keep original files after compression")] = False,
-    overwrite: Annotated[bool, typer.Option("--overwrite", help="overwrite existing outputs instead of skipping them")] = False,
-    extreme: Annotated[bool, typer.Option("--extreme", help="enable LZMA PRESET_EXTREME (slower, slightly smaller)")] = False,
-    only_if_smaller: Annotated[bool, typer.Option("--only-if-smaller", help="discard the archive when it does not shrink the file")] = False,
-    min_size: Annotated[int, typer.Option("--min-size", help="only compress files of at least this many bytes")] = MIN_SIZE_DEFAULT,
-    ext: Annotated[list[str], typer.Option("-e", "--ext", help="compress only files with these extensions (e.g. txt log)")] = [],
+    keep_original: Annotated[
+        bool, typer.Option("-k", "--keep-original", help="keep original files after compression")
+    ] = False,
+    overwrite: Annotated[
+        bool, typer.Option("--overwrite", help="overwrite existing outputs instead of skipping them")
+    ] = False,
+    extreme: Annotated[
+        bool, typer.Option("--extreme", help="enable LZMA PRESET_EXTREME (slower, slightly smaller)")
+    ] = False,
+    only_if_smaller: Annotated[
+        bool, typer.Option("--only-if-smaller", help="discard the archive when it does not shrink the file")
+    ] = False,
+    min_size: Annotated[
+        int, typer.Option("--min-size", help="only compress files of at least this many bytes")
+    ] = MIN_SIZE_DEFAULT,
+    ext: Annotated[
+        list[str], typer.Option("-e", "--ext", help="compress only files with these extensions (e.g. txt log)")
+    ] = [],
     exclude: Annotated[list[str], typer.Option("--exclude", help="exclude paths containing these substrings")] = [],
-    include_media: Annotated[bool, typer.Option("--include-media", help="also compress media/binary files (jpg, mp4, pdf, ...)")] = False,
-    no_skip_compressed: Annotated[bool, typer.Option("--no-skip-compressed", help="also compress foreign archives (own outputs stay skipped)")] = False,
-    out: Annotated[Path | None, typer.Option("--out", help="write archives into this directory (relative paths preserved)")] = None,
+    include_media: Annotated[
+        bool, typer.Option("--include-media", help="also compress media/binary files (jpg, mp4, pdf, ...)")
+    ] = False,
+    no_skip_compressed: Annotated[
+        bool, typer.Option("--no-skip-compressed", help="also compress foreign archives (own outputs stay skipped)")
+    ] = False,
+    out: Annotated[
+        Path | None, typer.Option("--out", help="write archives into this directory (relative paths preserved)")
+    ] = None,
     report: Annotated[Report, typer.Option("--report", help="summary renderer (default: auto)")] = Report.auto,
     dry_run: Annotated[bool, typer.Option("--dry-run", help="show what would happen")] = False,
     verbose: Annotated[bool, typer.Option("-v", "--verbose", help="chatty output")] = False,
@@ -1504,24 +1529,67 @@ def cmd_compress(
         raise typer.BadParameter(f"invalid choice: {backend!r} (choose from {sorted(BACKEND_SUFFIX)})")
     if preset is not None and preset not in range(10):
         raise typer.BadParameter(f"invalid choice: {preset!r} (choose from {range(10)})")
-    _STATE.update(root=root, backend=backend, preset=preset, tar_subdirs=tar_subdirs, threads=threads, workers=workers, keep_original=keep_original, overwrite=overwrite, extreme=extreme, only_if_smaller=only_if_smaller, min_size=min_size, ext=ext, exclude=exclude, include_media=include_media, no_skip_compressed=no_skip_compressed, out=out, report=report, dry_run=dry_run, verbose=verbose, command="compress", handler=_cmd_compress)
+    _STATE.update(
+        root=root,
+        backend=backend,
+        preset=preset,
+        tar_subdirs=tar_subdirs,
+        threads=threads,
+        workers=workers,
+        keep_original=keep_original,
+        overwrite=overwrite,
+        extreme=extreme,
+        only_if_smaller=only_if_smaller,
+        min_size=min_size,
+        ext=ext,
+        exclude=exclude,
+        include_media=include_media,
+        no_skip_compressed=no_skip_compressed,
+        out=out,
+        report=report,
+        dry_run=dry_run,
+        verbose=verbose,
+        command="compress",
+        handler=_cmd_compress,
+    )
     _run()
 
 
 @app.command("decompress", help="decompress archives recursively")
 def cmd_decompress(
     root: Annotated[str, typer.Argument(help="root directory (default: cwd)")] = ".",
-    keep_original: Annotated[bool, typer.Option("-k", "--keep-original", help="keep the archive files after decompression")] = False,
-    no_extract_tar: Annotated[bool, typer.Option("--no-extract-tar", help="turn .tar.xz into .tar files instead of extracting them")] = False,
-    overwrite: Annotated[bool, typer.Option("--overwrite", help="overwrite existing outputs instead of skipping them")] = False,
+    keep_original: Annotated[
+        bool, typer.Option("-k", "--keep-original", help="keep the archive files after decompression")
+    ] = False,
+    no_extract_tar: Annotated[
+        bool, typer.Option("--no-extract-tar", help="turn .tar.xz into .tar files instead of extracting them")
+    ] = False,
+    overwrite: Annotated[
+        bool, typer.Option("--overwrite", help="overwrite existing outputs instead of skipping them")
+    ] = False,
     workers: Annotated[int, typer.Option("-w", "--workers", help="parallel worker processes (default: auto)")] = 0,
     exclude: Annotated[list[str], typer.Option("--exclude", help="exclude paths containing these substrings")] = [],
-    out: Annotated[Path | None, typer.Option("--out", help="write results into this directory (relative paths preserved)")] = None,
+    out: Annotated[
+        Path | None, typer.Option("--out", help="write results into this directory (relative paths preserved)")
+    ] = None,
     report: Annotated[Report2, typer.Option("--report", help="summary renderer (default: auto)")] = Report2.auto,
     dry_run: Annotated[bool, typer.Option("--dry-run", help="show what would happen")] = False,
     verbose: Annotated[bool, typer.Option("-v", "--verbose", help="chatty output")] = False,
 ) -> None:
-    _STATE.update(root=root, keep_original=keep_original, no_extract_tar=no_extract_tar, overwrite=overwrite, workers=workers, exclude=exclude, out=out, report=report, dry_run=dry_run, verbose=verbose, command="decompress", handler=_cmd_decompress)
+    _STATE.update(
+        root=root,
+        keep_original=keep_original,
+        no_extract_tar=no_extract_tar,
+        overwrite=overwrite,
+        workers=workers,
+        exclude=exclude,
+        out=out,
+        report=report,
+        dry_run=dry_run,
+        verbose=verbose,
+        command="decompress",
+        handler=_cmd_decompress,
+    )
     _run()
 
 
@@ -1530,20 +1598,33 @@ def cmd_archive(
     root: Annotated[str, typer.Argument(help="directory containing subdirs")] = ".",
     preset: Annotated[int, typer.Option("-p", "--preset", help="xz preset (default: 9)")] = 9,
     workers: Annotated[int, typer.Option("-w", "--workers", help="parallel worker processes (default: auto)")] = 0,
-    keep_original: Annotated[bool, typer.Option("-k", "--keep-original", help="keep source directories after archiving")] = False,
+    keep_original: Annotated[
+        bool, typer.Option("-k", "--keep-original", help="keep source directories after archiving")
+    ] = False,
     no_verify: Annotated[bool, typer.Option("--no-verify", help="skip the read-back verification pass")] = False,
     verbose: Annotated[bool, typer.Option("-v", "--verbose", help="chatty output")] = False,
 ) -> None:
     if preset is not None and preset not in range(10):
         raise typer.BadParameter(f"invalid choice: {preset!r} (choose from {range(10)})")
-    _STATE.update(root=root, preset=preset, workers=workers, keep_original=keep_original, no_verify=no_verify, verbose=verbose, command="archive", handler=_cmd_archive)
+    _STATE.update(
+        root=root,
+        preset=preset,
+        workers=workers,
+        keep_original=keep_original,
+        no_verify=no_verify,
+        verbose=verbose,
+        command="archive",
+        handler=_cmd_archive,
+    )
     _run()
 
 
 @app.command("pack", help="pack one directory into ../<name>.tar.xz")
 def cmd_pack(
     root: Annotated[str, typer.Argument(help="directory to pack (default: cwd)")] = ".",
-    preset: Annotated[int, typer.Option("-p", "--preset", help="xz preset (default: 6, as in the original ptrr.py)")] = 6,
+    preset: Annotated[
+        int, typer.Option("-p", "--preset", help="xz preset (default: 6, as in the original ptrr.py)")
+    ] = 6,
     verbose: Annotated[bool, typer.Option("-v", "--verbose", help="chatty output")] = False,
 ) -> None:
     if preset is not None and preset not in range(10):

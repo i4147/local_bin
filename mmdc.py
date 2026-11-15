@@ -36,18 +36,18 @@ of the diagrams found in a Markdown file runs on a thread pool
 """
 
 from __future__ import annotations
-
 import argparse
 import ast
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass, field, replace
 import json
 import math
 import os
+from pathlib import Path
 import re
 import sys
-from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass, field, replace
-from pathlib import Path
 from typing import Any, Callable, Iterable, Sequence
+
 
 __version__ = "12.0.0"
 

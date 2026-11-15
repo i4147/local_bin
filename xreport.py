@@ -7,18 +7,16 @@ import gzip
 import json
 import lzma
 import os
+from pathlib import Path
 import shutil
 import sys
 import tarfile
-import zipfile
-from pathlib import Path
-from typing import Any, Callable, Iterable, Optional
-
-from dh import SKIP_DIRS
 from types import SimpleNamespace
-from typing import Annotated
+from typing import Annotated, Any, Callable, Iterable, Optional
+import zipfile
 
 import click
+from dh import SKIP_DIRS
 import typer
 
 
@@ -38,18 +36,18 @@ class _ParserShim:
     """Stand-in for the removed argparse parser; hands back what Typer parsed."""
 
     def parse_args(self, args=None, namespace=None):
-        'Parse args.'
+        "Parse args."
         return _Args(**_STATE)
 
     def error(self, message):
         raise typer.BadParameter(message)
 
     def print_help(self, file=None):
-        'Print help.'
+        "Print help."
         typer.echo(click.get_current_context().get_help(), file=file)
 
     def print_usage(self, file=None):
-        'Print usage.'
+        "Print usage."
         typer.echo(click.get_current_context().get_usage(), file=file)
 
 
@@ -629,7 +627,10 @@ app = typer.Typer(
 )
 
 
-@app.command(help="Unified archive scanner and uncompressed-size reporter (merges xreport.py, xreport2.py, zreport.py).", epilog="examples:\n  archive_report.py scan . -a -v\n  archive_report.py scan ~/Downloads -j\n  archive_report.py sizes ~/Downloads\n")
+@app.command(
+    help="Unified archive scanner and uncompressed-size reporter (merges xreport.py, xreport2.py, zreport.py).",
+    epilog="examples:\n  archive_report.py scan . -a -v\n  archive_report.py scan ~/Downloads -j\n  archive_report.py sizes ~/Downloads\n",
+)
 def cli() -> None:
     _run()
 

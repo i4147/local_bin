@@ -50,11 +50,13 @@ CLI examples (state defaults to ~/.sortplan):
 import argparse
 import contextlib
 import datetime as dt
+from enum import StrEnum
 import errno
 import fnmatch
 import hashlib
 import json
 import os
+from pathlib import Path
 import re
 import shutil
 import stat
@@ -62,21 +64,19 @@ import sys
 import tempfile
 import time
 import tomllib
+from types import SimpleNamespace
+from typing import Annotated, Any, Callable, Iterator, Mapping, Sequence
 import uuid
 import xml.etree.ElementTree as ET
 import zipfile
-from pathlib import Path
-from typing import Any, Callable, Iterator, Mapping, Sequence
-from enum import StrEnum
-from types import SimpleNamespace
-from typing import Annotated
 
 import click
 import typer
 
 
 class By(StrEnum):
-    'Enumerate the supported By values.'
+    "Enumerate the supported By values."
+
     content = "content"
 
 
@@ -96,18 +96,18 @@ class _ParserShim:
     """Stand-in for the removed argparse parser; hands back what Typer parsed."""
 
     def parse_args(self, args=None, namespace=None):
-        'Parse args.'
+        "Parse args."
         return _Args(**_STATE)
 
     def error(self, message):
         raise typer.BadParameter(message)
 
     def print_help(self, file=None):
-        'Print help.'
+        "Print help."
         typer.echo(click.get_current_context().get_help(), file=file)
 
     def print_usage(self, file=None):
-        'Print usage.'
+        "Print usage."
         typer.echo(click.get_current_context().get_usage(), file=file)
 
 
@@ -1181,9 +1181,18 @@ def cmd_undo(
     plan_id: Annotated[str | None, typer.Option("--plan-id")] = None,
     json: Annotated[bool, typer.Option("--json")] = False,
 ) -> None:
-    if sum((bool(last), plan_id is not None,)) > 1:
+    if (
+        sum((
+            bool(last),
+            plan_id is not None,
+        ))
+        > 1
+    ):
         raise typer.BadParameter("--last, --plan-id are mutually exclusive")
-    if not any((bool(last), plan_id is not None,)):
+    if not any((
+        bool(last),
+        plan_id is not None,
+    )):
         raise typer.BadParameter("one of --last, --plan-id is required")
     _STATE.update(last=last, plan_id=plan_id, json=json, command="undo")
     _run()

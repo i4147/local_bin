@@ -15,11 +15,11 @@ Install the grammar wheels in ``requirements.txt`` to enable all published
 bindings. A missing language binding affects only files of that language.
 """
 
-import importlib
-import re
 from dataclasses import dataclass
+import importlib
 from pathlib import Path
-from typing import Final
+import re
+from typing import Annotated, Final
 
 from atomicio import atomic_write
 from rich.console import Console
@@ -27,9 +27,8 @@ from rich.live import Live
 from rich.table import Table
 from rich.text import Text
 from tree_sitter import Language, Node, Parser
-from typing import Annotated
-
 import typer
+
 
 _EXTENSION_TO_LANGUAGE: Final[dict[str, str]] = {
     ".rs": "rust",

@@ -5,19 +5,17 @@ import argparse
 import ast
 import collections
 import json
-import sys
 from multiprocessing import Pool
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Final, cast
+import sys
+from types import SimpleNamespace
+from typing import TYPE_CHECKING, Annotated, Any, Final, cast
 
 import astor
 from dh import MAX_WORKERS
 from loguru import logger
 from rich.console import Console
 from rich.table import Table
-from types import SimpleNamespace
-from typing import Annotated
-
 import typer
 
 
@@ -281,18 +279,57 @@ app = typer.Typer(
 
 @app.command(help="Find duplicated Python definitions and optionally strip them.")
 def parse_args(
-    apply: Annotated[bool, typer.Option("-a", "--apply", help="Apply changes (default: report only, source files are not modified).")] = False,
-    min_files: Annotated[int, typer.Option("-m", "--min-files", help=f"Minimum number of files containing a duplicate (default: {DEFAULT_MIN_FILES}).", metavar="N")] = DEFAULT_MIN_FILES,
-    json: Annotated[Path, typer.Option("-j", "--json", help=f"Path to write the JSON report (default: {REPEATED_JSON_PATH}).", metavar="PATH")] = REPEATED_JSON_PATH,
-    workers: Annotated[int, typer.Option("-w", "--workers", help=f"Number of parallel workers when applying (default: {MAX_WORKERS}).", metavar="N")] = MAX_WORKERS,
-    root: Annotated[Path, typer.Option("-r", "--root", help="Root directory to scan (default: current directory).", metavar="DIR")] = Path.cwd(),
-    exclude: Annotated[list[str] | None, typer.Option("-e", "--exclude", help="Substring to exclude from scanning (repeatable).", metavar="PATTERN")] = None,
+    apply: Annotated[
+        bool, typer.Option("-a", "--apply", help="Apply changes (default: report only, source files are not modified).")
+    ] = False,
+    min_files: Annotated[
+        int,
+        typer.Option(
+            "-m",
+            "--min-files",
+            help=f"Minimum number of files containing a duplicate (default: {DEFAULT_MIN_FILES}).",
+            metavar="N",
+        ),
+    ] = DEFAULT_MIN_FILES,
+    json: Annotated[
+        Path,
+        typer.Option(
+            "-j", "--json", help=f"Path to write the JSON report (default: {REPEATED_JSON_PATH}).", metavar="PATH"
+        ),
+    ] = REPEATED_JSON_PATH,
+    workers: Annotated[
+        int,
+        typer.Option(
+            "-w", "--workers", help=f"Number of parallel workers when applying (default: {MAX_WORKERS}).", metavar="N"
+        ),
+    ] = MAX_WORKERS,
+    root: Annotated[
+        Path, typer.Option("-r", "--root", help="Root directory to scan (default: current directory).", metavar="DIR")
+    ] = Path.cwd(),
+    exclude: Annotated[
+        list[str] | None,
+        typer.Option("-e", "--exclude", help="Substring to exclude from scanning (repeatable).", metavar="PATTERN"),
+    ] = None,
     quiet: Annotated[bool, typer.Option("-q", "--quiet", help="Suppress the summary table.")] = False,
     no_json: Annotated[bool, typer.Option("--no-json", help="Do not write the JSON report.")] = False,
-    version: Annotated[bool, typer.Option("-V", "--version", callback=_version_callback, is_eager=True, help="show program's version number and exit")] = False,
+    version: Annotated[
+        bool,
+        typer.Option(
+            "-V", "--version", callback=_version_callback, is_eager=True, help="show program's version number and exit"
+        ),
+    ] = False,
 ) -> argparse.Namespace:
     "Parse args."
-    args = SimpleNamespace(apply=apply, min_files=min_files, json=json, workers=workers, root=root, exclude=exclude, quiet=quiet, no_json=no_json)
+    args = SimpleNamespace(
+        apply=apply,
+        min_files=min_files,
+        json=json,
+        workers=workers,
+        root=root,
+        exclude=exclude,
+        quiet=quiet,
+        no_json=no_json,
+    )
     if args.exclude is None:
         args.exclude = []
     return args

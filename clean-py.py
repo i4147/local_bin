@@ -2,32 +2,30 @@
 "Utilities for clean-py."
 
 from __future__ import absolute_import
-
 import contextlib
-import difflib
-import json
-from loguru import logger
-import shutil
-import sys
-import tempfile
-import time
 from dataclasses import dataclass, field, replace
+import difflib
 from functools import partial
+import json
 from multiprocessing import cpu_count
 from multiprocessing.dummy import Pool
 from pathlib import Path
+import shutil
 from subprocess import run
+import sys
+import tempfile
+import time
 from typing import Any, Callable, Optional, Sequence
 
-import typer
 from autoflake import fix_code
-from black import (DEFAULT_LINE_LENGTH, FileMode, NothingChanged,
-                   format_file_contents)
+from black import DEFAULT_LINE_LENGTH, FileMode, NothingChanged, format_file_contents
 from isort import code as isort_code
+from loguru import logger
 from rich.console import Console
-from rich.progress import (BarColumn, Progress, SpinnerColumn,
-                           TaskProgressColumn, TextColumn)
+from rich.progress import BarColumn, Progress, SpinnerColumn, TaskProgressColumn, TextColumn
 from rich.table import Table
+import typer
+
 
 try:
     from black import TargetVersion  # type: ignore[attr-defined]
@@ -51,8 +49,7 @@ except ImportError:
     _pathspec = None  # type: ignore[assignment]
 
 try:
-    from watchdog.events import \
-        FileSystemEventHandler  # type: ignore[import-not-found]
+    from watchdog.events import FileSystemEventHandler  # type: ignore[import-not-found]
     from watchdog.observers import Observer  # type: ignore[import-not-found]
 
     _HAS_WATCHDOG = True

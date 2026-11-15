@@ -1,15 +1,17 @@
 #!/data/data/com.termux/files/usr/bin/env python
-'Utilities for pydf.'
+"Utilities for pydf."
+
+from math import log
 import os
 from pathlib import Path
 import re
 import struct
 import sys
-import unicodedata
-from math import log
 from typing import Any, Optional
+import unicodedata
 
 import typer
+
 
 app = typer.Typer(add_completion=False)
 
@@ -43,13 +45,13 @@ colours: dict[str, str] = {
 
 class Bar:
     def __init__(self, percentage: float = 0.0, width: int = 2, header: bool = False) -> None:
-        'Initialize the instance state from the supplied arguments.'
+        "Initialize the instance state from the supplied arguments."
         self.percentage = percentage
         self.width = width
         self.header = header
 
     def __len__(self) -> int:
-        'Return the number of items represented by the object.'
+        "Return the number of items represented by the object."
         return self.width
 
     def __str__(self) -> str:
@@ -68,7 +70,7 @@ class DumbStatus:
 
 
 def get_terminal_width_termios() -> Optional[int]:
-    'Return terminal width termios.'
+    "Return terminal width termios."
     try:
         import fcntl
         import termios
@@ -83,7 +85,7 @@ def get_terminal_width_termios() -> Optional[int]:
 
 
 def get_terminal_width_resize() -> Optional[int]:
-    'Return terminal width resize.'
+    "Return terminal width resize."
     import subprocess
 
     status, output = subprocess.getstatusoutput("resize")
@@ -102,12 +104,12 @@ def get_terminal_width_resize() -> Optional[int]:
 
 
 def get_terminal_width_dumb() -> int:
-    'Return terminal width dumb.'
+    "Return terminal width dumb."
     return 80
 
 
 def get_terminal_width() -> int:
-    'Return terminal width.'
+    "Return terminal width."
     for handler in [get_terminal_width_termios, get_terminal_width_resize, get_terminal_width_dumb]:
         width = handler()
         if width:
@@ -116,7 +118,7 @@ def get_terminal_width() -> int:
 
 
 def find_mountpoint(path: str) -> Optional[str]:
-    'Find mountpoint.'
+    "Find mountpoint."
     if not Path(path).exists():
         sys.stderr.write(f"pydf: {repr(path)}: No such file or directory\n")
         return None
@@ -212,7 +214,7 @@ def makecolour(clist: str | list[str]) -> str:
 
 
 def get_all_mountpoints() -> dict[str, tuple[str, str, list[str]]]:
-    'Return all mountpoints.'
+    "Return all mountpoints."
     dummy_result = {"/": ("/", "", [])}
     f = None
     if isinstance(mountfile, str):
@@ -265,17 +267,17 @@ def niceprint_fs(fs: Any) -> Any:
 
 
 def is_remote_fs(fs: str) -> bool:
-    'Return whether remote fs.'
+    "Return whether remote fs."
     return fs.lower() in ["nfs", "smbfs", "cifs", "ncpfs", "afs", "coda", "ftpfs", "mfs", "sshfs", "fuse.sshfs", "nfs4"]
 
 
 def is_special_fs(fs: str) -> bool:
-    'Return whether special fs.'
+    "Return whether special fs."
     return fs.lower() in ["tmpfs", "devpts", "devtmpfs", "proc", "sysfs", "usbfs", "devfs", "fdescfs", "linprocfs"]
 
 
 def get_row_mp(mp: Optional[str]) -> Optional[list[tuple[str, Any]]]:
-    'Return row mp.'
+    "Return row mp."
     global \
         local_fs_colour, \
         remote_fs_colour, \
@@ -387,7 +389,7 @@ def get_row_mp(mp: Optional[str]) -> Optional[list[tuple[str, Any]]]:
 
 
 def get_table(mps: list[str]) -> list[list[tuple[str, Any]]]:
-    'Return table.'
+    "Return table."
     rows = [get_row_mp(None)]
     for mp in mps:
         row = get_row_mp(mp)
@@ -548,7 +550,7 @@ def main(
     show_binds: bool = typer.Option(True, "-B", "--show-binds", help="show 'mount --bind' mounts"),
     inodes_opt: bool = typer.Option(False, "-i", "--inodes", help="show inode instead of block usage"),
 ):
-    'Run the command-line interface.'
+    "Run the command-line interface."
     global \
         blocksize, \
         allfss, \

@@ -10,6 +10,7 @@ module, class, function, and method. Run from any directory with:
 import ast
 from pathlib import Path
 
+
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "documented" / "AUDIT.md"
 

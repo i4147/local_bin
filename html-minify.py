@@ -2,20 +2,17 @@
 "Minify HTML files in the current directory in place."
 
 from __future__ import annotations
-
 import argparse
+from concurrent.futures import ProcessPoolExecutor
 import os
+from pathlib import Path
 import sys
 import tempfile
-from concurrent.futures import ProcessPoolExecutor
-from pathlib import Path
-from typing import NamedTuple
-
-from dh import get_files, runcmd
 from types import SimpleNamespace
-from typing import Annotated
+from typing import Annotated, NamedTuple
 
 import click
+from dh import get_files, runcmd
 import typer
 
 
@@ -35,18 +32,18 @@ class _ParserShim:
     """Stand-in for the removed argparse parser; hands back what Typer parsed."""
 
     def parse_args(self, args=None, namespace=None):
-        'Parse args.'
+        "Parse args."
         return _Args(**_STATE)
 
     def error(self, message):
         raise typer.BadParameter(message)
 
     def print_help(self, file=None):
-        'Print help.'
+        "Print help."
         typer.echo(click.get_current_context().get_help(), file=file)
 
     def print_usage(self, file=None):
-        'Print usage.'
+        "Print usage."
         typer.echo(click.get_current_context().get_usage(), file=file)
 
 
@@ -204,8 +201,12 @@ app = typer.Typer(
 
 @app.command(help="Minify HTML files in the current directory in place.")
 def cli(
-    binary: Annotated[str, typer.Option("--binary", help="min-html executable name or path (default: min-html)")] = "min-html",
-    workers: Annotated[int, typer.Option("-j", "--workers", help="number of files to process concurrently")] = max(1, os.cpu_count() or 1),
+    binary: Annotated[
+        str, typer.Option("--binary", help="min-html executable name or path (default: min-html)")
+    ] = "min-html",
+    workers: Annotated[int, typer.Option("-j", "--workers", help="number of files to process concurrently")] = max(
+        1, os.cpu_count() or 1
+    ),
 ) -> None:
     _STATE.update(binary=binary, workers=workers)
     _run()

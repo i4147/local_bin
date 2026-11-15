@@ -2,25 +2,25 @@
 "Merge JSON files with matching schemas, including bilingual string dictionaries."
 
 import argparse
+from enum import StrEnum
 import glob
 import json
 import mmap
 import os
+from pathlib import Path
 import secrets
 import string
 import sys
-from pathlib import Path
-from typing import Any, NoReturn, Sequence
-from enum import StrEnum
 from types import SimpleNamespace
-from typing import Annotated
+from typing import Annotated, Any, NoReturn, Sequence
 
 import click
 import typer
 
 
 class Conflict(StrEnum):
-    'Enumerate the supported Conflict values.'
+    "Enumerate the supported Conflict values."
+
     last = "last"
     first = "first"
     list = "list"
@@ -43,18 +43,18 @@ class _ParserShim:
     """Stand-in for the removed argparse parser; hands back what Typer parsed."""
 
     def parse_args(self, args=None, namespace=None):
-        'Parse args.'
+        "Parse args."
         return _Args(**_STATE)
 
     def error(self, message):
         raise typer.BadParameter(message)
 
     def print_help(self, file=None):
-        'Print help.'
+        "Print help."
         typer.echo(click.get_current_context().get_help(), file=file)
 
     def print_usage(self, file=None):
-        'Print usage.'
+        "Print usage."
         typer.echo(click.get_current_context().get_usage(), file=file)
 
 
@@ -359,15 +359,36 @@ app = typer.Typer(
 
 @app.command(help="Merge JSON files with matching schemas, including bilingual string dictionaries.")
 def cli(
-    inputs: Annotated[list[str], typer.Argument(help="Input JSON files or glob patterns; quote patterns containing wildcards")],
-    output_dir: Annotated[Path, typer.Option("--output-dir", help="Directory for a randomly named output file (default: current directory)")] = Path.cwd(),
-    output: Annotated[Path | None, typer.Option("--output", help="Write to this exact path; existing files are not overwritten")] = None,
-    conflict: Annotated[Conflict, typer.Option("--conflict", help="How to handle keys with different values (default: last)")] = Conflict.last,
-    dedup: Annotated[bool, typer.Option("-d", "--dedup", help="Remove duplicate list items and repeated values after merging")] = False,
+    inputs: Annotated[
+        list[str], typer.Argument(help="Input JSON files or glob patterns; quote patterns containing wildcards")
+    ],
+    output_dir: Annotated[
+        Path,
+        typer.Option("--output-dir", help="Directory for a randomly named output file (default: current directory)"),
+    ] = Path.cwd(),
+    output: Annotated[
+        Path | None, typer.Option("--output", help="Write to this exact path; existing files are not overwritten")
+    ] = None,
+    conflict: Annotated[
+        Conflict, typer.Option("--conflict", help="How to handle keys with different values (default: last)")
+    ] = Conflict.last,
+    dedup: Annotated[
+        bool, typer.Option("-d", "--dedup", help="Remove duplicate list items and repeated values after merging")
+    ] = False,
     sort_keys: Annotated[bool, typer.Option("-s", "--sort-keys", help="Sort object keys in the output JSON")] = False,
-    dry_run: Annotated[bool, typer.Option("--dry-run", help="Report which files would be merged without writing an output file")] = False,
+    dry_run: Annotated[
+        bool, typer.Option("--dry-run", help="Report which files would be merged without writing an output file")
+    ] = False,
 ) -> None:
-    _STATE.update(inputs=inputs, output_dir=output_dir, output=output, conflict=conflict, dedup=dedup, sort_keys=sort_keys, dry_run=dry_run)
+    _STATE.update(
+        inputs=inputs,
+        output_dir=output_dir,
+        output=output,
+        conflict=conflict,
+        dedup=dedup,
+        sort_keys=sort_keys,
+        dry_run=dry_run,
+    )
     _run()
 
 

@@ -33,8 +33,10 @@ Environment: Linux, Python 3.12+.  No hard dependencies.
 """
 
 from __future__ import annotations
-
+from array import array
 import base64
+from collections import Counter
+from enum import StrEnum
 import fcntl
 import glob
 import math
@@ -47,19 +49,17 @@ import sys
 import termios
 import time
 import tty
-import xml.etree.ElementTree as ET
-import zlib
-from array import array
-from collections import Counter
-from enum import StrEnum
 from types import SimpleNamespace
 from typing import Annotated
+import xml.etree.ElementTree as ET
+import zlib
 
 import typer
 
 
 class Renderer(StrEnum):
-    'Enumerate the supported Renderer values.'
+    "Enumerate the supported Renderer values."
+
     auto = "auto"
     blocks = "blocks"
     halfblock = "halfblock"
@@ -68,14 +68,16 @@ class Renderer(StrEnum):
 
 
 class Engine(StrEnum):
-    'Enumerate the supported Engine values.'
+    "Enumerate the supported Engine values."
+
     auto = "auto"
     cairosvg = "cairosvg"
     builtin = "builtin"
 
 
 class Color(StrEnum):
-    'Enumerate the supported Color values.'
+    "Enumerate the supported Color values."
+
     auto = "auto"
     truecolor = "truecolor"
     v_256 = "256"
@@ -2209,21 +2211,61 @@ app = typer.Typer(
 @app.command(help="One-shot terminal SVG viewer with PNG auto-save.")
 def main(
     files: Annotated[list[str], typer.Argument(help="SVG file(s), glob patterns allowed", metavar="SVG")],
-    renderer: Annotated[Renderer, typer.Option("--renderer", help="terminal output backend (default: auto-detect)")] = Renderer.auto,
-    engine: Annotated[Engine, typer.Option("--engine", help="rendering engine (default: cairosvg if importable)")] = Engine.auto,
-    bg: Annotated[str | None, typer.Option("--bg", help="background color for transparency (name or hex); 'none' keeps alpha in saved PNGs only", metavar="COLOR")] = None,
-    png: Annotated[str | None, typer.Option("--png", help="save PNG to exactly this path (single input only)", metavar="PATH")] = None,
-    png_width: Annotated[int | None, typer.Option("--png-width", help="width of saved PNGs (default: intrinsic, capped at 512 px on the long side)", metavar="PX")] = None,
+    renderer: Annotated[
+        Renderer, typer.Option("--renderer", help="terminal output backend (default: auto-detect)")
+    ] = Renderer.auto,
+    engine: Annotated[
+        Engine, typer.Option("--engine", help="rendering engine (default: cairosvg if importable)")
+    ] = Engine.auto,
+    bg: Annotated[
+        str | None,
+        typer.Option(
+            "--bg",
+            help="background color for transparency (name or hex); 'none' keeps alpha in saved PNGs only",
+            metavar="COLOR",
+        ),
+    ] = None,
+    png: Annotated[
+        str | None, typer.Option("--png", help="save PNG to exactly this path (single input only)", metavar="PATH")
+    ] = None,
+    png_width: Annotated[
+        int | None,
+        typer.Option(
+            "--png-width",
+            help="width of saved PNGs (default: intrinsic, capped at 512 px on the long side)",
+            metavar="PX",
+        ),
+    ] = None,
     no_save: Annotated[bool, typer.Option("--no-save", help="do not auto-save <file>.svg.png")] = False,
     ss: Annotated[int, typer.Option("--ss", help="supersampling factor for the built-in engine", metavar="1-5")] = 3,
-    width: Annotated[int | None, typer.Option("--width", help="maximum terminal columns to use", metavar="COLS")] = None,
+    width: Annotated[
+        int | None, typer.Option("--width", help="maximum terminal columns to use", metavar="COLS")
+    ] = None,
     color: Annotated[Color, typer.Option("--color", help="color depth for half-block output")] = Color.auto,
     quiet: Annotated[bool, typer.Option("-q", "--quiet", help="suppress status messages on stderr")] = False,
     verbose: Annotated[bool, typer.Option("--verbose", help="extra diagnostics on stderr")] = False,
-    version: Annotated[bool, typer.Option("--version", callback=_version_callback, is_eager=True, help="show program's version number and exit")] = False,
+    version: Annotated[
+        bool,
+        typer.Option(
+            "--version", callback=_version_callback, is_eager=True, help="show program's version number and exit"
+        ),
+    ] = False,
 ):
     "Run the command-line interface."
-    args = SimpleNamespace(files=files, renderer=renderer, engine=engine, bg=bg, png=png, png_width=png_width, no_save=no_save, ss=ss, width=width, color=color, quiet=quiet, verbose=verbose)
+    args = SimpleNamespace(
+        files=files,
+        renderer=renderer,
+        engine=engine,
+        bg=bg,
+        png=png,
+        png_width=png_width,
+        no_save=no_save,
+        ss=ss,
+        width=width,
+        color=color,
+        quiet=quiet,
+        verbose=verbose,
+    )
 
     # expand globs (shell may have done it already)
     files = []

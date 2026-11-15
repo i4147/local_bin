@@ -24,13 +24,18 @@ Data lives in $RLATER_DB, or $XDG_DATA_HOME/rlater/rlater.db
 """
 
 from __future__ import annotations
-
 import argparse
 import codecs
+from collections.abc import Callable, Iterator, Sequence
+from concurrent.futures import ThreadPoolExecutor
 import contextlib
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from html.parser import HTMLParser
 import json
 import math
 import os
+from pathlib import Path
 import re
 import shlex
 import shutil
@@ -38,18 +43,13 @@ import sqlite3
 import subprocess
 import sys
 import textwrap
-import webbrowser
-import zlib
-from collections.abc import Callable, Iterator, Sequence
-from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass, field
-from datetime import UTC, datetime
-from html.parser import HTMLParser
-from pathlib import Path
 from typing import Final, NoReturn
 from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit, urlunsplit
 from urllib.request import Request, urlopen
+import webbrowser
+import zlib
+
 
 __version__ = "1.0.0"
 APP: Final = "rlater"

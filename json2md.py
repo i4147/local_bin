@@ -2,30 +2,30 @@
 """Convert JSON from a file or stdin into a Markdown table or list."""
 
 from __future__ import annotations
-
 import argparse
-import fnmatch
-import json
-import sys
-from itertools import product
-from pathlib import Path
-from typing import Any, Sequence, TextIO
 from enum import StrEnum
+import fnmatch
+from itertools import product
+import json
+from pathlib import Path
+import sys
 from types import SimpleNamespace
-from typing import Annotated
+from typing import Annotated, Any, Sequence, TextIO
 
 import click
 import typer
 
 
 class Format(StrEnum):
-    'Enumerate the supported Format values.'
+    "Enumerate the supported Format values."
+
     table = "table"
     list = "list"
 
 
 class Array_mode(StrEnum):
-    'Enumerate the supported Array mode values.'
+    "Enumerate the supported Array mode values."
+
     json = "json"
     join = "join"
     expand = "expand"
@@ -47,18 +47,18 @@ class _ParserShim:
     """Stand-in for the removed argparse parser; hands back what Typer parsed."""
 
     def parse_args(self, args=None, namespace=None):
-        'Parse args.'
+        "Parse args."
         return _Args(**_STATE)
 
     def error(self, message):
         raise typer.BadParameter(message)
 
     def print_help(self, file=None):
-        'Print help.'
+        "Print help."
         typer.echo(click.get_current_context().get_help(), file=file)
 
     def print_usage(self, file=None):
-        'Print usage.'
+        "Print usage."
         typer.echo(click.get_current_context().get_usage(), file=file)
 
 
@@ -327,17 +327,55 @@ app = typer.Typer(
 @app.command(help="Convert JSON from a file or stdin into a Markdown table or list.")
 def cli(
     input: Annotated[str, typer.Argument(help="JSON input file; defaults to stdin")] = "-",
-    output: Annotated[str | None, typer.Option("-o", "--output", help="write Markdown to this file instead of stdout")] = None,
+    output: Annotated[
+        str | None, typer.Option("-o", "--output", help="write Markdown to this file instead of stdout")
+    ] = None,
     format: Annotated[Format, typer.Option("-f", "--format", help="output format (default: table)")] = Format.table,
-    array_mode: Annotated[Array_mode, typer.Option("--array-mode", help="how to display or handle arrays: compact JSON, join scalar values, or expand array items into rows (default: json)")] = Array_mode.json,
-    separator: Annotated[str, typer.Option("--separator", help="separator used in flattened column paths (default: .)")] = ".",
-    header: Annotated[list[str], typer.Option("--header", help="rename a flattened column; may be supplied more than once", metavar="PATH=LABEL", parser=parse_header)] = [],
-    exclude: Annotated[list[str], typer.Option("--exclude", help="exclude columns matching a glob pattern; may be supplied more than once", metavar="GLOB")] = [],
-    sort_columns: Annotated[bool, typer.Option("--sort-columns", help="sort columns alphabetically by their displayed header")] = False,
-    no_header: Annotated[bool, typer.Option("--no-header", help="omit the header and separator rows (table format only)")] = False,
+    array_mode: Annotated[
+        Array_mode,
+        typer.Option(
+            "--array-mode",
+            help="how to display or handle arrays: compact JSON, join scalar values, or expand array items into rows (default: json)",
+        ),
+    ] = Array_mode.json,
+    separator: Annotated[
+        str, typer.Option("--separator", help="separator used in flattened column paths (default: .)")
+    ] = ".",
+    header: Annotated[
+        list[str],
+        typer.Option(
+            "--header",
+            help="rename a flattened column; may be supplied more than once",
+            metavar="PATH=LABEL",
+            parser=parse_header,
+        ),
+    ] = [],
+    exclude: Annotated[
+        list[str],
+        typer.Option(
+            "--exclude", help="exclude columns matching a glob pattern; may be supplied more than once", metavar="GLOB"
+        ),
+    ] = [],
+    sort_columns: Annotated[
+        bool, typer.Option("--sort-columns", help="sort columns alphabetically by their displayed header")
+    ] = False,
+    no_header: Annotated[
+        bool, typer.Option("--no-header", help="omit the header and separator rows (table format only)")
+    ] = False,
     null_text: Annotated[str, typer.Option("--null-text", help="text to use for JSON null values (default: —)")] = "—",
 ) -> None:
-    _STATE.update(input=input, output=output, format=format, array_mode=array_mode, separator=separator, header=header, exclude=exclude, sort_columns=sort_columns, no_header=no_header, null_text=null_text)
+    _STATE.update(
+        input=input,
+        output=output,
+        format=format,
+        array_mode=array_mode,
+        separator=separator,
+        header=header,
+        exclude=exclude,
+        sort_columns=sort_columns,
+        no_header=no_header,
+        null_text=null_text,
+    )
     _run()
 
 

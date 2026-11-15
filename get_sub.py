@@ -3,33 +3,31 @@
 "download subtitles easily"
 
 import argparse
+from collections import OrderedDict
+from contextlib import closing, suppress
 import copy
+from io import BytesIO
 import json
 import os
+from pathlib import Path
 import re
+from shutil import get_terminal_size
 import subprocess
 import sys
 import tempfile
-import zipfile
-from collections import OrderedDict
-from contextlib import closing, suppress
-from io import BytesIO
-from pathlib import Path
-from shutil import get_terminal_size
 from traceback import format_exc
-from typing import Any, Optional
+from types import SimpleNamespace
+from typing import Annotated, Any, Optional
 from urllib.parse import urljoin
+import zipfile
 
+from bs4 import BeautifulSoup
+import click
+from guessit import guessit
 import rarfile
 import requests
-from bs4 import BeautifulSoup
-from guessit import guessit
 from requests import exceptions
 from requests.utils import quote
-from types import SimpleNamespace
-from typing import Annotated
-
-import click
 import typer
 
 
@@ -49,18 +47,18 @@ class _ParserShim:
     """Stand-in for the removed argparse parser; hands back what Typer parsed."""
 
     def parse_args(self, args=None, namespace=None):
-        'Parse args.'
+        "Parse args."
         return _Args(**_STATE)
 
     def error(self, message):
         raise typer.BadParameter(message)
 
     def print_help(self, file=None):
-        'Print help.'
+        "Print help."
         typer.echo(click.get_current_context().get_help(), file=file)
 
     def print_usage(self, file=None):
-        'Print usage.'
+        "Print usage."
         typer.echo(click.get_current_context().get_usage(), file=file)
 
 
@@ -1128,17 +1126,45 @@ app = typer.Typer(
 def cli(
     name: Annotated[str, typer.Argument(help="the video's name or full path or a dir with videos")],
     directory: Annotated[str, typer.Option("-p", "--directory", help="set specified subtitle download path")] = "",
-    query: Annotated[bool, typer.Option("-q", "--query", help="show search results and choose one to download")] = False,
-    single: Annotated[bool, typer.Option("-s", "--single", help="show subtitles in the compacted file and choose one to download")] = False,
+    query: Annotated[
+        bool, typer.Option("-q", "--query", help="show search results and choose one to download")
+    ] = False,
+    single: Annotated[
+        bool, typer.Option("-s", "--single", help="show subtitles in the compacted file and choose one to download")
+    ] = False,
     over: Annotated[bool, typer.Option("-o", "--over", help="replace the subtitle already exists")] = False,
     more: Annotated[bool, typer.Option("-m", "--more", help="save original download file.")] = False,
-    number: Annotated[str | None, typer.Option("-n", "--number", help="set max number of subtitles to be choosen when in query mode")] = None,
-    both: Annotated[bool, typer.Option("-b", "--both", help="save .srt and .ass subtitles at the same time if two types exist in the same archive")] = False,
-    downloader: Annotated[str | None, typer.Option("-d", "--downloader", help="choose downloader from " + ", ".join(DownloaderManager.downloader_names))] = None,
+    number: Annotated[
+        str | None, typer.Option("-n", "--number", help="set max number of subtitles to be choosen when in query mode")
+    ] = None,
+    both: Annotated[
+        bool,
+        typer.Option(
+            "-b", "--both", help="save .srt and .ass subtitles at the same time if two types exist in the same archive"
+        ),
+    ] = False,
+    downloader: Annotated[
+        str | None,
+        typer.Option(
+            "-d", "--downloader", help="choose downloader from " + ", ".join(DownloaderManager.downloader_names)
+        ),
+    ] = None,
     debug: Annotated[bool, typer.Option("--debug", help="show more info of the error")] = False,
     plex: Annotated[bool, typer.Option("--plex", help="add .zh to the subtitle's name for plex to recognize")] = False,
 ) -> None:
-    _STATE.update(name=name, directory=directory, query=query, single=single, over=over, more=more, number=number, both=both, downloader=downloader, debug=debug, plex=plex)
+    _STATE.update(
+        name=name,
+        directory=directory,
+        query=query,
+        single=single,
+        over=over,
+        more=more,
+        number=number,
+        both=both,
+        downloader=downloader,
+        debug=debug,
+        plex=plex,
+    )
     _run()
 
 

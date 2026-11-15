@@ -2,31 +2,30 @@
 "List and bulk-delete branches that are already merged into the base branch."
 
 from __future__ import annotations
-
 import argparse
+from collections.abc import Sequence
+from dataclasses import asdict, dataclass
+from enum import StrEnum
 import fnmatch
 import json
 import os
+from pathlib import Path
 import re
 import shlex
 import shutil
 import subprocess
 import sys
 import time
-from collections.abc import Sequence
-from dataclasses import asdict, dataclass
-from pathlib import Path
-from typing import Literal
-from enum import StrEnum
 from types import SimpleNamespace
-from typing import Annotated
+from typing import Annotated, Literal
 
 import click
 import typer
 
 
 class Scope2(StrEnum):
-    'Enumerate the supported Scope2 values.'
+    "Enumerate the supported Scope2 values."
+
     local = "local"
     remote = "remote"
     both = "both"
@@ -48,18 +47,18 @@ class _ParserShim:
     """Stand-in for the removed argparse parser; hands back what Typer parsed."""
 
     def parse_args(self, args=None, namespace=None):
-        'Parse args.'
+        "Parse args."
         return _Args(**_STATE)
 
     def error(self, message):
         raise typer.BadParameter(message)
 
     def print_help(self, file=None):
-        'Print help.'
+        "Print help."
         typer.echo(click.get_current_context().get_help(), file=file)
 
     def print_usage(self, file=None):
-        'Print usage.'
+        "Print usage."
         typer.echo(click.get_current_context().get_usage(), file=file)
 
 
@@ -578,29 +577,80 @@ app = typer.Typer(
 
 @app.command(help="List and bulk-delete branches that are already merged into the base branch.")
 def cli(
-    patterns: Annotated[list[str] | None, typer.Argument(help="only consider branches matching these globs", metavar="PATTERN")] = None,
-    repo: Annotated[Path, typer.Option("-C", "--repo", help="repository path (default: current directory)")] = Path("."),
-    base: Annotated[str | None, typer.Option("-b", "--base", help="base ref to compare against (default: remote HEAD, main or master)")] = None,
+    patterns: Annotated[
+        list[str] | None, typer.Argument(help="only consider branches matching these globs", metavar="PATTERN")
+    ] = None,
+    repo: Annotated[Path, typer.Option("-C", "--repo", help="repository path (default: current directory)")] = Path(
+        "."
+    ),
+    base: Annotated[
+        str | None,
+        typer.Option("-b", "--base", help="base ref to compare against (default: remote HEAD, main or master)"),
+    ] = None,
     scope: Annotated[Scope2, typer.Option("-s", "--scope", help="which branches to consider")] = Scope2.local,
     remote: Annotated[str, typer.Option("--remote", help="remote name (default: origin)")] = "origin",
-    exclude: Annotated[list[str], typer.Option("-x", "--exclude", help="skip branches matching this glob (repeatable)", metavar="GLOB")] = [],
-    regex: Annotated[str | None, typer.Option("-e", "--regex", help="only consider branch names matching this regular expression")] = None,
-    older_than: Annotated[int | None, typer.Option("--older-than", help="only branches whose last commit is older than DAYS", metavar="DAYS")] = None,
-    author: Annotated[str | None, typer.Option("--author", help="only branches whose last commit author contains this text")] = None,
-    protect: Annotated[list[str], typer.Option("-p", "--protect", help="extra protected branch globs (repeatable)", metavar="GLOB")] = [],
-    no_default_protect: Annotated[bool, typer.Option("--no-default-protect", help=f"do not protect {', '.join(DEFAULT_PROTECTED)}")] = False,
-    squash: Annotated[bool, typer.Option("--squash", help="also detect squash/rebase-merged branches (git 2.38+)")] = False,
+    exclude: Annotated[
+        list[str], typer.Option("-x", "--exclude", help="skip branches matching this glob (repeatable)", metavar="GLOB")
+    ] = [],
+    regex: Annotated[
+        str | None, typer.Option("-e", "--regex", help="only consider branch names matching this regular expression")
+    ] = None,
+    older_than: Annotated[
+        int | None,
+        typer.Option("--older-than", help="only branches whose last commit is older than DAYS", metavar="DAYS"),
+    ] = None,
+    author: Annotated[
+        str | None, typer.Option("--author", help="only branches whose last commit author contains this text")
+    ] = None,
+    protect: Annotated[
+        list[str], typer.Option("-p", "--protect", help="extra protected branch globs (repeatable)", metavar="GLOB")
+    ] = [],
+    no_default_protect: Annotated[
+        bool, typer.Option("--no-default-protect", help=f"do not protect {', '.join(DEFAULT_PROTECTED)}")
+    ] = False,
+    squash: Annotated[
+        bool, typer.Option("--squash", help="also detect squash/rebase-merged branches (git 2.38+)")
+    ] = False,
     fetch: Annotated[bool, typer.Option("-F", "--fetch", help="run 'git fetch --prune' on the remote first")] = False,
-    delete: Annotated[bool, typer.Option("-d", "--delete", help="delete the listed branches after confirmation")] = False,
+    delete: Annotated[
+        bool, typer.Option("-d", "--delete", help="delete the listed branches after confirmation")
+    ] = False,
     yes: Annotated[bool, typer.Option("-y", "--yes", help="skip the confirmation prompt")] = False,
-    dry_run: Annotated[bool, typer.Option("-n", "--dry-run", help="with --delete, print the commands without running them")] = False,
-    show_skipped: Annotated[bool, typer.Option("--show-skipped", help="list protected and checked-out branches that were kept")] = False,
+    dry_run: Annotated[
+        bool, typer.Option("-n", "--dry-run", help="with --delete, print the commands without running them")
+    ] = False,
+    show_skipped: Annotated[
+        bool, typer.Option("--show-skipped", help="list protected and checked-out branches that were kept")
+    ] = False,
     as_json: Annotated[bool, typer.Option("--json", help="print machine-readable output (no deletion)")] = False,
-    undo_file: Annotated[Path | None, typer.Option("--undo-file", help="write a shell script that restores the deleted branches")] = None,
+    undo_file: Annotated[
+        Path | None, typer.Option("--undo-file", help="write a shell script that restores the deleted branches")
+    ] = None,
     no_color: Annotated[bool, typer.Option("--no-color", help="disable colored output")] = False,
 ) -> None:
     patterns = patterns or []
-    _STATE.update(patterns=patterns, repo=repo, base=base, scope=scope, remote=remote, exclude=exclude, regex=regex, older_than=older_than, author=author, protect=protect, no_default_protect=no_default_protect, squash=squash, fetch=fetch, delete=delete, yes=yes, dry_run=dry_run, show_skipped=show_skipped, as_json=as_json, undo_file=undo_file, no_color=no_color)
+    _STATE.update(
+        patterns=patterns,
+        repo=repo,
+        base=base,
+        scope=scope,
+        remote=remote,
+        exclude=exclude,
+        regex=regex,
+        older_than=older_than,
+        author=author,
+        protect=protect,
+        no_default_protect=no_default_protect,
+        squash=squash,
+        fetch=fetch,
+        delete=delete,
+        yes=yes,
+        dry_run=dry_run,
+        show_skipped=show_skipped,
+        as_json=as_json,
+        undo_file=undo_file,
+        no_color=no_color,
+    )
     _run()
 
 

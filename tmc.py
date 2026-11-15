@@ -4,8 +4,11 @@
 
 import argparse
 import ast
+from collections.abc import Callable, Iterable, Iterator
 import concurrent.futures as cf
+from contextlib import nullcontext
 import dataclasses
+from dataclasses import dataclass
 import difflib
 import fnmatch
 import importlib
@@ -14,6 +17,7 @@ import io
 import json
 import multiprocessing as mp
 import os
+from pathlib import Path
 import re
 import shlex
 import signal
@@ -21,19 +25,16 @@ import stat
 import sys
 import tempfile
 import textwrap
+from time import perf_counter
 import tokenize
 import traceback
-from collections.abc import Callable, Iterable, Iterator
-from contextlib import nullcontext
-from dataclasses import dataclass
-from pathlib import Path
-from time import perf_counter
 from typing import TYPE_CHECKING, Any, Final, Protocol, TypeVar, cast
 
-import libcst as cst
 from atomicio import atomic_write
 from dh import MAX_WORKERS, SKIP_DIRS
+import libcst as cst
 from loguru import logger
+
 
 if TYPE_CHECKING:
     from rich.progress import Progress, TaskID
@@ -690,9 +691,13 @@ def colorize_diff(diff: str, color: bool) -> str:
 def make_rich_ui(color_mode: str) -> tuple[Progress, Callable[[str], None]]:
     "Create rich ui."
     from rich.console import Console
-    from rich.progress import BarColumn
-    from rich.progress import Progress as RichProgress
-    from rich.progress import TaskProgressColumn, TextColumn, TimeElapsedColumn
+    from rich.progress import (
+        BarColumn,
+        Progress as RichProgress,
+        TaskProgressColumn,
+        TextColumn,
+        TimeElapsedColumn,
+    )
     from rich.text import Text
 
     force_terminal = True if color_mode == "always" else False if color_mode == "never" else None

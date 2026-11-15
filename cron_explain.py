@@ -5,17 +5,17 @@ Fully type-annotated and self-contained for Python 3.12+.
 """
 
 from __future__ import annotations
-
 import dataclasses
+from datetime import datetime, timedelta, timezone
 import json
 import os
 import sys
-from datetime import datetime, timedelta, timezone
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from types import SimpleNamespace
 from typing import Annotated
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import typer
+
 
 # --- Data Models ---
 
@@ -433,18 +433,31 @@ app = typer.Typer(
 
 @app.command(help="Advanced Crontab Explainer & DST Simulator")
 def main(
-    expression: Annotated[str | None, typer.Argument(help="Cron expression string (e.g., '*/5 9-17 * * MON-FRI')")] = None,
+    expression: Annotated[
+        str | None, typer.Argument(help="Cron expression string (e.g., '*/5 9-17 * * MON-FRI')")
+    ] = None,
     file: Annotated[str | None, typer.Option("--file", help="Path to crontab or cron.d file")] = None,
     tz: Annotated[str, typer.Option("--tz", help="Target timezone (e.g., America/Toronto, Europe/London)")] = "UTC",
     next: Annotated[int, typer.Option("--next", help="Number of next runs to compute")] = 5,
     dst_warnings: Annotated[bool, typer.Option("--dst-warnings", help="Enable strict DST gap/fold analysis")] = False,
     overlaps: Annotated[bool, typer.Option("--overlaps", help="Check for overlapping job executions")] = False,
-    min_duration: Annotated[str, typer.Option("--min-duration", help="Assumed job duration for overlap analysis")] = "30m",
+    min_duration: Annotated[
+        str, typer.Option("--min-duration", help="Assumed job duration for overlap analysis")
+    ] = "30m",
     json: Annotated[bool, typer.Option("--json", help="Output results in JSON format")] = False,
 ) -> None:
     "Run the command-line interface."
 
-    args = SimpleNamespace(expression=expression, file=file, tz=tz, next=next, dst_warnings=dst_warnings, overlaps=overlaps, min_duration=min_duration, json=json)
+    args = SimpleNamespace(
+        expression=expression,
+        file=file,
+        tz=tz,
+        next=next,
+        dst_warnings=dst_warnings,
+        overlaps=overlaps,
+        min_duration=min_duration,
+        json=json,
+    )
 
     try:
         tz = ZoneInfo(args.tz)

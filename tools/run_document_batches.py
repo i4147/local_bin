@@ -7,12 +7,14 @@ are never changed.
 """
 
 import ast
-import sys
 from pathlib import Path
+import sys
+
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "arena"))
 import document_sources  # noqa: E402
+
 
 DEST = ROOT / "documented"
 

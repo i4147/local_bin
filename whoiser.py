@@ -2,13 +2,16 @@
 "Command-line utility to query domains in the WhoisXML API WHOIS service similarly to the whois command."
 
 from __future__ import annotations
-
 import argparse
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import csv
+from dataclasses import dataclass
 import datetime as dt
+from enum import StrEnum
 import hashlib
 import json
 import os
+from pathlib import Path
 import platform
 import re
 import subprocess
@@ -18,21 +21,15 @@ import threading
 import time
 import tomllib
 import traceback
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass
-from pathlib import Path
-from typing import Any
+from types import SimpleNamespace
+from typing import Annotated, Any
 from urllib.parse import urlencode
 
-import requests
+import click
 from pygments import highlight
 from pygments.formatters import TerminalFormatter
 from pygments.lexers import JsonLexer
-from enum import StrEnum
-from types import SimpleNamespace
-from typing import Annotated
-
-import click
+import requests
 import typer
 
 
@@ -43,21 +40,24 @@ def _version_callback(value: bool) -> None:
 
 
 class Rawtext(StrEnum):
-    'Enumerate the supported Rawtext values.'
+    "Enumerate the supported Rawtext values."
+
     none = "none"
     stripped = "stripped"
     full = "full"
 
 
 class Color(StrEnum):
-    'Enumerate the supported Color values.'
+    "Enumerate the supported Color values."
+
     auto = "auto"
     always = "always"
     never = "never"
 
 
 class Shell_completion(StrEnum):
-    'Enumerate the supported Shell completion values.'
+    "Enumerate the supported Shell completion values."
+
     bash = "bash"
     zsh = "zsh"
     fish = "fish"
@@ -79,18 +79,18 @@ class _ParserShim:
     """Stand-in for the removed argparse parser; hands back what Typer parsed."""
 
     def parse_args(self, args=None, namespace=None):
-        'Parse args.'
+        "Parse args."
         return _Args(**_STATE)
 
     def error(self, message):
         raise typer.BadParameter(message)
 
     def print_help(self, file=None):
-        'Print help.'
+        "Print help."
         typer.echo(click.get_current_context().get_help(), file=file)
 
     def print_usage(self, file=None):
-        'Print usage.'
+        "Print usage."
         typer.echo(click.get_current_context().get_usage(), file=file)
 
 
@@ -978,7 +978,6 @@ def build_parser() -> argparse.ArgumentParser:
     "Build parser."
     p = _ParserShim()
 
-
     return p
 
 
@@ -1142,60 +1141,184 @@ app = typer.Typer(
 )
 
 
-@app.command(help="Command-line utility to query domains in the WhoisXML API WHOIS service similarly to the whois command.")
+@app.command(
+    help="Command-line utility to query domains in the WhoisXML API WHOIS service similarly to the whois command."
+)
 def cli(
-    domainName: Annotated[str | None, typer.Argument(help="The domain to be queried (or @FILE, or - for stdin). Unicode/IDN accepted.")] = None,
-    version: Annotated[bool, typer.Option("--version", callback=_version_callback, is_eager=True, help="show program's version number and exit")] = False,
-    version_full: Annotated[bool, typer.Option("--version-full", help="Print version, Python version, and platform, then exit.")] = False,
+    domainName: Annotated[
+        str | None, typer.Argument(help="The domain to be queried (or @FILE, or - for stdin). Unicode/IDN accepted.")
+    ] = None,
+    version: Annotated[
+        bool,
+        typer.Option(
+            "--version", callback=_version_callback, is_eager=True, help="show program's version number and exit"
+        ),
+    ] = False,
+    version_full: Annotated[
+        bool, typer.Option("--version-full", help="Print version, Python version, and platform, then exit.")
+    ] = False,
     changelog: Annotated[bool, typer.Option("--changelog", help="Print changelog and exit.")] = False,
-    rcfile: Annotated[Path | None, typer.Option("--rcfile", help="Use this rc file (plain text API key). Overrides default rc locations.")] = None,
+    rcfile: Annotated[
+        Path | None,
+        typer.Option("--rcfile", help="Use this rc file (plain text API key). Overrides default rc locations."),
+    ] = None,
     config: Annotated[Path | None, typer.Option("--config", help="Use this TOML config file.")] = None,
     profile: Annotated[str | None, typer.Option("--profile", help="Named section in the TOML config to use.")] = None,
     dotenv: Annotated[Path | None, typer.Option("--dotenv", help="Load environment from this .env file.")] = None,
-    apikey: Annotated[str | None, typer.Option("--apikey", help="Directly specify the API key. Overrides any other source.")] = None,
-    print_key_source: Annotated[bool, typer.Option("--print-key-source", help="Print which source the API key came from.")] = False,
-    print_config: Annotated[bool, typer.Option("--print-config", help="Print resolved configuration and exit.")] = False,
-    check_key: Annotated[bool, typer.Option("--check-key", help="Check API key and print account balance, then exit.")] = False,
+    apikey: Annotated[
+        str | None, typer.Option("--apikey", help="Directly specify the API key. Overrides any other source.")
+    ] = None,
+    print_key_source: Annotated[
+        bool, typer.Option("--print-key-source", help="Print which source the API key came from.")
+    ] = False,
+    print_config: Annotated[
+        bool, typer.Option("--print-config", help="Print resolved configuration and exit.")
+    ] = False,
+    check_key: Annotated[
+        bool, typer.Option("--check-key", help="Check API key and print account balance, then exit.")
+    ] = False,
     balance: Annotated[bool, typer.Option("--balance", help="Alias for --check-key.")] = False,
-    file: Annotated[Path | None, typer.Option("--file", help="Read domains from file (one per line, '#' comments allowed).")] = None,
+    file: Annotated[
+        Path | None, typer.Option("--file", help="Read domains from file (one per line, '#' comments allowed).")
+    ] = None,
     stdin: Annotated[bool, typer.Option("--stdin", help="Read domains from standard input.")] = False,
-    batch: Annotated[bool, typer.Option("--batch", help="Emit one NDJSON object per domain (default for multi-domain inputs).")] = False,
-    parallel: Annotated[int | None, typer.Option("--parallel", help="Process N domains concurrently (default 1).", metavar="N")] = None,
-    rate_limit: Annotated[float | None, typer.Option("--rate-limit", help="Global requests-per-second limit.", metavar="N")] = None,
+    batch: Annotated[
+        bool, typer.Option("--batch", help="Emit one NDJSON object per domain (default for multi-domain inputs).")
+    ] = False,
+    parallel: Annotated[
+        int | None, typer.Option("--parallel", help="Process N domains concurrently (default 1).", metavar="N")
+    ] = None,
+    rate_limit: Annotated[
+        float | None, typer.Option("--rate-limit", help="Global requests-per-second limit.", metavar="N")
+    ] = None,
     stop_on_error: Annotated[bool, typer.Option("--stop-on-error", help="Stop processing on the first error.")] = False,
-    skip_empty: Annotated[bool, typer.Option("--skip-empty", help="Skip records that resolve to empty results.")] = False,
-    ip: Annotated[str | None, typer.Option("--ip", help="Query an IP address instead of a domain.", metavar="ADDRESS")] = None,
+    skip_empty: Annotated[
+        bool, typer.Option("--skip-empty", help="Skip records that resolve to empty results.")
+    ] = False,
+    ip: Annotated[
+        str | None, typer.Option("--ip", help="Query an IP address instead of a domain.", metavar="ADDRESS")
+    ] = None,
     dns: Annotated[bool, typer.Option("--dns", help="Query the DNS API instead of WHOIS.")] = False,
-    reverse: Annotated[str | None, typer.Option("--reverse", help="Reverse WHOIS lookup, e.g. email:user@example.com or org:\"Example Inc\".", metavar="TYPE:VALUE")] = None,
-    history: Annotated[bool, typer.Option("--history", help="Get historic records from the history API. Implied by date filters.")] = False,
-    since_date: Annotated[str | None, typer.Option("--since-date", help="(history) Search activities discovered since this date.", metavar="YYYY-MM-DD", parser=valid_date)] = None,
-    created_date_from: Annotated[str | None, typer.Option("--created-date-from", help="(history) Domains created after this date.", metavar="YYYY-MM-DD", parser=valid_date)] = None,
-    created_date_to: Annotated[str | None, typer.Option("--created-date-to", help="(history) Domains created before this date.", metavar="YYYY-MM-DD", parser=valid_date)] = None,
-    updated_date_from: Annotated[str | None, typer.Option("--updated-date-from", help="(history) Domains updated after this date.", metavar="YYYY-MM-DD", parser=valid_date)] = None,
-    updated_date_to: Annotated[str | None, typer.Option("--updated-date-to", help="(history) Domains updated before this date.", metavar="YYYY-MM-DD", parser=valid_date)] = None,
-    expired_date_from: Annotated[str | None, typer.Option("--expired-date-from", help="(history) Domains expired after this date.", metavar="YYYY-MM-DD", parser=valid_date)] = None,
-    expired_date_to: Annotated[str | None, typer.Option("--expired-date-to", help="(history) Domains expired before this date.", metavar="YYYY-MM-DD", parser=valid_date)] = None,
-    history_limit: Annotated[int | None, typer.Option("--history-limit", help="(history) Maximum number of records to return.", metavar="N")] = None,
-    history_offset: Annotated[int | None, typer.Option("--history-offset", help="(history) Pagination offset.", metavar="N")] = None,
-    history_sort: Annotated[str | None, typer.Option("--history-sort", help="(history) Sort field if supported by the API.", metavar="FIELD")] = None,
-    rawtext: Annotated[Rawtext | None, typer.Option("--rawtext", help="Raw-text handling: none (default), stripped (first 64 chars), full.")] = None,
+    reverse: Annotated[
+        str | None,
+        typer.Option(
+            "--reverse",
+            help='Reverse WHOIS lookup, e.g. email:user@example.com or org:"Example Inc".',
+            metavar="TYPE:VALUE",
+        ),
+    ] = None,
+    history: Annotated[
+        bool, typer.Option("--history", help="Get historic records from the history API. Implied by date filters.")
+    ] = False,
+    since_date: Annotated[
+        str | None,
+        typer.Option(
+            "--since-date",
+            help="(history) Search activities discovered since this date.",
+            metavar="YYYY-MM-DD",
+            parser=valid_date,
+        ),
+    ] = None,
+    created_date_from: Annotated[
+        str | None,
+        typer.Option(
+            "--created-date-from",
+            help="(history) Domains created after this date.",
+            metavar="YYYY-MM-DD",
+            parser=valid_date,
+        ),
+    ] = None,
+    created_date_to: Annotated[
+        str | None,
+        typer.Option(
+            "--created-date-to",
+            help="(history) Domains created before this date.",
+            metavar="YYYY-MM-DD",
+            parser=valid_date,
+        ),
+    ] = None,
+    updated_date_from: Annotated[
+        str | None,
+        typer.Option(
+            "--updated-date-from",
+            help="(history) Domains updated after this date.",
+            metavar="YYYY-MM-DD",
+            parser=valid_date,
+        ),
+    ] = None,
+    updated_date_to: Annotated[
+        str | None,
+        typer.Option(
+            "--updated-date-to",
+            help="(history) Domains updated before this date.",
+            metavar="YYYY-MM-DD",
+            parser=valid_date,
+        ),
+    ] = None,
+    expired_date_from: Annotated[
+        str | None,
+        typer.Option(
+            "--expired-date-from",
+            help="(history) Domains expired after this date.",
+            metavar="YYYY-MM-DD",
+            parser=valid_date,
+        ),
+    ] = None,
+    expired_date_to: Annotated[
+        str | None,
+        typer.Option(
+            "--expired-date-to",
+            help="(history) Domains expired before this date.",
+            metavar="YYYY-MM-DD",
+            parser=valid_date,
+        ),
+    ] = None,
+    history_limit: Annotated[
+        int | None, typer.Option("--history-limit", help="(history) Maximum number of records to return.", metavar="N")
+    ] = None,
+    history_offset: Annotated[
+        int | None, typer.Option("--history-offset", help="(history) Pagination offset.", metavar="N")
+    ] = None,
+    history_sort: Annotated[
+        str | None,
+        typer.Option("--history-sort", help="(history) Sort field if supported by the API.", metavar="FIELD"),
+    ] = None,
+    rawtext: Annotated[
+        Rawtext | None,
+        typer.Option("--rawtext", help="Raw-text handling: none (default), stripped (first 64 chars), full."),
+    ] = None,
     fullrawtext: Annotated[bool, typer.Option("--fullrawtext", hidden=True)] = False,
     strippedrawtext: Annotated[bool, typer.Option("--strippedrawtext", hidden=True)] = False,
-    keep_empty: Annotated[bool, typer.Option("--keep-empty", help="Keep and display fields with empty and null values.")] = False,
-    keep_null: Annotated[bool, typer.Option("--keep-null", help="Keep null fields while still removing empty strings/collections.")] = False,
-    no_purge_nested: Annotated[bool, typer.Option("--no-purge-nested", help="Only purge empty fields at the top level; do not recurse.")] = False,
+    keep_empty: Annotated[
+        bool, typer.Option("--keep-empty", help="Keep and display fields with empty and null values.")
+    ] = False,
+    keep_null: Annotated[
+        bool, typer.Option("--keep-null", help="Keep null fields while still removing empty strings/collections.")
+    ] = False,
+    no_purge_nested: Annotated[
+        bool, typer.Option("--no-purge-nested", help="Only purge empty fields at the top level; do not recurse.")
+    ] = False,
     text: Annotated[bool, typer.Option("--text", help="Print a textual output instead of JSON.")] = False,
     json: Annotated[bool, typer.Option("--json", help="Force machine-readable JSON (disables coloring).")] = False,
     yaml: Annotated[bool, typer.Option("--yaml", help="Print YAML instead of JSON.")] = False,
     csv: Annotated[bool, typer.Option("--csv", help="Print CSV (flattened records, one row each).")] = False,
     raw_whois: Annotated[bool, typer.Option("--raw-whois", help="Print only the raw WHOIS text.")] = False,
-    jsonpath: Annotated[str | None, typer.Option("--jsonpath", help="Select a subset of the record using a JSONPath expression.", metavar="EXPR")] = None,
-    fields: Annotated[str | None, typer.Option("--fields", help="Only output the given dotted-path fields.", metavar="A,B.C,...")] = None,
-    exclude_fields: Annotated[str | None, typer.Option("--exclude-fields", help="Drop the given dotted-path fields.", metavar="A,B.C,...")] = None,
+    jsonpath: Annotated[
+        str | None,
+        typer.Option("--jsonpath", help="Select a subset of the record using a JSONPath expression.", metavar="EXPR"),
+    ] = None,
+    fields: Annotated[
+        str | None, typer.Option("--fields", help="Only output the given dotted-path fields.", metavar="A,B.C,...")
+    ] = None,
+    exclude_fields: Annotated[
+        str | None, typer.Option("--exclude-fields", help="Drop the given dotted-path fields.", metavar="A,B.C,...")
+    ] = None,
     compact: Annotated[bool, typer.Option("--compact", help="Compact JSON output.")] = False,
     indent: Annotated[int | None, typer.Option("--indent", help="JSON indent (default 1).", metavar="N")] = None,
     sort_keys: Annotated[bool, typer.Option("--sort-keys", help="Sort JSON keys.")] = False,
-    theme: Annotated[str | None, typer.Option("--theme", help="Pygments style name (e.g. monokai, dracula).", metavar="NAME")] = None,
+    theme: Annotated[
+        str | None, typer.Option("--theme", help="Pygments style name (e.g. monokai, dracula).", metavar="NAME")
+    ] = None,
     nocolor: Annotated[bool, typer.Option("--nocolor", hidden=True)] = False,
     color: Annotated[Color, typer.Option("--color", help="Colorize output.")] = Color.auto,
     no_header: Annotated[bool, typer.Option("--no-header", help="Suppress the historic-record header.")] = False,
@@ -1203,27 +1326,141 @@ def cli(
     verbose: Annotated[bool, typer.Option("--verbose", "-v", help="Print verbose info to stderr.")] = False,
     debug: Annotated[bool, typer.Option("--debug", help="Print full tracebacks on error.")] = False,
     trace: Annotated[bool, typer.Option("--trace", help="Print HTTP request/response details to stderr.")] = False,
-    wrap: Annotated[int, typer.Option("--wrap", help="Wrap text/raw output at N columns (0 = no wrap).", metavar="N")] = 0,
-    pager: Annotated[bool, typer.Option("--pager", "-P", help="Pipe output through $PAGER when stdout is a tty.")] = False,
-    output: Annotated[str | None, typer.Option("--output", "-o", help="Write output to FILE ('-' for stdout).", metavar="FILE")] = None,
-    timeout: Annotated[float | None, typer.Option("--timeout", help="Per-request timeout (default 30s).", metavar="SECS")] = None,
-    retries: Annotated[int | None, typer.Option("--retries", help="Retry count for transient failures (default 0).", metavar="N")] = None,
-    retry_backoff: Annotated[float | None, typer.Option("--retry-backoff", help="Base delay between retries (default 0.5s).", metavar="SECS")] = None,
+    wrap: Annotated[
+        int, typer.Option("--wrap", help="Wrap text/raw output at N columns (0 = no wrap).", metavar="N")
+    ] = 0,
+    pager: Annotated[
+        bool, typer.Option("--pager", "-P", help="Pipe output through $PAGER when stdout is a tty.")
+    ] = False,
+    output: Annotated[
+        str | None, typer.Option("--output", "-o", help="Write output to FILE ('-' for stdout).", metavar="FILE")
+    ] = None,
+    timeout: Annotated[
+        float | None, typer.Option("--timeout", help="Per-request timeout (default 30s).", metavar="SECS")
+    ] = None,
+    retries: Annotated[
+        int | None, typer.Option("--retries", help="Retry count for transient failures (default 0).", metavar="N")
+    ] = None,
+    retry_backoff: Annotated[
+        float | None, typer.Option("--retry-backoff", help="Base delay between retries (default 0.5s).", metavar="SECS")
+    ] = None,
     no_verify: Annotated[bool, typer.Option("--no-verify", help="Disable TLS certificate verification.")] = False,
-    ca_bundle: Annotated[str | None, typer.Option("--ca-bundle", help="Custom CA bundle for TLS verification.", metavar="PATH")] = None,
-    user_agent: Annotated[str | None, typer.Option("--user-agent", help="Override the HTTP User-Agent header.", metavar="UA")] = None,
-    proxy: Annotated[str | None, typer.Option("--proxy", help="HTTP(S) proxy to use for requests.", metavar="URL")] = None,
-    dry_run: Annotated[bool, typer.Option("--dry-run", help="Print effective URLs (API key redacted) and exit.")] = False,
+    ca_bundle: Annotated[
+        str | None, typer.Option("--ca-bundle", help="Custom CA bundle for TLS verification.", metavar="PATH")
+    ] = None,
+    user_agent: Annotated[
+        str | None, typer.Option("--user-agent", help="Override the HTTP User-Agent header.", metavar="UA")
+    ] = None,
+    proxy: Annotated[
+        str | None, typer.Option("--proxy", help="HTTP(S) proxy to use for requests.", metavar="URL")
+    ] = None,
+    dry_run: Annotated[
+        bool, typer.Option("--dry-run", help="Print effective URLs (API key redacted) and exit.")
+    ] = False,
     cache_dir: Annotated[Path | None, typer.Option("--cache-dir", help="Cache directory (default: XDG cache).")] = None,
     no_cache: Annotated[bool, typer.Option("--no-cache", help="Disable response caching.")] = False,
-    cache_ttl: Annotated[int | None, typer.Option("--cache-ttl", help="Cache time-to-live (default 0 = off).", metavar="SECS")] = None,
-    reconcile: Annotated[Path | None, typer.Option("--reconcile", help="Compare results against a saved JSON file and report changes on stderr.", metavar="PATH")] = None,
-    shell_completion: Annotated[Shell_completion | None, typer.Option("--shell-completion", help="Print shell completion script and exit.")] = None,
+    cache_ttl: Annotated[
+        int | None, typer.Option("--cache-ttl", help="Cache time-to-live (default 0 = off).", metavar="SECS")
+    ] = None,
+    reconcile: Annotated[
+        Path | None,
+        typer.Option(
+            "--reconcile",
+            help="Compare results against a saved JSON file and report changes on stderr.",
+            metavar="PATH",
+        ),
+    ] = None,
+    shell_completion: Annotated[
+        Shell_completion | None, typer.Option("--shell-completion", help="Print shell completion script and exit.")
+    ] = None,
     manpage: Annotated[bool, typer.Option("--manpage", help="Print a manpage and exit.")] = False,
 ) -> None:
-    if sum((rawtext is not None, bool(fullrawtext), bool(strippedrawtext),)) > 1:
+    if (
+        sum((
+            rawtext is not None,
+            bool(fullrawtext),
+            bool(strippedrawtext),
+        ))
+        > 1
+    ):
         raise typer.BadParameter("--rawtext, --fullrawtext, --strippedrawtext are mutually exclusive")
-    _STATE.update(domainName=domainName, version_full=version_full, changelog=changelog, rcfile=rcfile, config=config, profile=profile, dotenv=dotenv, apikey=apikey, print_key_source=print_key_source, print_config=print_config, check_key=check_key, balance=balance, file=file, stdin=stdin, batch=batch, parallel=parallel, rate_limit=rate_limit, stop_on_error=stop_on_error, skip_empty=skip_empty, ip=ip, dns=dns, reverse=reverse, history=history, since_date=since_date, created_date_from=created_date_from, created_date_to=created_date_to, updated_date_from=updated_date_from, updated_date_to=updated_date_to, expired_date_from=expired_date_from, expired_date_to=expired_date_to, history_limit=history_limit, history_offset=history_offset, history_sort=history_sort, rawtext=rawtext, fullrawtext=fullrawtext, strippedrawtext=strippedrawtext, keep_empty=keep_empty, keep_null=keep_null, no_purge_nested=no_purge_nested, text=text, json=json, yaml=yaml, csv=csv, raw_whois=raw_whois, jsonpath=jsonpath, fields=fields, exclude_fields=exclude_fields, compact=compact, indent=indent, sort_keys=sort_keys, theme=theme, nocolor=nocolor, color=color, no_header=no_header, quiet=quiet, verbose=verbose, debug=debug, trace=trace, wrap=wrap, pager=pager, output=output, timeout=timeout, retries=retries, retry_backoff=retry_backoff, no_verify=no_verify, ca_bundle=ca_bundle, user_agent=user_agent, proxy=proxy, dry_run=dry_run, cache_dir=cache_dir, no_cache=no_cache, cache_ttl=cache_ttl, reconcile=reconcile, shell_completion=shell_completion, manpage=manpage)
+    _STATE.update(
+        domainName=domainName,
+        version_full=version_full,
+        changelog=changelog,
+        rcfile=rcfile,
+        config=config,
+        profile=profile,
+        dotenv=dotenv,
+        apikey=apikey,
+        print_key_source=print_key_source,
+        print_config=print_config,
+        check_key=check_key,
+        balance=balance,
+        file=file,
+        stdin=stdin,
+        batch=batch,
+        parallel=parallel,
+        rate_limit=rate_limit,
+        stop_on_error=stop_on_error,
+        skip_empty=skip_empty,
+        ip=ip,
+        dns=dns,
+        reverse=reverse,
+        history=history,
+        since_date=since_date,
+        created_date_from=created_date_from,
+        created_date_to=created_date_to,
+        updated_date_from=updated_date_from,
+        updated_date_to=updated_date_to,
+        expired_date_from=expired_date_from,
+        expired_date_to=expired_date_to,
+        history_limit=history_limit,
+        history_offset=history_offset,
+        history_sort=history_sort,
+        rawtext=rawtext,
+        fullrawtext=fullrawtext,
+        strippedrawtext=strippedrawtext,
+        keep_empty=keep_empty,
+        keep_null=keep_null,
+        no_purge_nested=no_purge_nested,
+        text=text,
+        json=json,
+        yaml=yaml,
+        csv=csv,
+        raw_whois=raw_whois,
+        jsonpath=jsonpath,
+        fields=fields,
+        exclude_fields=exclude_fields,
+        compact=compact,
+        indent=indent,
+        sort_keys=sort_keys,
+        theme=theme,
+        nocolor=nocolor,
+        color=color,
+        no_header=no_header,
+        quiet=quiet,
+        verbose=verbose,
+        debug=debug,
+        trace=trace,
+        wrap=wrap,
+        pager=pager,
+        output=output,
+        timeout=timeout,
+        retries=retries,
+        retry_backoff=retry_backoff,
+        no_verify=no_verify,
+        ca_bundle=ca_bundle,
+        user_agent=user_agent,
+        proxy=proxy,
+        dry_run=dry_run,
+        cache_dir=cache_dir,
+        no_cache=no_cache,
+        cache_ttl=cache_ttl,
+        reconcile=reconcile,
+        shell_completion=shell_completion,
+        manpage=manpage,
+    )
     _run()
 
 

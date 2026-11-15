@@ -134,13 +134,19 @@ Limitations
 """
 
 from __future__ import annotations
-
 import argparse
+from collections.abc import Iterable, Iterator, Mapping, Sequence
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import asdict, dataclass, replace
+from datetime import datetime, timezone
+from enum import StrEnum
 import hashlib
+from importlib.metadata import Distribution, distributions
 import json
 import locale
 import math
 import os
+from pathlib import Path
 import platform
 import re
 import shutil
@@ -150,17 +156,9 @@ import sysconfig
 import tempfile
 import threading
 import time
-from collections.abc import Iterable, Iterator, Mapping, Sequence
-from concurrent.futures import ThreadPoolExecutor
-from dataclasses import asdict, dataclass, replace
-from datetime import datetime, timezone
-from importlib.metadata import Distribution, distributions
-from pathlib import Path
-from typing import Any, ClassVar, TypeVar
-from venv import create as _venv_create
-from enum import StrEnum
 from types import SimpleNamespace
-from typing import Annotated
+from typing import Annotated, Any, ClassVar, TypeVar
+from venv import create as _venv_create
 
 import click
 import typer
@@ -173,7 +171,8 @@ def _version_callback(value: bool) -> None:
 
 
 class Format(StrEnum):
-    'Enumerate the supported Format values.'
+    "Enumerate the supported Format values."
+
     terminal = "terminal"
     markdown = "markdown"
     json = "json"
@@ -195,18 +194,18 @@ class _ParserShim:
     """Stand-in for the removed argparse parser; hands back what Typer parsed."""
 
     def parse_args(self, args=None, namespace=None):
-        'Parse args.'
+        "Parse args."
         return _Args(**_STATE)
 
     def error(self, message):
         raise typer.BadParameter(message)
 
     def print_help(self, file=None):
-        'Print help.'
+        "Print help."
         typer.echo(click.get_current_context().get_help(), file=file)
 
     def print_usage(self, file=None):
-        'Print usage.'
+        "Print usage."
         typer.echo(click.get_current_context().get_usage(), file=file)
 
 
@@ -2246,7 +2245,6 @@ def build_parser() -> argparse.ArgumentParser:
     """Build the ``env-stamp`` argument parser (documented in --help)."""
     parser = _ParserShim()
 
-
     return parser
 
 
@@ -2267,7 +2265,7 @@ def _run() -> None:
 
 app = typer.Typer(
     help="Reproducible environment fingerprints: capture, diff, bisect.",
-    epilog="examples:\n  env-stamp capture --out good.json\n  env-stamp capture --out broken.json\n  env-stamp diff good.json broken.json\n  cat broken.json | env-stamp diff good.json --stdin\n  env-stamp bisect --baseline good.json --test \"pytest -x tests/test_x.py\" --venv .venv\n",
+    epilog='examples:\n  env-stamp capture --out good.json\n  env-stamp capture --out broken.json\n  env-stamp diff good.json broken.json\n  cat broken.json | env-stamp diff good.json --stdin\n  env-stamp bisect --baseline good.json --test "pytest -x tests/test_x.py" --venv .venv\n',
     add_completion=False,
     context_settings={"help_option_names": ["-h", "--help"]},
     pretty_exceptions_show_locals=False,
@@ -2276,35 +2274,79 @@ app = typer.Typer(
 
 @app.callback()
 def _root(
-    version: Annotated[bool, typer.Option("--version", callback=_version_callback, is_eager=True, help="show program's version number and exit")] = False,
+    version: Annotated[
+        bool,
+        typer.Option(
+            "--version", callback=_version_callback, is_eager=True, help="show program's version number and exit"
+        ),
+    ] = False,
 ) -> None:
     pass
 
 
 @app.command("capture", help="fingerprint the current (or --venv) environment")
 def cmd_capture(
-    out: Annotated[Path | None, typer.Option("--out", "-o", help="write the stamp JSON to this file (default: stdout)")] = None,
-    venv: Annotated[Path | None, typer.Option("--venv", help="fingerprint the packages of this venv without activating it")] = None,
-    allow_values: Annotated[str, typer.Option("--allow-values", help="comma-separated env names whose values may be recorded (default: TZ,LANG,PYTHONHASHSEED); replaces the default")] = ",".join(sorted(SAFE_VALUE_KEYS)),
-    no_redact: Annotated[bool, typer.Option("--no-redact", help="record ALL env values (prints a warning; do not share the file)")] = False,
-    no_paths: Annotated[bool, typer.Option("--no-paths", help="strip editable/file:// package origins (leak safety)")] = False,
-    no_tools: Annotated[bool, typer.Option("--no-tools", help="skip probing external tool versions (pip/uv/gcc/...)")] = False,
+    out: Annotated[
+        Path | None, typer.Option("--out", "-o", help="write the stamp JSON to this file (default: stdout)")
+    ] = None,
+    venv: Annotated[
+        Path | None, typer.Option("--venv", help="fingerprint the packages of this venv without activating it")
+    ] = None,
+    allow_values: Annotated[
+        str,
+        typer.Option(
+            "--allow-values",
+            help="comma-separated env names whose values may be recorded (default: TZ,LANG,PYTHONHASHSEED); replaces the default",
+        ),
+    ] = ",".join(sorted(SAFE_VALUE_KEYS)),
+    no_redact: Annotated[
+        bool, typer.Option("--no-redact", help="record ALL env values (prints a warning; do not share the file)")
+    ] = False,
+    no_paths: Annotated[
+        bool, typer.Option("--no-paths", help="strip editable/file:// package origins (leak safety)")
+    ] = False,
+    no_tools: Annotated[
+        bool, typer.Option("--no-tools", help="skip probing external tool versions (pip/uv/gcc/...)")
+    ] = False,
     quiet: Annotated[bool, typer.Option("--quiet", "-q", help="suppress summary output")] = False,
 ) -> None:
-    _STATE.update(out=out, venv=venv, allow_values=allow_values, no_redact=no_redact, no_paths=no_paths, no_tools=no_tools, quiet=quiet, command="capture", handler=_cmd_capture)
+    _STATE.update(
+        out=out,
+        venv=venv,
+        allow_values=allow_values,
+        no_redact=no_redact,
+        no_paths=no_paths,
+        no_tools=no_tools,
+        quiet=quiet,
+        command="capture",
+        handler=_cmd_capture,
+    )
     _run()
 
 
 @app.command("diff", help="rank the differences between two stamps")
 def cmd_diff(
     baseline: Annotated[str, typer.Argument(help="path to the baseline (good) stamp JSON")],
-    suspect: Annotated[str | None, typer.Argument(help="path to the suspect (broken) stamp JSON, or '-' for stdin")] = None,
+    suspect: Annotated[
+        str | None, typer.Argument(help="path to the suspect (broken) stamp JSON, or '-' for stdin")
+    ] = None,
     stdin: Annotated[bool, typer.Option("--stdin", help="read the suspect stamp from stdin")] = False,
     format: Annotated[Format, typer.Option("--format", help="output renderer (default: terminal)")] = Format.terminal,
     all: Annotated[bool, typer.Option("--all", help="show every change, not just the top 10")] = False,
-    max_lines: Annotated[int, typer.Option("--max-lines", help=f"truncate to N lines (default: {DEFAULT_MAX_DIFF_LINES})")] = DEFAULT_MAX_DIFF_LINES,
+    max_lines: Annotated[
+        int, typer.Option("--max-lines", help=f"truncate to N lines (default: {DEFAULT_MAX_DIFF_LINES})")
+    ] = DEFAULT_MAX_DIFF_LINES,
 ) -> None:
-    _STATE.update(baseline=baseline, suspect=suspect, stdin=stdin, format=format, all=all, max_lines=max_lines, command="diff", handler=_cmd_diff)
+    _STATE.update(
+        baseline=baseline,
+        suspect=suspect,
+        stdin=stdin,
+        format=format,
+        all=all,
+        max_lines=max_lines,
+        command="diff",
+        handler=_cmd_diff,
+    )
     _run()
 
 
@@ -2312,19 +2354,52 @@ def cmd_diff(
 def cmd_bisect(
     baseline: Annotated[str, typer.Option("--baseline", help="stamp of the environment where the test passes")],
     test: Annotated[str, typer.Option("--test", help="shell command; exit code 0 = PASS, anything else = FAIL")],
-    venv: Annotated[Path | None, typer.Option("--venv", help="suspect venv to compare against (default: current environment)")] = None,
-    python: Annotated[str | None, typer.Option("--python", help="interpreter used to build candidate venvs (default: running python)")] = None,
-    find_links: Annotated[list[str], typer.Option("--find-links", help="local wheel directory; repeatable; implies --no-index (offline mode)", metavar="DIR")] = [],
-    max_runs: Annotated[int, typer.Option("--max-runs", help=f"cap on test executions (default: {DEFAULT_MAX_RUNS})")] = DEFAULT_MAX_RUNS,
-    timeout: Annotated[float, typer.Option("--timeout", help="per-test timeout in seconds (default: 900)")] = DEFAULT_TEST_TIMEOUT,
-    workdir: Annotated[Path | None, typer.Option("--workdir", help="where throwaway venvs live (default: a fresh temp dir)")] = None,
-    parallel: Annotated[bool, typer.Option("--parallel", help="run axis-level probes concurrently (each in its own venv)")] = False,
+    venv: Annotated[
+        Path | None, typer.Option("--venv", help="suspect venv to compare against (default: current environment)")
+    ] = None,
+    python: Annotated[
+        str | None, typer.Option("--python", help="interpreter used to build candidate venvs (default: running python)")
+    ] = None,
+    find_links: Annotated[
+        list[str],
+        typer.Option(
+            "--find-links", help="local wheel directory; repeatable; implies --no-index (offline mode)", metavar="DIR"
+        ),
+    ] = [],
+    max_runs: Annotated[
+        int, typer.Option("--max-runs", help=f"cap on test executions (default: {DEFAULT_MAX_RUNS})")
+    ] = DEFAULT_MAX_RUNS,
+    timeout: Annotated[
+        float, typer.Option("--timeout", help="per-test timeout in seconds (default: 900)")
+    ] = DEFAULT_TEST_TIMEOUT,
+    workdir: Annotated[
+        Path | None, typer.Option("--workdir", help="where throwaway venvs live (default: a fresh temp dir)")
+    ] = None,
+    parallel: Annotated[
+        bool, typer.Option("--parallel", help="run axis-level probes concurrently (each in its own venv)")
+    ] = False,
     force_pip: Annotated[bool, typer.Option("--force-pip", help="use pip even when uv is available")] = False,
     keep: Annotated[bool, typer.Option("--keep", help="keep throwaway venvs for inspection")] = False,
     verbose: Annotated[bool, typer.Option("--verbose", help="show tail of the failing test output")] = False,
     quiet: Annotated[bool, typer.Option("--quiet", "-q", help="suppress progress logging")] = False,
 ) -> None:
-    _STATE.update(baseline=baseline, test=test, venv=venv, python=python, find_links=find_links, max_runs=max_runs, timeout=timeout, workdir=workdir, parallel=parallel, force_pip=force_pip, keep=keep, verbose=verbose, quiet=quiet, command="bisect", handler=_cmd_bisect)
+    _STATE.update(
+        baseline=baseline,
+        test=test,
+        venv=venv,
+        python=python,
+        find_links=find_links,
+        max_runs=max_runs,
+        timeout=timeout,
+        workdir=workdir,
+        parallel=parallel,
+        force_pip=force_pip,
+        keep=keep,
+        verbose=verbose,
+        quiet=quiet,
+        command="bisect",
+        handler=_cmd_bisect,
+    )
     _run()
 
 

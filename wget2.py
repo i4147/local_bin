@@ -2,12 +2,18 @@
 "Utilities for wget2."
 
 from __future__ import annotations
-
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
+from contextlib import contextmanager, suppress
 import csv
+from dataclasses import dataclass, field, replace
+from email.utils import parsedate_to_datetime
+from fnmatch import fnmatch
 import hashlib
 import io
 import json
 import os
+from pathlib import Path
+from queue import Empty, Queue
 import random
 import re
 import shutil
@@ -16,22 +22,15 @@ import string
 import sys
 import threading
 import time
-import unicodedata
-from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
-from contextlib import contextmanager, suppress
-from dataclasses import dataclass, field, replace
-from email.utils import parsedate_to_datetime
-from fnmatch import fnmatch
-from pathlib import Path
-from queue import Empty, Queue
 from typing import Any, Optional
+import unicodedata
 from urllib.parse import unquote, urljoin, urlparse
 
 import pycurl
-import typer
 from rich.console import Console
-from rich.progress import (BarColumn, Progress, TaskID, TextColumn,
-                           TimeElapsedColumn, TransferSpeedColumn)
+from rich.progress import BarColumn, Progress, TaskID, TextColumn, TimeElapsedColumn, TransferSpeedColumn
+import typer
+
 
 __version__ = "2.0.0-onefile"
 

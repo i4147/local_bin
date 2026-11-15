@@ -2,40 +2,37 @@
 "Find and download Python distributions from PEP 503/691 indexes."
 
 import argparse
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass, field
+from enum import StrEnum
 import hashlib
+from html.parser import HTMLParser
 import json
 import os
+from pathlib import Path
 import shutil
 import subprocess
 import sys
 import tarfile
-import zipfile
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass, field
-from html.parser import HTMLParser
-from pathlib import Path
-from typing import Any
+from types import SimpleNamespace
+from typing import Annotated, Any
 from urllib.parse import parse_qs, unquote, urljoin, urlparse
+import zipfile
 
+import click
 import httpx
 from loguru import logger
 from packaging.requirements import InvalidRequirement, Requirement
 from packaging.specifiers import InvalidSpecifier, SpecifierSet
-from packaging.tags import (Tag, compatible_tags, cpython_tags, generic_tags,
-                            interpreter_name, interpreter_version)
-from packaging.utils import (InvalidWheelFilename, canonicalize_name,
-                             parse_wheel_filename)
+from packaging.tags import Tag, compatible_tags, cpython_tags, generic_tags, interpreter_name, interpreter_version
+from packaging.utils import InvalidWheelFilename, canonicalize_name, parse_wheel_filename
 from packaging.version import InvalidVersion, Version
-from enum import StrEnum
-from types import SimpleNamespace
-from typing import Annotated
-
-import click
 import typer
 
 
 class Backend(StrEnum):
-    'Enumerate the supported Backend values.'
+    "Enumerate the supported Backend values."
+
     httpx = "httpx"
     requests = "requests"
     pycurl = "pycurl"
@@ -58,18 +55,18 @@ class _ParserShim:
     """Stand-in for the removed argparse parser; hands back what Typer parsed."""
 
     def parse_args(self, args=None, namespace=None):
-        'Parse args.'
+        "Parse args."
         return _Args(**_STATE)
 
     def error(self, message):
         raise typer.BadParameter(message)
 
     def print_help(self, file=None):
-        'Print help.'
+        "Print help."
         typer.echo(click.get_current_context().get_help(), file=file)
 
     def print_usage(self, file=None):
-        'Print usage.'
+        "Print usage."
         typer.echo(click.get_current_context().get_usage(), file=file)
 
 
@@ -884,14 +881,35 @@ app = typer.Typer(
 
 @app.command(help="Find and download Python distributions from PEP 503/691 indexes.")
 def cli(
-    requirement: Annotated[list[str] | None, typer.Argument(help="one or more PEP 508 requirements, e.g. requests>=2.28 black==24.3.0", metavar="REQ")] = None,
-    file: Annotated[list[Path], typer.Option("-f", "--file", help="file containing one requirement per line; repeatable", metavar="FILE")] = [],
-    index_url: Annotated[list[str], typer.Option("-i", "--index-url", help="simple index URL, repeatable; defaults to PyPI, Tsinghua, Yandex", metavar="URL")] = [],
-    find_link: Annotated[list[str], typer.Option("-L", "--find-link", help="additional find-links source, repeatable", metavar="DIR_OR_URL")] = [],
-    dest: Annotated[Path, typer.Option("-d", "--dest", help="download destination directory", metavar="DIR")] = Path("."),
+    requirement: Annotated[
+        list[str] | None,
+        typer.Argument(help="one or more PEP 508 requirements, e.g. requests>=2.28 black==24.3.0", metavar="REQ"),
+    ] = None,
+    file: Annotated[
+        list[Path],
+        typer.Option("-f", "--file", help="file containing one requirement per line; repeatable", metavar="FILE"),
+    ] = [],
+    index_url: Annotated[
+        list[str],
+        typer.Option(
+            "-i", "--index-url", help="simple index URL, repeatable; defaults to PyPI, Tsinghua, Yandex", metavar="URL"
+        ),
+    ] = [],
+    find_link: Annotated[
+        list[str],
+        typer.Option("-L", "--find-link", help="additional find-links source, repeatable", metavar="DIR_OR_URL"),
+    ] = [],
+    dest: Annotated[Path, typer.Option("-d", "--dest", help="download destination directory", metavar="DIR")] = Path(
+        "."
+    ),
     backend: Annotated[Backend, typer.Option("-b", "--backend", help="download backend")] = Backend.httpx,
-    py_version: Annotated[str | None, typer.Option("--py-version", help="override target Python version", metavar="X.Y", parser=parse_version_arg)] = None,
-    platform: Annotated[list[str], typer.Option("--platform", help="override platform tag, repeatable", metavar="TAG")] = [],
+    py_version: Annotated[
+        str | None,
+        typer.Option("--py-version", help="override target Python version", metavar="X.Y", parser=parse_version_arg),
+    ] = None,
+    platform: Annotated[
+        list[str], typer.Option("--platform", help="override platform tag, repeatable", metavar="TAG")
+    ] = [],
     abi: Annotated[list[str], typer.Option("--abi", help="override ABI tag, repeatable", metavar="TAG")] = [],
     impl: Annotated[str | None, typer.Option("--impl", help="override Python implementation", metavar="IMPL")] = None,
     no_binary: Annotated[bool, typer.Option("--no-binary", help="exclude wheels")] = False,
@@ -902,10 +920,34 @@ def cli(
     no_download: Annotated[bool, typer.Option("--no-download", help="resolve only, no download")] = False,
     verbose: Annotated[bool, typer.Option("-v", "--verbose", help="debug logging")] = False,
 ) -> None:
-    if sum((bool(no_binary), bool(only_binary),)) > 1:
+    if (
+        sum((
+            bool(no_binary),
+            bool(only_binary),
+        ))
+        > 1
+    ):
         raise typer.BadParameter("--no-binary, --only-binary are mutually exclusive")
     requirement = requirement or []
-    _STATE.update(requirement=requirement, file=file, index_url=index_url, find_link=find_link, dest=dest, backend=backend, py_version=py_version, platform=platform, abi=abi, impl=impl, no_binary=no_binary, only_binary=only_binary, pre=pre, all=all, json=json, no_download=no_download, verbose=verbose)
+    _STATE.update(
+        requirement=requirement,
+        file=file,
+        index_url=index_url,
+        find_link=find_link,
+        dest=dest,
+        backend=backend,
+        py_version=py_version,
+        platform=platform,
+        abi=abi,
+        impl=impl,
+        no_binary=no_binary,
+        only_binary=only_binary,
+        pre=pre,
+        all=all,
+        json=json,
+        no_download=no_download,
+        verbose=verbose,
+    )
     _run()
 
 

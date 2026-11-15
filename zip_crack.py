@@ -3,18 +3,17 @@
 "Optimized Zip Brute-Forcer for Python 3.11+"
 
 from __future__ import annotations
-
-import multiprocessing
-import sys
-import time
-import zipfile
 from dataclasses import dataclass, field
 from itertools import islice
+import multiprocessing
 from pathlib import Path
-from typing import TYPE_CHECKING, Final
-from typing import Annotated
+import sys
+import time
+from typing import TYPE_CHECKING, Annotated, Final
+import zipfile
 
 import typer
+
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -172,10 +171,18 @@ app = typer.Typer(
 @app.command(help="Optimized Zip Brute-Forcer for Python 3.11+")
 def main(
     zip_file: Annotated[Path, typer.Argument(help="Path to the protected zip file")],
-    wordlist: Annotated[Path, typer.Option("-w", "--wordlist", help="Path to the password wordlist")] = Path("wordlist.txt"),
-    processes: Annotated[int | None, typer.Option("-p", "--processes", help="Number of parallel processes (default: CPU count)")] = None,
-    batch_size: Annotated[int, typer.Option("-b", "--batch-size", help="Passwords per worker batch")] = DEFAULT_BATCH_SIZE,
-    interval: Annotated[float, typer.Option("-i", "--interval", help="Status update interval in seconds")] = DEFAULT_UPDATE_INTERVAL,
+    wordlist: Annotated[Path, typer.Option("-w", "--wordlist", help="Path to the password wordlist")] = Path(
+        "wordlist.txt"
+    ),
+    processes: Annotated[
+        int | None, typer.Option("-p", "--processes", help="Number of parallel processes (default: CPU count)")
+    ] = None,
+    batch_size: Annotated[
+        int, typer.Option("-b", "--batch-size", help="Passwords per worker batch")
+    ] = DEFAULT_BATCH_SIZE,
+    interval: Annotated[
+        float, typer.Option("-i", "--interval", help="Status update interval in seconds")
+    ] = DEFAULT_UPDATE_INTERVAL,
 ) -> None:
     "Run the command-line interface."
     try:

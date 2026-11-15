@@ -2,15 +2,15 @@
 
 "Utilities for csshtmlpret."
 
-import itertools
-import os
-import re
-import sys
 from argparse import Namespace
 from datetime import datetime
+import itertools
 from multiprocessing import get_context
+import os
 from pathlib import Path
+import re
 from subprocess import getoutput
+import sys
 from time import sleep
 from types import SimpleNamespace
 from typing import Annotated
@@ -315,23 +315,49 @@ app = typer.Typer(
 )
 
 
-@app.command(epilog="CSS-HTML-Prettify:\n    Takes file or folder full path string and process all CSS/SCSS/HTML found.\n    If argument is not file/folder will fail. Check Updates works on Python3.\n    StdIn to StdOut is deprecated since may fail with unicode characters.\n    CSS Properties are AlphaSorted,to help spot cloned ones,Selectors not.\n    Watch works for whole folders, with minimum of ~60 Secs between runs.")
+@app.command(
+    epilog="CSS-HTML-Prettify:\n    Takes file or folder full path string and process all CSS/SCSS/HTML found.\n    If argument is not file/folder will fail. Check Updates works on Python3.\n    StdIn to StdOut is deprecated since may fail with unicode characters.\n    CSS Properties are AlphaSorted,to help spot cloned ones,Selectors not.\n    Watch works for whole folders, with minimum of ~60 Secs between runs."
+)
 def make_arguments_parser(
     fullpath: Annotated[str, typer.Argument(help="Full path to local file or folder.", metavar="fullpath")],
-    version: Annotated[bool, typer.Option("--version", callback=_version_callback, is_eager=True, help="show program's version number and exit")] = False,
-    prefix: Annotated[str | None, typer.Option("--prefix", help="Prefix string to prepend on output filenames.")] = None,
-    timestamp: Annotated[bool, typer.Option("--timestamp", help="Add a Time Stamp on all CSS/SCSS output files.")] = False,
+    version: Annotated[
+        bool,
+        typer.Option(
+            "--version", callback=_version_callback, is_eager=True, help="show program's version number and exit"
+        ),
+    ] = False,
+    prefix: Annotated[
+        str | None, typer.Option("--prefix", help="Prefix string to prepend on output filenames.")
+    ] = None,
+    timestamp: Annotated[
+        bool, typer.Option("--timestamp", help="Add a Time Stamp on all CSS/SCSS output files.")
+    ] = False,
     quiet: Annotated[bool, typer.Option("--quiet", help="Quiet, Silent, force disable all Logging.")] = False,
     after: Annotated[str | None, typer.Option("--after", help="Command to execute after run (Experimental).")] = None,
-    before: Annotated[str | None, typer.Option("--before", help="Command to execute before run (Experimental).")] = None,
+    before: Annotated[
+        str | None, typer.Option("--before", help="Command to execute before run (Experimental).")
+    ] = None,
     watch: Annotated[bool, typer.Option("--watch", help="Re-Compress if file changes (Experimental).")] = False,
     group: Annotated[bool, typer.Option("--group", help="Group Alphabetically CSS Poperties by name.")] = False,
     justify: Annotated[bool, typer.Option("--justify", help="Right Justify CSS Properties (Experimental).")] = False,
-    extraline: Annotated[bool, typer.Option("--extraline", help="Add 1 New Line for each New Line (Experimental)")] = False,
+    extraline: Annotated[
+        bool, typer.Option("--extraline", help="Add 1 New Line for each New Line (Experimental)")
+    ] = False,
 ) -> Namespace:
     "Create arguments parser."
     global args
-    args = SimpleNamespace(fullpath=fullpath, prefix=prefix, timestamp=timestamp, quiet=quiet, after=after, before=before, watch=watch, group=group, justify=justify, extraline=extraline)
+    args = SimpleNamespace(
+        fullpath=fullpath,
+        prefix=prefix,
+        timestamp=timestamp,
+        quiet=quiet,
+        after=after,
+        before=before,
+        watch=watch,
+        group=group,
+        justify=justify,
+        extraline=extraline,
+    )
     return args
 
 

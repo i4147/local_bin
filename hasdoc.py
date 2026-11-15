@@ -11,11 +11,11 @@ Exit status:
 """
 
 from __future__ import annotations
-
 import ast
+from pathlib import Path
 import sys
 import tokenize
-from pathlib import Path
+
 
 SKIP_DIRS = {
     "__pycache__",

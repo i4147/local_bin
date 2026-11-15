@@ -1,9 +1,9 @@
 #!/data/data/com.termux/files/usr/bin/env python
 "Utilities for infer."
 
+from pathlib import Path
 import re
 import sys
-from pathlib import Path
 
 import libcst as cst
 

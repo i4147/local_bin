@@ -4,12 +4,18 @@
 
 import argparse
 import bz2
+from collections.abc import Callable, Sequence
+from concurrent.futures import Future, ProcessPoolExecutor, wait
+from contextlib import ExitStack
+from dataclasses import asdict, dataclass
 import hashlib
 import importlib.util
 import json
 import lzma
 import multiprocessing as mp
+from multiprocessing.queues import Queue as MPQueue
 import os
+from pathlib import Path
 import queue
 import shutil
 import struct
@@ -17,26 +23,25 @@ import tarfile
 import tempfile
 import time
 import traceback
-from collections.abc import Callable, Sequence
-from concurrent.futures import Future, ProcessPoolExecutor, wait
-from contextlib import ExitStack
-from dataclasses import asdict, dataclass
-from multiprocessing.queues import Queue as MPQueue
-from pathlib import Path
-from typing import Final, TypeAlias
+from types import SimpleNamespace
+from typing import Annotated, Final, TypeAlias
 
+import click
 from dh import MAX_WORKERS
 from rich.console import Console
 from rich.panel import Panel
-from rich.progress import (BarColumn, DownloadColumn, Progress, TaskID,
-                           TaskProgressColumn, TextColumn, TimeElapsedColumn,
-                           TransferSpeedColumn)
+from rich.progress import (
+    BarColumn,
+    DownloadColumn,
+    Progress,
+    TaskID,
+    TaskProgressColumn,
+    TextColumn,
+    TimeElapsedColumn,
+    TransferSpeedColumn,
+)
 from rich.table import Table
 from rich.text import Text
-from types import SimpleNamespace
-from typing import Annotated
-
-import click
 import typer
 
 
@@ -56,18 +61,18 @@ class _ParserShim:
     """Stand-in for the removed argparse parser; hands back what Typer parsed."""
 
     def parse_args(self, args=None, namespace=None):
-        'Parse args.'
+        "Parse args."
         return _Args(**_STATE)
 
     def error(self, message):
         raise typer.BadParameter(message)
 
     def print_help(self, file=None):
-        'Print help.'
+        "Print help."
         typer.echo(click.get_current_context().get_help(), file=file)
 
     def print_usage(self, file=None):
-        'Print usage.'
+        "Print usage."
         typer.echo(click.get_current_context().get_usage(), file=file)
 
 
@@ -679,7 +684,17 @@ def cli(
 ) -> None:
     if preset is not None and preset not in list(LEVELS):
         raise typer.BadParameter(f"invalid choice: {preset!r} (choose from {list(LEVELS)})")
-    _STATE.update(path=path, out_dir=out_dir, preset=preset, algos=algos, verify=verify, force=force, keep_tar=keep_tar, tmp_dir=tmp_dir, json_path=json_path)
+    _STATE.update(
+        path=path,
+        out_dir=out_dir,
+        preset=preset,
+        algos=algos,
+        verify=verify,
+        force=force,
+        keep_tar=keep_tar,
+        tmp_dir=tmp_dir,
+        json_path=json_path,
+    )
     _run()
 
 

@@ -2,47 +2,47 @@
 "Utilities for scraper."
 
 import argparse
+from collections import defaultdict, deque
 import contextlib
+from datetime import UTC, datetime, timedelta
+from enum import StrEnum
 import hashlib
+from importlib.machinery import SourceFileLoader
+from io import BytesIO
 import json
 import multiprocessing as mp
 import os
+from pathlib import Path
 import random
 import re
 import signal
 import string
 import sys
 import time
-from collections import defaultdict, deque
-from datetime import UTC, datetime, timedelta
-from importlib.machinery import SourceFileLoader
-from io import BytesIO
-from pathlib import Path
-from typing import Any, Iterable
+from types import SimpleNamespace
+from typing import Annotated, Any, Iterable
 from urllib.parse import urldefrag, urljoin, urlparse
 from urllib.robotparser import RobotFileParser
 
-import requests
 from bs4 import BeautifulSoup
+import click
 from dh import MAX_WORKERS
 from loguru import logger
-from enum import StrEnum
-from types import SimpleNamespace
-from typing import Annotated
-
-import click
+import requests
 import typer
 
 
 class Engine(StrEnum):
-    'Enumerate the supported Engine values.'
+    "Enumerate the supported Engine values."
+
     basic = "basic"
     simple = "simple"
     parallel = "parallel"
 
 
 class Mode(StrEnum):
-    'Enumerate the supported Mode values.'
+    "Enumerate the supported Mode values."
+
     ext = "ext"
     pdf = "pdf"
     keyword = "keyword"
@@ -64,18 +64,18 @@ class _ParserShim:
     """Stand-in for the removed argparse parser; hands back what Typer parsed."""
 
     def parse_args(self, args=None, namespace=None):
-        'Parse args.'
+        "Parse args."
         return _Args(**_STATE)
 
     def error(self, message):
         raise typer.BadParameter(message)
 
     def print_help(self, file=None):
-        'Print help.'
+        "Print help."
         typer.echo(click.get_current_context().get_help(), file=file)
 
     def print_usage(self, file=None):
-        'Print usage.'
+        "Print usage."
         typer.echo(click.get_current_context().get_usage(), file=file)
 
 
@@ -1424,14 +1424,18 @@ def cmd_coc_youtube2(
     days: Annotated[int, typer.Option("--days")] = 30,
     output_dir: Annotated[str, typer.Option("--output-dir")] = "output",
 ) -> None:
-    _STATE.update(api_key=api_key, channels=channels, days=days, output_dir=output_dir, cmd="coc-youtube", func=cmd_coc_youtube)
+    _STATE.update(
+        api_key=api_key, channels=channels, days=days, output_dir=output_dir, cmd="coc-youtube", func=cmd_coc_youtube
+    )
     _run()
 
 
 @app.command("movie-crawl", help="Movie index crawler with three engines.")
 def cmd_movie_crawl2(
     engine: Annotated[Engine, typer.Option("--engine")] = Engine.basic,
-    url: Annotated[str | None, typer.Option("-u", "--url", help="Base index URL. Engine defaults apply if omitted.")] = None,
+    url: Annotated[
+        str | None, typer.Option("-u", "--url", help="Base index URL. Engine defaults apply if omitted.")
+    ] = None,
     size: Annotated[float, typer.Option("-s", "--size", help="Max size in MB (default 300).")] = 300,
     movies_file: Annotated[str, typer.Option("--movies-file")] = "movies.txt",
     state_file: Annotated[str, typer.Option("--state-file")] = "crawler_state.json",
@@ -1440,7 +1444,19 @@ def cmd_movie_crawl2(
     extensions: Annotated[list[str], typer.Option("--extensions")] = [".mkv", ".mp4"],
     qualities: Annotated[list[str], typer.Option("--qualities")] = ["480p", "720p"],
 ) -> None:
-    _STATE.update(engine=engine, url=url, size=size, movies_file=movies_file, state_file=state_file, json_out=json_out, timeout=timeout, extensions=extensions, qualities=qualities, cmd="movie-crawl", func=cmd_movie_crawl)
+    _STATE.update(
+        engine=engine,
+        url=url,
+        size=size,
+        movies_file=movies_file,
+        state_file=state_file,
+        json_out=json_out,
+        timeout=timeout,
+        extensions=extensions,
+        qualities=qualities,
+        cmd="movie-crawl",
+        func=cmd_movie_crawl,
+    )
     _run()
 
 
@@ -1454,7 +1470,17 @@ def cmd_image_hunt2(
     min_height: Annotated[int, typer.Option("--min-height")] = 400,
     urls_file: Annotated[str, typer.Option("--urls-file")] = "img_urls.txt",
 ) -> None:
-    _STATE.update(url=url, print_urls=print_urls, download=download, max_pages=max_pages, min_width=min_width, min_height=min_height, urls_file=urls_file, cmd="image-hunt", func=cmd_image_hunt)
+    _STATE.update(
+        url=url,
+        print_urls=print_urls,
+        download=download,
+        max_pages=max_pages,
+        min_width=min_width,
+        min_height=min_height,
+        urls_file=urls_file,
+        cmd="image-hunt",
+        func=cmd_image_hunt,
+    )
     _run()
 
 
@@ -1479,7 +1505,18 @@ def cmd_link_crawl2(
     timeout: Annotated[float, typer.Option("--timeout")] = 10,
     output: Annotated[str, typer.Option("-o", "--output")] = "urls.txt",
 ) -> None:
-    _STATE.update(url=url, mode=mode, ext=ext, keyword=keyword, max_pages=max_pages, delay=delay, timeout=timeout, output=output, cmd="link-crawl", func=cmd_link_crawl)
+    _STATE.update(
+        url=url,
+        mode=mode,
+        ext=ext,
+        keyword=keyword,
+        max_pages=max_pages,
+        delay=delay,
+        timeout=timeout,
+        output=output,
+        cmd="link-crawl",
+        func=cmd_link_crawl,
+    )
     _run()
 
 

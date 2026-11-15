@@ -1,14 +1,17 @@
 #!/data/data/com.termux/files/usr/bin/env python
-'Utilities for replacer.'
-from __future__ import annotations
+"Utilities for replacer."
 
+from __future__ import annotations
 import argparse
 import concurrent.futures
+from dataclasses import dataclass, field
 import difflib
+from enum import StrEnum
 import fnmatch
 import hashlib
 import json
 import os
+from pathlib import Path
 import re
 import shutil
 import stat
@@ -17,29 +20,26 @@ import sys
 import tempfile
 import threading
 import time
-from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Callable, Iterator, Sequence
-
-from dh import SKIP_DIRS
-from isbinary import is_binary
-from enum import StrEnum
 from types import SimpleNamespace
-from typing import Annotated
+from typing import Annotated, Callable, Iterator, Sequence
 
 import click
+from dh import SKIP_DIRS
+from isbinary import is_binary
 import typer
 
 
 class Symlink_policy(StrEnum):
-    'Enumerate the supported Symlink policy values.'
+    "Enumerate the supported Symlink policy values."
+
     skip = "skip"
     follow = "follow"
     error = "error"
 
 
 class Color(StrEnum):
-    'Enumerate the supported Color values.'
+    "Enumerate the supported Color values."
+
     auto = "auto"
     always = "always"
     never = "never"
@@ -67,18 +67,18 @@ class _ParserShim:
     """Stand-in for the removed argparse parser; hands back what Typer parsed."""
 
     def parse_args(self, args=None, namespace=None):
-        'Parse args.'
+        "Parse args."
         return _Args(**_STATE)
 
     def error(self, message):
         raise typer.BadParameter(message)
 
     def print_help(self, file=None):
-        'Print help.'
+        "Print help."
         typer.echo(click.get_current_context().get_help(), file=file)
 
     def print_usage(self, file=None):
-        'Print usage.'
+        "Print usage."
         typer.echo(click.get_current_context().get_usage(), file=file)
 
 
@@ -133,7 +133,8 @@ _color_lock = threading.Lock()
 
 @dataclass
 class Options:
-    'Store search, replace, regex, ignore_case, smart_case and related state.'
+    "Store search, replace, regex, ignore_case, smart_case and related state."
+
     search: str = ""
     replace: str = ""
     regex: bool = False
@@ -190,7 +191,8 @@ class Options:
 
 @dataclass
 class Rule:
-    'Store pattern, replacement, preserve_case, upper, lower and related state.'
+    "Store pattern, replacement, preserve_case, upper, lower and related state."
+
     pattern: re.Pattern[str]
     replacement: str
     preserve_case: bool = False
@@ -202,7 +204,8 @@ class Rule:
 
 @dataclass
 class FileResult:
-    'Store path, matches, changed, skipped, reason and related state.'
+    "Store path, matches, changed, skipped, reason and related state."
+
     path: str
     matches: int = 0
     changed: bool = False
@@ -788,7 +791,6 @@ def _build_rules(opts: Options) -> list[Rule]:
 def _build_parser() -> argparse.ArgumentParser:
     p = _ParserShim()
 
-
     return p
 
 
@@ -802,7 +804,7 @@ def _merge_config(args: argparse.Namespace, cfg: dict) -> argparse.Namespace:
 
 
 def main() -> int:
-    'Run the command-line interface.'
+    "Run the command-line interface."
     parser = _build_parser()
     args = parser.parse_args()
     cfg = _load_config(Path(args.config) if args.config else None)
@@ -1066,11 +1068,76 @@ def cli(
     jobs: Annotated[int | None, typer.Option("-j", "--jobs")] = None,
     config: Annotated[str | None, typer.Option("--config")] = None,
     encoding: Annotated[str | None, typer.Option("--encoding")] = None,
-    version: Annotated[bool, typer.Option("--version", callback=_version_callback, is_eager=True, help="show program's version number and exit")] = False,
+    version: Annotated[
+        bool,
+        typer.Option(
+            "--version", callback=_version_callback, is_eager=True, help="show program's version number and exit"
+        ),
+    ] = False,
 ) -> None:
-    if sum((bool(files_with_matches), bool(files_without_match),)) > 1:
+    if (
+        sum((
+            bool(files_with_matches),
+            bool(files_without_match),
+        ))
+        > 1
+    ):
         raise typer.BadParameter("-l, -L are mutually exclusive")
-    _STATE.update(search=search, replace=replace, remove=remove, dry_run=dry_run, apply=apply, files=files, files_from=files_from, globs=globs, excludes=excludes, types=types, include_hidden=include_hidden, follow_symlinks=follow_symlinks, symlink_policy=symlink_policy, max_depth=max_depth, max_filesize=max_filesize, ignore_file=ignore_file, no_ignore=no_ignore, regex=regex, ignore_case=ignore_case, smart_case=smart_case, word=word, multiline=multiline, preserve_case=preserve_case, upper=upper, lower=lower, capitalize=capitalize, env_expand=env_expand, replace_from=replace_from, literal_replace=literal_replace, max_count=max_count, rules_file=rules_file, prompt=prompt, backup=backup, backup_dir=backup_dir, undo_journal=undo_journal, undo=undo, require_clean_git=require_clean_git, confirm=confirm, diff=diff, color=color, quiet=quiet, verbose=verbose, json_out=json_out, count=count, stats=stats, context=context, exit_code=exit_code, check=check, files_with_matches=files_with_matches, files_without_match=files_without_match, jobs=jobs, config=config, encoding=encoding)
+    _STATE.update(
+        search=search,
+        replace=replace,
+        remove=remove,
+        dry_run=dry_run,
+        apply=apply,
+        files=files,
+        files_from=files_from,
+        globs=globs,
+        excludes=excludes,
+        types=types,
+        include_hidden=include_hidden,
+        follow_symlinks=follow_symlinks,
+        symlink_policy=symlink_policy,
+        max_depth=max_depth,
+        max_filesize=max_filesize,
+        ignore_file=ignore_file,
+        no_ignore=no_ignore,
+        regex=regex,
+        ignore_case=ignore_case,
+        smart_case=smart_case,
+        word=word,
+        multiline=multiline,
+        preserve_case=preserve_case,
+        upper=upper,
+        lower=lower,
+        capitalize=capitalize,
+        env_expand=env_expand,
+        replace_from=replace_from,
+        literal_replace=literal_replace,
+        max_count=max_count,
+        rules_file=rules_file,
+        prompt=prompt,
+        backup=backup,
+        backup_dir=backup_dir,
+        undo_journal=undo_journal,
+        undo=undo,
+        require_clean_git=require_clean_git,
+        confirm=confirm,
+        diff=diff,
+        color=color,
+        quiet=quiet,
+        verbose=verbose,
+        json_out=json_out,
+        count=count,
+        stats=stats,
+        context=context,
+        exit_code=exit_code,
+        check=check,
+        files_with_matches=files_with_matches,
+        files_without_match=files_without_match,
+        jobs=jobs,
+        config=config,
+        encoding=encoding,
+    )
     _run()
 
 

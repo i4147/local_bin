@@ -8,6 +8,7 @@ import shutil
 
 from dh import gsz
 
+
 DIRS_TO_DELETE = [
     "$PREFIX/lib/python3.*/site-packages/**/test",
     "$PREFIX/lib/python3.*/site-packages/**/tests",
@@ -55,13 +56,13 @@ def purge_system():
         for path in expand_and_resolve(pattern):
             p = Path(path)
         if p.exists() and p.is_dir():
-                try:
-                    total += gsz(path)
-                    shutil.rmtree(path)
-                    print(f"[-] Removed Dir: {path}")
-                    deleted_count += 1
-                except Exception as e:
-                    print(f"[!] Error removing dir {path}: {e}")
+            try:
+                total += gsz(path)
+                shutil.rmtree(path)
+                print(f"[-] Removed Dir: {path}")
+                deleted_count += 1
+            except Exception as e:
+                print(f"[!] Error removing dir {path}: {e}")
 
     for zone in SCAN_ZONES:
         expanded_zone = os.path.expandvars(zone)

@@ -5,24 +5,24 @@
 import argparse
 import ast
 import base64
+from collections import deque
+from collections.abc import Callable, Iterable, Iterator, Sequence
+from dataclasses import dataclass, field
 import fnmatch
 import io
-from loguru import logger
 import os
+from pathlib import Path
 import platform
 import re
 import sys
 import time
 import tokenize
-import zipfile
-from collections import deque
-from collections.abc import Callable, Iterable, Iterator, Sequence
-from dataclasses import dataclass, field
-from pathlib import Path
 from types import SimpleNamespace
 from typing import Annotated
+import zipfile
 
 import click
+from loguru import logger
 import typer
 
 
@@ -48,18 +48,18 @@ class _ParserShim:
     """Stand-in for the removed argparse parser; hands back what Typer parsed."""
 
     def parse_args(self, args=None, namespace=None):
-        'Parse args.'
+        "Parse args."
         return _Args(**_STATE)
 
     def error(self, message):
         raise typer.BadParameter(message)
 
     def print_help(self, file=None):
-        'Print help.'
+        "Print help."
         typer.echo(click.get_current_context().get_help(), file=file)
 
     def print_usage(self, file=None):
-        'Print usage.'
+        "Print usage."
         typer.echo(click.get_current_context().get_usage(), file=file)
 
 
@@ -1422,33 +1422,127 @@ app = typer.Typer(
 )
 
 
-@app.command(help="Consolidate a pure-Python package or script into a single self-contained file.", epilog="examples:\n  bundle the package in the current directory (saved under ./output/):\n    python consolidator.py .\n\n  bundle a script with its sibling modules:\n    python consolidator.py cli.py -o standalone.py\n\n  bundle a package and embed its data files:\n    python consolidator.py demo_app --include-package-data\n\n  auto-generate __main__.py for a package that has none:\n    python consolidator.py my_pkg/\n    python consolidator.py my_pkg/ --main-module cli\n\n  search extra source directories and embed matching data files:\n    python consolidator.py app/main.py -p src --include-data 'assets/*.json'\n\n  include a pure-Python third-party dependency:\n    python consolidator.py cli.py --include-package rich --site-path vendor\n\n  preview what would be bundled:\n    python consolidator.py demo_app --dry-run\n")
+@app.command(
+    help="Consolidate a pure-Python package or script into a single self-contained file.",
+    epilog="examples:\n  bundle the package in the current directory (saved under ./output/):\n    python consolidator.py .\n\n  bundle a script with its sibling modules:\n    python consolidator.py cli.py -o standalone.py\n\n  bundle a package and embed its data files:\n    python consolidator.py demo_app --include-package-data\n\n  auto-generate __main__.py for a package that has none:\n    python consolidator.py my_pkg/\n    python consolidator.py my_pkg/ --main-module cli\n\n  search extra source directories and embed matching data files:\n    python consolidator.py app/main.py -p src --include-data 'assets/*.json'\n\n  include a pure-Python third-party dependency:\n    python consolidator.py cli.py --include-package rich --site-path vendor\n\n  preview what would be bundled:\n    python consolidator.py demo_app --dry-run\n",
+)
 def cli(
     entry: Annotated[str, typer.Argument(help="entry script, package directory, or module name (with -m)")],
-    output: Annotated[str | None, typer.Option("-o", "--output", help="output file ('-' for stdout); default: ./output/<name>_standalone.py")] = None,
-    module: Annotated[bool, typer.Option("-m", "--module", help="treat ENTRY as a module name, emulating `python -m ENTRY`")] = False,
-    add_python_path: Annotated[list[str], typer.Option("-p", "--add-python-path", help="extra directories to search for local packages (repeatable; ':'-separated lists allowed)", metavar="DIR")] = [],
-    include_package: Annotated[list[str], typer.Option("--include-package", help="pure-Python third-party packages to bundle (name or path)", metavar="PKG")] = [],
-    site_path: Annotated[list[str], typer.Option("--site-path", help="extra directories searched for --include-package names", metavar="DIR")] = [],
-    exclude_module: Annotated[list[str], typer.Option("--exclude-module", help="exclude modules/packages (fnmatch on dotted names; a bare name excludes its whole subtree)", metavar="PAT")] = [],
-    include_data: Annotated[list[str], typer.Option("--include-data", help="embed data files: 'PKG:GLOB', 'GLOB' (relative to the entry directory and --add-python-path roots), or an existing directory/file path", metavar="SPEC")] = [],
-    exclude_data: Annotated[list[str], typer.Option("--exclude-data", help="exclude data files (glob matched against bundle-relative paths)", metavar="GLOB")] = [],
-    main_module: Annotated[str | None, typer.Option("--main-module", help="module inside the entry package to run as its __main__ (dotted, relative to the package; auto-detected if omitted)", metavar="MOD")] = None,
-    whole_package: Annotated[bool, typer.Option("--no-whole-package", help="embed only statically reachable modules instead of whole packages")] = True,
-    python: Annotated[str | None, typer.Option("--python", help="shebang interpreter (default: the python running consolidator)", metavar="INTERP")] = None,
-    compression: Annotated[str, typer.Option("--compression", help="payload compression (default: deflate)")] = "deflate",
-    keep_tmpdir: Annotated[bool, typer.Option("--keep-tmpdir", help="the generated bundle keeps its extraction directory")] = False,
-    runtime_debug: Annotated[bool, typer.Option("--runtime-debug", help="the generated bundle prints its extraction directory to stderr")] = False,
+    output: Annotated[
+        str | None,
+        typer.Option("-o", "--output", help="output file ('-' for stdout); default: ./output/<name>_standalone.py"),
+    ] = None,
+    module: Annotated[
+        bool, typer.Option("-m", "--module", help="treat ENTRY as a module name, emulating `python -m ENTRY`")
+    ] = False,
+    add_python_path: Annotated[
+        list[str],
+        typer.Option(
+            "-p",
+            "--add-python-path",
+            help="extra directories to search for local packages (repeatable; ':'-separated lists allowed)",
+            metavar="DIR",
+        ),
+    ] = [],
+    include_package: Annotated[
+        list[str],
+        typer.Option(
+            "--include-package", help="pure-Python third-party packages to bundle (name or path)", metavar="PKG"
+        ),
+    ] = [],
+    site_path: Annotated[
+        list[str],
+        typer.Option("--site-path", help="extra directories searched for --include-package names", metavar="DIR"),
+    ] = [],
+    exclude_module: Annotated[
+        list[str],
+        typer.Option(
+            "--exclude-module",
+            help="exclude modules/packages (fnmatch on dotted names; a bare name excludes its whole subtree)",
+            metavar="PAT",
+        ),
+    ] = [],
+    include_data: Annotated[
+        list[str],
+        typer.Option(
+            "--include-data",
+            help="embed data files: 'PKG:GLOB', 'GLOB' (relative to the entry directory and --add-python-path roots), or an existing directory/file path",
+            metavar="SPEC",
+        ),
+    ] = [],
+    exclude_data: Annotated[
+        list[str],
+        typer.Option(
+            "--exclude-data", help="exclude data files (glob matched against bundle-relative paths)", metavar="GLOB"
+        ),
+    ] = [],
+    main_module: Annotated[
+        str | None,
+        typer.Option(
+            "--main-module",
+            help="module inside the entry package to run as its __main__ (dotted, relative to the package; auto-detected if omitted)",
+            metavar="MOD",
+        ),
+    ] = None,
+    whole_package: Annotated[
+        bool,
+        typer.Option("--no-whole-package", help="embed only statically reachable modules instead of whole packages"),
+    ] = True,
+    python: Annotated[
+        str | None,
+        typer.Option(
+            "--python", help="shebang interpreter (default: the python running consolidator)", metavar="INTERP"
+        ),
+    ] = None,
+    compression: Annotated[
+        str, typer.Option("--compression", help="payload compression (default: deflate)")
+    ] = "deflate",
+    keep_tmpdir: Annotated[
+        bool, typer.Option("--keep-tmpdir", help="the generated bundle keeps its extraction directory")
+    ] = False,
+    runtime_debug: Annotated[
+        bool, typer.Option("--runtime-debug", help="the generated bundle prints its extraction directory to stderr")
+    ] = False,
     strict: Annotated[bool, typer.Option("--strict", help="fail the build on unresolved imports")] = False,
-    deterministic: Annotated[bool, typer.Option("--no-deterministic", help="embed the build date instead of a fixed timestamp")] = True,
-    dry_run: Annotated[bool, typer.Option("--dry-run", help="print the consolidation plan and exit without writing")] = False,
+    deterministic: Annotated[
+        bool, typer.Option("--no-deterministic", help="embed the build date instead of a fixed timestamp")
+    ] = True,
+    dry_run: Annotated[
+        bool, typer.Option("--dry-run", help="print the consolidation plan and exit without writing")
+    ] = False,
     quiet: Annotated[bool, typer.Option("-q", "--quiet", help="only report errors")] = False,
     verbose: Annotated[bool, typer.Option("-v", "--verbose", help="log more detail while building")] = False,
-    version: Annotated[bool, typer.Option("--version", callback=_version_callback, is_eager=True, help="show program's version number and exit")] = False,
+    version: Annotated[
+        bool,
+        typer.Option(
+            "--version", callback=_version_callback, is_eager=True, help="show program's version number and exit"
+        ),
+    ] = False,
 ) -> None:
     if compression is not None and compression not in sorted(_COMPRESSIONS):
         raise typer.BadParameter(f"invalid choice: {compression!r} (choose from {sorted(_COMPRESSIONS)})")
-    _STATE.update(entry=entry, output=output, module=module, add_python_path=add_python_path, include_package=include_package, site_path=site_path, exclude_module=exclude_module, include_data=include_data, exclude_data=exclude_data, main_module=main_module, whole_package=whole_package, python=python, compression=compression, keep_tmpdir=keep_tmpdir, runtime_debug=runtime_debug, strict=strict, deterministic=deterministic, dry_run=dry_run, quiet=quiet, verbose=verbose)
+    _STATE.update(
+        entry=entry,
+        output=output,
+        module=module,
+        add_python_path=add_python_path,
+        include_package=include_package,
+        site_path=site_path,
+        exclude_module=exclude_module,
+        include_data=include_data,
+        exclude_data=exclude_data,
+        main_module=main_module,
+        whole_package=whole_package,
+        python=python,
+        compression=compression,
+        keep_tmpdir=keep_tmpdir,
+        runtime_debug=runtime_debug,
+        strict=strict,
+        deterministic=deterministic,
+        dry_run=dry_run,
+        quiet=quiet,
+        verbose=verbose,
+    )
     _run()
 
 

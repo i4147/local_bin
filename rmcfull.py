@@ -13,28 +13,28 @@ Optional: python -m pip install joblib
 """
 
 from __future__ import annotations
-
 import argparse
 import ast
 import concurrent.futures as cf
+from dataclasses import dataclass
 import difflib
 import importlib
 import io
 import multiprocessing as mp
+from multiprocessing.pool import ThreadPool
 import os
+from pathlib import Path
 import re
 import shlex
 import stat
 import sys
 import tempfile
-import tokenize
-from dataclasses import dataclass
-from multiprocessing.pool import ThreadPool
-from pathlib import Path
 from time import perf_counter
+import tokenize
 from typing import Iterable, Iterator, Protocol, cast
 
 from loguru import logger
+
 
 _Edit = tuple[int, int, bytes]
 
@@ -760,8 +760,8 @@ def colorize_diff(diff: str, color: bool) -> str:
 
 def main() -> int:
     "Run the command-line interface."
-    import importlib.util
     from contextlib import nullcontext
+    import importlib.util
 
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument(
@@ -843,8 +843,7 @@ def main() -> int:
     progress_id = None
     if args.rich:
         from rich.console import Console
-        from rich.progress import (BarColumn, Progress, TaskProgressColumn,
-                                   TextColumn, TimeElapsedColumn)
+        from rich.progress import BarColumn, Progress, TaskProgressColumn, TextColumn, TimeElapsedColumn
         from rich.text import Text
 
         force_terminal = True if args.color == "always" else False if args.color == "never" else None

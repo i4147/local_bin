@@ -2,19 +2,18 @@
 
 "Fuzzy text comparison CLI"
 
+from abc import ABC, abstractmethod
 import argparse
+from collections import Counter
+from dataclasses import dataclass, field
 import hashlib
 import math
+from pathlib import Path
 import random
 import re
 import sys
-from abc import ABC, abstractmethod
-from collections import Counter
-from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Callable, Iterable, Sequence
 from types import SimpleNamespace
-from typing import Annotated
+from typing import Annotated, Callable, Iterable, Sequence
 
 import click
 import typer
@@ -42,18 +41,18 @@ class _ParserShim:
     """Stand-in for the removed argparse parser; hands back what Typer parsed."""
 
     def parse_args(self, args=None, namespace=None):
-        'Parse args.'
+        "Parse args."
         return _Args(**_STATE)
 
     def error(self, message):
         raise typer.BadParameter(message)
 
     def print_help(self, file=None):
-        'Print help.'
+        "Print help."
         typer.echo(click.get_current_context().get_help(), file=file)
 
     def print_usage(self, file=None):
-        'Print usage.'
+        "Print usage."
         typer.echo(click.get_current_context().get_usage(), file=file)
 
 
@@ -1261,7 +1260,12 @@ app = typer.Typer(
 
 @app.callback()
 def _root(
-    version: Annotated[bool, typer.Option("--version", callback=_version_callback, is_eager=True, help="show program's version number and exit")] = False,
+    version: Annotated[
+        bool,
+        typer.Option(
+            "--version", callback=_version_callback, is_eager=True, help="show program's version number and exit"
+        ),
+    ] = False,
 ) -> None:
     pass
 
@@ -1300,7 +1304,15 @@ def cmd_best_match(
 ) -> None:
     if metric is not None and metric not in sorted(DEFAULT_METRICS):
         raise typer.BadParameter(f"invalid choice: {metric!r} (choose from {sorted(DEFAULT_METRICS)})")
-    _STATE.update(metric=metric, query=query, candidates=candidates, threshold=threshold, normalize=normalize, rank=rank, command="best-match")
+    _STATE.update(
+        metric=metric,
+        query=query,
+        candidates=candidates,
+        threshold=threshold,
+        normalize=normalize,
+        rank=rank,
+        command="best-match",
+    )
     _run()
 
 
@@ -1319,7 +1331,19 @@ def cmd_files(
 ) -> None:
     if metric is not None and metric not in sorted(DEFAULT_METRICS):
         raise typer.BadParameter(f"invalid choice: {metric!r} (choose from {sorted(DEFAULT_METRICS)})")
-    _STATE.update(metric=metric, a=a, b=b, threshold=threshold, window=window, encoding=encoding, diff=diff, normalize=normalize, normalize_lines=normalize_lines, json=json, command="files")
+    _STATE.update(
+        metric=metric,
+        a=a,
+        b=b,
+        threshold=threshold,
+        window=window,
+        encoding=encoding,
+        diff=diff,
+        normalize=normalize,
+        normalize_lines=normalize_lines,
+        json=json,
+        command="files",
+    )
     _run()
 
 
@@ -1334,7 +1358,15 @@ def cmd_grep(
 ) -> None:
     if metric is not None and metric not in sorted(DEFAULT_METRICS):
         raise typer.BadParameter(f"invalid choice: {metric!r} (choose from {sorted(DEFAULT_METRICS)})")
-    _STATE.update(metric=metric, file=file, query=query, threshold=threshold, encoding=encoding, normalize=normalize, command="grep")
+    _STATE.update(
+        metric=metric,
+        file=file,
+        query=query,
+        threshold=threshold,
+        encoding=encoding,
+        normalize=normalize,
+        command="grep",
+    )
     _run()
 
 

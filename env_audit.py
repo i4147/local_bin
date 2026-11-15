@@ -2,15 +2,14 @@
 """env-audit: Reconcile .env, .env.example, CI, and Python code via static AST analysis."""
 
 import ast
+from dataclasses import dataclass, field
 import os
 import pathlib
 import re
 import subprocess
 import sys
-from dataclasses import dataclass, field
-from typing import Any, Optional
 from types import SimpleNamespace
-from typing import Annotated
+from typing import Annotated, Any, Optional
 
 import click
 import typer
@@ -32,18 +31,18 @@ class _ParserShim:
     """Stand-in for the removed argparse parser; hands back what Typer parsed."""
 
     def parse_args(self, args=None, namespace=None):
-        'Parse args.'
+        "Parse args."
         return _Args(**_STATE)
 
     def error(self, message):
         raise typer.BadParameter(message)
 
     def print_help(self, file=None):
-        'Print help.'
+        "Print help."
         typer.echo(click.get_current_context().get_help(), file=file)
 
     def print_usage(self, file=None):
-        'Print usage.'
+        "Print usage."
         typer.echo(click.get_current_context().get_usage(), file=file)
 
 
@@ -453,7 +452,6 @@ def reconcile(
 def main() -> None:
     "Run the command-line interface."
     parser = _ParserShim()
-
 
     args = parser.parse_args()
     root = pathlib.Path(".")

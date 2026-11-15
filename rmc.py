@@ -7,32 +7,32 @@ when no inputs are supplied, and reports per-file bytes reduced with Rich.
 """
 
 from __future__ import annotations
-
 import ast
 import codecs
+from concurrent.futures import ProcessPoolExecutor
 import dataclasses
 import difflib
 import enum
 import fnmatch
 import json
 import os
+from pathlib import Path
 import re
 import shutil
 import signal
 import sys
 import textwrap
-from concurrent.futures import ProcessPoolExecutor
-from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final, TypeVar, cast
 
-import libcst as cst
-import typer
 from atomicio import atomic_write as _atomic_write
 from dh import MAX_WORKERS, SKIP_DIRS
+import libcst as cst
 from loguru import logger
 from rich.console import Console
 from rich.table import Table
 from rich.text import Text
+import typer
+
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, Sequence

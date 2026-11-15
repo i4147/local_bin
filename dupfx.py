@@ -28,20 +28,19 @@ Command-line script: run ``python dupfx.py`` or the ``dupfx`` command. The modul
 """
 
 from collections import defaultdict
+from enum import StrEnum
 from multiprocessing import Pool
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Annotated
 
 from loguru import logger
-from xxhash import xxh64
-from enum import StrEnum
-from typing import Annotated
-
 import typer
+from xxhash import xxh64
 
 
 class Keep(StrEnum):
-    'Enumerate the supported Keep values.'
+    "Enumerate the supported Keep values."
+
     first = "first"
     oldest = "oldest"
     newest = "newest"
@@ -146,10 +145,19 @@ app = typer.Typer(
 
 @app.command(help="Find and delete duplicate files by content.")
 def main(
-    recursive: Annotated[bool, typer.Option("--recursive", help="Search directories recursively (default: True).")] = True,
-    remove: Annotated[bool, typer.Option("-r", "--remove", help="Actually delete duplicate files. Without this flag, only report them.")] = True,
-    all: Annotated[bool, typer.Option("-a", "--all", help="Include .git directories in the search (symlinks are still skipped).")] = False,
-    dry_run: Annotated[bool, typer.Option("-n", "--dry-run", help="Don't delete; just show what would be done.")] = False,
+    recursive: Annotated[
+        bool, typer.Option("--recursive", help="Search directories recursively (default: True).")
+    ] = True,
+    remove: Annotated[
+        bool,
+        typer.Option("-r", "--remove", help="Actually delete duplicate files. Without this flag, only report them."),
+    ] = True,
+    all: Annotated[
+        bool, typer.Option("-a", "--all", help="Include .git directories in the search (symlinks are still skipped).")
+    ] = False,
+    dry_run: Annotated[
+        bool, typer.Option("-n", "--dry-run", help="Don't delete; just show what would be done.")
+    ] = False,
     follow_symlinks: Annotated[bool, typer.Option("--follow-symlinks", help="Follow symlinks to files.")] = False,
     keep: Annotated[Keep, typer.Option("-k", "--keep", help="Which file to keep within duplicates.")] = Keep.oldest,
 ) -> None:

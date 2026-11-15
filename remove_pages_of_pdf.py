@@ -2,15 +2,15 @@
 "Utilities for remove pages of pdf."
 
 from __future__ import annotations
-
 import importlib
 import os
+from pathlib import Path
 import shutil
 import tempfile
-from pathlib import Path
 from typing import Callable
 
 import typer
+
 
 RemoveFn = Callable[[Path, Path, int, int], None]
 Backend = tuple[str, RemoveFn]

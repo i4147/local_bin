@@ -3,19 +3,20 @@
 "Utilities for svgo."
 
 import base64
-import functools
-import json
-import math
-import os
-import re
-import sys
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass, field
 from decimal import ROUND_HALF_UP, Decimal
+import functools
 from html.entities import html5 as _HTML5_ENTITIES
+import json
+import math
+import os
 from pathlib import Path
+import re
+import sys
 from typing import Any, Callable, Iterator, Mapping, Sequence
 from xml.parsers import expat
+
 
 EXIT_SUCCESS: int = 0
 EXIT_FAILURE: int = 1
@@ -8764,6 +8765,7 @@ VERSION_TEXT = "4.1.0\n"
 
 import errno
 import time
+
 
 #: Number of parallel workers (per the port specification).
 _WORKERS: int = 4

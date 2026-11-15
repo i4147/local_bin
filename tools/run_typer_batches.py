@@ -6,16 +6,17 @@ and records results into .typer_refactor_progress.md.
 """
 
 from __future__ import annotations
-
 import os
+from pathlib import Path
 import shutil
 import subprocess
 import sys
-from pathlib import Path
+
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 from argparse2typer import convert  # noqa: E402
+
 
 FILES_IN_SCOPE = [
     "archive_converter.py",

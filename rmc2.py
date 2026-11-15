@@ -2,21 +2,19 @@
 "Strip comments (and optionally docstrings/blank lines) from Python sources."
 
 from __future__ import annotations
-
 import argparse
 import ast
+from collections.abc import Iterable, Sequence
+from dataclasses import dataclass
 import io
 import multiprocessing as mp
 import os
+from pathlib import Path
 import re
 import sys
 import tokenize
-from collections.abc import Iterable, Sequence
-from dataclasses import dataclass
-from pathlib import Path
-from typing import Any
 from types import SimpleNamespace
-from typing import Annotated
+from typing import Annotated, Any
 
 import click
 import typer
@@ -44,18 +42,18 @@ class _ParserShim:
     """Stand-in for the removed argparse parser; hands back what Typer parsed."""
 
     def parse_args(self, args=None, namespace=None):
-        'Parse args.'
+        "Parse args."
         return _Args(**_STATE)
 
     def error(self, message):
         raise typer.BadParameter(message)
 
     def print_help(self, file=None):
-        'Print help.'
+        "Print help."
         typer.echo(click.get_current_context().get_help(), file=file)
 
     def print_usage(self, file=None):
-        'Print usage.'
+        "Print usage."
         typer.echo(click.get_current_context().get_usage(), file=file)
 
 
@@ -503,18 +501,37 @@ app = typer.Typer(
 def cli(
     paths: Annotated[list[Path], typer.Argument(help="Files or directories to process")],
     remove_all: Annotated[bool, typer.Option("--remove-all", "-a", help="Also strip docstrings")] = False,
-    collapse_blanks: Annotated[bool, typer.Option("--collapse-blanks", "-b", help="Collapse runs of blank lines to a single blank line")] = False,
+    collapse_blanks: Annotated[
+        bool, typer.Option("--collapse-blanks", "-b", help="Collapse runs of blank lines to a single blank line")
+    ] = False,
     dry_run: Annotated[bool, typer.Option("--dry-run", "-n", help="Report changes without writing files")] = False,
     no_backup: Annotated[bool, typer.Option("--no-backup", help="Do not write .pystripbak backup files")] = False,
     no_color: Annotated[bool, typer.Option("--no-color", help="Disable colorized output")] = False,
     verbose: Annotated[int, typer.Option("-v", "--verbose", count=True, help="Increase verbosity (repeatable)")] = 0,
     quiet: Annotated[bool, typer.Option("-q", "--quiet", help="Suppress per-file output, only show summary")] = False,
-    version: Annotated[bool, typer.Option("--version", callback=_version_callback, is_eager=True, help="show program's version number and exit")] = False,
+    version: Annotated[
+        bool,
+        typer.Option(
+            "--version", callback=_version_callback, is_eager=True, help="show program's version number and exit"
+        ),
+    ] = False,
     jobs: Annotated[int, typer.Option("-j", "--jobs", help="Max worker processes (default: 8)")] = 8,
     chunksize: Annotated[int, typer.Option("--chunksize", help="Chunk size for parallel processing (default: 8)")] = 8,
     no_parallel: Annotated[bool, typer.Option("--no-parallel", help="Disable parallel processing")] = False,
 ) -> None:
-    _STATE.update(paths=paths, remove_all=remove_all, collapse_blanks=collapse_blanks, dry_run=dry_run, no_backup=no_backup, no_color=no_color, verbose=verbose, quiet=quiet, jobs=jobs, chunksize=chunksize, no_parallel=no_parallel)
+    _STATE.update(
+        paths=paths,
+        remove_all=remove_all,
+        collapse_blanks=collapse_blanks,
+        dry_run=dry_run,
+        no_backup=no_backup,
+        no_color=no_color,
+        verbose=verbose,
+        quiet=quiet,
+        jobs=jobs,
+        chunksize=chunksize,
+        no_parallel=no_parallel,
+    )
     _run()
 
 

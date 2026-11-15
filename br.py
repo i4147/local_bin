@@ -2,25 +2,23 @@
 "📦 Recursively compress/decompress files using Brotli with parallel processing (deletes originals by default)"
 
 import argparse
+from dataclasses import dataclass
 import hashlib
 import multiprocessing as mp
+from multiprocessing import Pool, cpu_count
 import os
+from pathlib import Path
 import shutil
 import struct
 import tarfile
 import tempfile
 import time
-from dataclasses import dataclass
-from multiprocessing import Pool, cpu_count
-from pathlib import Path
-from typing import Callable, Iterator, Optional, Sequence
+from types import SimpleNamespace
+from typing import Annotated, Callable, Iterator, Optional, Sequence
 
 import brotli
-from dh import MAX_WORKERS, SKIP_DIRS
-from types import SimpleNamespace
-from typing import Annotated
-
 import click
+from dh import MAX_WORKERS, SKIP_DIRS
 import typer
 
 
@@ -40,18 +38,18 @@ class _ParserShim:
     """Stand-in for the removed argparse parser; hands back what Typer parsed."""
 
     def parse_args(self, args=None, namespace=None):
-        'Parse args.'
+        "Parse args."
         return _Args(**_STATE)
 
     def error(self, message):
         raise typer.BadParameter(message)
 
     def print_help(self, file=None):
-        'Print help.'
+        "Print help."
         typer.echo(click.get_current_context().get_help(), file=file)
 
     def print_usage(self, file=None):
-        'Print usage.'
+        "Print usage."
         typer.echo(click.get_current_context().get_usage(), file=file)
 
 
@@ -59,8 +57,7 @@ try:
     from rich import box
     from rich.console import Console
     from rich.panel import Panel
-    from rich.progress import (BarColumn, Progress, SpinnerColumn, TextColumn,
-                               TimeElapsedColumn)
+    from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
     from rich.table import Table
     from rich.text import Text
 
@@ -1300,27 +1297,103 @@ app = typer.Typer(
 )
 
 
-@app.command(help="📦 Recursively compress/decompress files using Brotli with parallel processing (deletes originals by default)", epilog="\nExamples:\n  %(prog)s                          # Compress all files in current dir (tars subdirs first)\n  %(prog)s -c                       # Compress all files (explicit)\n  %(prog)s -c file1 file2 dir/      # Compress multiple inputs\n  %(prog)s -d                       # Decompress all .br files (auto-untar .tar.br)\n  %(prog)s -d archive.tar.br        # Decompress and untar archive.tar.br\n  %(prog)s -c -t /path/to/dir       # Tar subdirs first, then compress\n  %(prog)s -c -e txt log csv        # Compress only specific extensions\n  %(prog)s -c -q 11 -w 8            # Custom quality and workers\n  %(prog)s -c --verify              # Verify round-trip before deleting originals\n  %(prog)s -c --keep-originals      # Keep original files when compressing\n  %(prog)s -d --keep-originals      # Keep compressed files when decompressing\n  %(prog)s -c --dry-run             # Preview compression without modifying\n  %(prog)s --exclude .git -- .      # Exclude patterns, use '.' as target\n        ")
+@app.command(
+    help="📦 Recursively compress/decompress files using Brotli with parallel processing (deletes originals by default)",
+    epilog="\nExamples:\n  %(prog)s                          # Compress all files in current dir (tars subdirs first)\n  %(prog)s -c                       # Compress all files (explicit)\n  %(prog)s -c file1 file2 dir/      # Compress multiple inputs\n  %(prog)s -d                       # Decompress all .br files (auto-untar .tar.br)\n  %(prog)s -d archive.tar.br        # Decompress and untar archive.tar.br\n  %(prog)s -c -t /path/to/dir       # Tar subdirs first, then compress\n  %(prog)s -c -e txt log csv        # Compress only specific extensions\n  %(prog)s -c -q 11 -w 8            # Custom quality and workers\n  %(prog)s -c --verify              # Verify round-trip before deleting originals\n  %(prog)s -c --keep-originals      # Keep original files when compressing\n  %(prog)s -d --keep-originals      # Keep compressed files when decompressing\n  %(prog)s -c --dry-run             # Preview compression without modifying\n  %(prog)s --exclude .git -- .      # Exclude patterns, use '.' as target\n        ",
+)
 def cli(
     compress: Annotated[bool, typer.Option("-c", "--compress", help="Compress files (default)")] = True,
     decompress: Annotated[bool, typer.Option("-d", "--decompress", help="Decompress .br files")] = False,
-    tar_subdirs_first: Annotated[bool, typer.Option("-t", "--tar-subdirs-first", help="Tar subdirectories first, then apply Brotli compression on the .tar files (only valid with -c/--compress)")] = False,
-    paths: Annotated[list[str], typer.Argument(help="Files and/or directories to process. If omitted, uses current directory and tars subdirs first.")] = [],
-    extensions: Annotated[list[str] | None, typer.Option("-e", "--extensions", help="Compress only specific file extensions (e.g., txt log csv). Only valid with -c/--compress.")] = None,
-    quality: Annotated[int, typer.Option("-q", "--quality", help="Brotli compression quality (0-11, default: 11). Only valid with -c/--compress.")] = 11,
-    chunk_size: Annotated[int, typer.Option("--chunk-size", help=f"Streaming chunk size in bytes (default: {DEFAULT_CHUNK_SIZE}, minimum: {MIN_CHUNK_SIZE})")] = DEFAULT_CHUNK_SIZE,
-    verify: Annotated[bool, typer.Option("--verify", help="Decompress each result in memory and compare SHA-256 with the source before deleting originals")] = False,
-    keep_originals: Annotated[bool, typer.Option("--keep-originals", help="Keep original files after processing (default: delete originals)")] = False,
-    allow_truncated: Annotated[bool, typer.Option("--allow-truncated", help="Accept Brotli streams without an end-of-stream marker (only valid with -d/--decompress)")] = False,
-    exclude: Annotated[list[str], typer.Option("--exclude", help="Directory/file patterns to exclude from processing (e.g., node_modules .git)")] = [],
+    tar_subdirs_first: Annotated[
+        bool,
+        typer.Option(
+            "-t",
+            "--tar-subdirs-first",
+            help="Tar subdirectories first, then apply Brotli compression on the .tar files (only valid with -c/--compress)",
+        ),
+    ] = False,
+    paths: Annotated[
+        list[str],
+        typer.Argument(
+            help="Files and/or directories to process. If omitted, uses current directory and tars subdirs first."
+        ),
+    ] = [],
+    extensions: Annotated[
+        list[str] | None,
+        typer.Option(
+            "-e",
+            "--extensions",
+            help="Compress only specific file extensions (e.g., txt log csv). Only valid with -c/--compress.",
+        ),
+    ] = None,
+    quality: Annotated[
+        int,
+        typer.Option(
+            "-q", "--quality", help="Brotli compression quality (0-11, default: 11). Only valid with -c/--compress."
+        ),
+    ] = 11,
+    chunk_size: Annotated[
+        int,
+        typer.Option(
+            "--chunk-size",
+            help=f"Streaming chunk size in bytes (default: {DEFAULT_CHUNK_SIZE}, minimum: {MIN_CHUNK_SIZE})",
+        ),
+    ] = DEFAULT_CHUNK_SIZE,
+    verify: Annotated[
+        bool,
+        typer.Option(
+            "--verify",
+            help="Decompress each result in memory and compare SHA-256 with the source before deleting originals",
+        ),
+    ] = False,
+    keep_originals: Annotated[
+        bool, typer.Option("--keep-originals", help="Keep original files after processing (default: delete originals)")
+    ] = False,
+    allow_truncated: Annotated[
+        bool,
+        typer.Option(
+            "--allow-truncated",
+            help="Accept Brotli streams without an end-of-stream marker (only valid with -d/--decompress)",
+        ),
+    ] = False,
+    exclude: Annotated[
+        list[str],
+        typer.Option("--exclude", help="Directory/file patterns to exclude from processing (e.g., node_modules .git)"),
+    ] = [],
     no_parallel: Annotated[bool, typer.Option("--no-parallel", help="Disable parallel processing")] = False,
-    dry_run: Annotated[bool, typer.Option("--dry-run", help="Show what would be processed without actually modifying files")] = False,
-    no_skip_compressed: Annotated[bool, typer.Option("--no-skip-compressed", help="Do not skip already compressed files (dangerous, may double-compress). Only valid with -c/--compress.")] = False,
-    yes: Annotated[bool, typer.Option("-y", "--yes", help="Skip the confirmation prompt shown before deleting originals")] = False,
+    dry_run: Annotated[
+        bool, typer.Option("--dry-run", help="Show what would be processed without actually modifying files")
+    ] = False,
+    no_skip_compressed: Annotated[
+        bool,
+        typer.Option(
+            "--no-skip-compressed",
+            help="Do not skip already compressed files (dangerous, may double-compress). Only valid with -c/--compress.",
+        ),
+    ] = False,
+    yes: Annotated[
+        bool, typer.Option("-y", "--yes", help="Skip the confirmation prompt shown before deleting originals")
+    ] = False,
 ) -> None:
     if quality is not None and quality not in range(12):
         raise typer.BadParameter(f"invalid choice: {quality!r} (choose from {range(12)})")
-    _STATE.update(compress=compress, decompress=decompress, tar_subdirs_first=tar_subdirs_first, paths=paths, extensions=extensions, quality=quality, chunk_size=chunk_size, verify=verify, keep_originals=keep_originals, allow_truncated=allow_truncated, exclude=exclude, no_parallel=no_parallel, dry_run=dry_run, no_skip_compressed=no_skip_compressed, yes=yes)
+    _STATE.update(
+        compress=compress,
+        decompress=decompress,
+        tar_subdirs_first=tar_subdirs_first,
+        paths=paths,
+        extensions=extensions,
+        quality=quality,
+        chunk_size=chunk_size,
+        verify=verify,
+        keep_originals=keep_originals,
+        allow_truncated=allow_truncated,
+        exclude=exclude,
+        no_parallel=no_parallel,
+        dry_run=dry_run,
+        no_skip_compressed=no_skip_compressed,
+        yes=yes,
+    )
     _run()
 
 

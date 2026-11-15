@@ -3,29 +3,29 @@
 "Render Markdown in your terminal, page through it, and convert between Markdown and HTML.  No subprocess / os.system is used."
 
 from __future__ import annotations
-
 import argparse
 import contextlib
+from dataclasses import dataclass
+from enum import IntEnum
 import glob
 import html
 import importlib.metadata
 import importlib.util
 import io
 import os
+from pathlib import Path
 import platform
 import re
 import select
 import shutil
+from string import Template
 import sys
+from typing import Any, Final, Iterable, Literal, Mapping, NoReturn, Sequence
 import unicodedata
 import urllib.error
 import urllib.parse
 import urllib.request
-from dataclasses import dataclass
-from enum import IntEnum
-from pathlib import Path
-from string import Template
-from typing import Any, Final, Iterable, Literal, Mapping, NoReturn, Sequence
+
 
 try:
     from loguru import logger

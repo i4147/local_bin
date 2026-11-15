@@ -63,17 +63,15 @@ How it works
 """
 
 from __future__ import annotations
-
 import ast
 import builtins
+from dataclasses import dataclass, field
 import io
+from pathlib import Path
 import re
 import sys
 import tokenize
-from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Sequence
-from typing import Annotated
+from typing import Annotated, Sequence
 
 import typer
 
@@ -1883,10 +1881,19 @@ app = typer.Typer(
 @app.command(help="Restore indentation to a flattened Python source file.")
 def main(
     source: Annotated[Path | None, typer.Argument(help="the Python file whose indentation should be restored")] = None,
-    output: Annotated[Path | None, typer.Option("-o", "--output", help="write the result to this file instead of stdout")] = None,
-    in_place: Annotated[bool, typer.Option("-i", "--in-place", help="overwrite the input file with the result")] = False,
+    output: Annotated[
+        Path | None, typer.Option("-o", "--output", help="write the result to this file instead of stdout")
+    ] = None,
+    in_place: Annotated[
+        bool, typer.Option("-i", "--in-place", help="overwrite the input file with the result")
+    ] = False,
     no_validate: Annotated[bool, typer.Option("--no-validate", help="skip the final ast.parse() check")] = False,
-    version: Annotated[bool, typer.Option("--version", callback=_version_callback, is_eager=True, help="show program's version number and exit")] = False,
+    version: Annotated[
+        bool,
+        typer.Option(
+            "--version", callback=_version_callback, is_eager=True, help="show program's version number and exit"
+        ),
+    ] = False,
 ) -> int:
     "Run the command-line interface."
 

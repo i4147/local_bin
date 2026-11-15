@@ -5,27 +5,25 @@
 import argparse
 import contextlib
 import datetime as dt
+from difflib import SequenceMatcher
 import re
 import string
 import sys
+from types import SimpleNamespace
+from typing import Annotated, Any, Optional
 import urllib.error
 import urllib.request
-from difflib import SequenceMatcher
-from typing import Any, Optional
 
 import bibtexparser
+from bibtexparser.bparser import BibTexParser
+from bibtexparser.bwriter import BibTexWriter
 import bs4
+import click
 import isbnlib
 import pycountry
 import pyparsing
-from bibtexparser.bparser import BibTexParser
-from bibtexparser.bwriter import BibTexWriter
 from SPARQLWrapper import JSON, SPARQLWrapper
 from termcolor import colored
-from types import SimpleNamespace
-from typing import Annotated
-
-import click
 import typer
 
 
@@ -45,18 +43,18 @@ class _ParserShim:
     """Stand-in for the removed argparse parser; hands back what Typer parsed."""
 
     def parse_args(self, args=None, namespace=None):
-        'Parse args.'
+        "Parse args."
         return _Args(**_STATE)
 
     def error(self, message):
         raise typer.BadParameter(message)
 
     def print_help(self, file=None):
-        'Print help.'
+        "Print help."
         typer.echo(click.get_current_context().get_help(), file=file)
 
     def print_usage(self, file=None):
-        'Print usage.'
+        "Print usage."
         typer.echo(click.get_current_context().get_usage(), file=file)
 
 
@@ -845,9 +843,19 @@ def cmd_check(
     output: Annotated[typer.FileTextWrite, typer.Option("--output", help="Optional output file.")] = sys.stdout,
     try_fix: Annotated[bool, typer.Option("--try-fix", help="Flag to search information to fix the database.")] = False,
     add_todo: Annotated[bool, typer.Option("--add-todo", help="Adds TODO for missing fields.")] = False,
-    anthologies: Annotated[list[str] | None, typer.Option("--anthologies", help="List of BibTeX files with know papers.")] = None,
+    anthologies: Annotated[
+        list[str] | None, typer.Option("--anthologies", help="List of BibTeX files with know papers.")
+    ] = None,
 ) -> None:
-    _STATE.update(input=input, output=output, try_fix=try_fix, add_todo=add_todo, anthologies=anthologies, subcommand="check", func=run_check)
+    _STATE.update(
+        input=input,
+        output=output,
+        try_fix=try_fix,
+        add_todo=add_todo,
+        anthologies=anthologies,
+        subcommand="check",
+        func=run_check,
+    )
     _run()
 
 

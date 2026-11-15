@@ -4,14 +4,15 @@
 
 import ast
 import builtins
+from collections import Counter
+from itertools import count, product
 import keyword
+from pathlib import Path
 import string
 import subprocess
 import sys
-from collections import Counter
-from itertools import count, product
-from pathlib import Path
 from typing import Iterator
+
 
 try:
     import libcst as cst

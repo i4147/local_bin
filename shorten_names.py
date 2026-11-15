@@ -72,24 +72,22 @@ Requires Python 3.10+ and ``libcst``.
 """
 
 from __future__ import annotations
-
 import ast
 import builtins
-import keyword
-import string
-import sys
 from collections import Counter
 from dataclasses import dataclass, field
 from itertools import count, product
+import keyword
 from pathlib import Path
-from typing import Iterator, Optional
+import string
+import sys
+from typing import Annotated, Iterator, Optional
 
 import libcst as cst
 from libcst.helpers import get_full_name_for_node
 from libcst.metadata import ClassScope, MetadataWrapper, ScopeProvider
-from typing import Annotated
-
 import typer
+
 
 __all__ = ["shorten_names"]
 

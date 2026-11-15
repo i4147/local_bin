@@ -13,23 +13,23 @@ Examples:
 """
 
 from __future__ import annotations
-
+from collections import deque
+from dataclasses import dataclass, field
 import fnmatch
 import json
 import os
+from pathlib import Path
 import re
 import shutil
 import sys
 import tempfile
-from collections import deque
-from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Optional
 
-import typer
 from rich.console import Console
 from rich.table import Table
 from rich.text import Text
+import typer
+
 
 __version__ = "2.0.0"
 

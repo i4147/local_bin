@@ -47,10 +47,11 @@ The repair pipeline operates in three compiler-validated stages:
 """
 
 from __future__ import annotations
-
 import argparse
 import ast
 import builtins
+from collections.abc import Sequence
+from dataclasses import asdict, dataclass, replace
 import functools
 import io
 import json
@@ -59,8 +60,6 @@ import re
 import sys
 import time
 import tokenize
-from collections.abc import Sequence
-from dataclasses import asdict, dataclass, replace
 from types import SimpleNamespace
 from typing import Annotated
 
@@ -84,18 +83,18 @@ class _ParserShim:
     """Stand-in for the removed argparse parser; hands back what Typer parsed."""
 
     def parse_args(self, args=None, namespace=None):
-        'Parse args.'
+        "Parse args."
         return _Args(**_STATE)
 
     def error(self, message):
         raise typer.BadParameter(message)
 
     def print_help(self, file=None):
-        'Print help.'
+        "Print help."
         typer.echo(click.get_current_context().get_help(), file=file)
 
     def print_usage(self, file=None):
-        'Print usage.'
+        "Print usage."
         typer.echo(click.get_current_context().get_usage(), file=file)
 
 
@@ -2863,12 +2862,25 @@ app = typer.Typer(
 )
 
 
-@app.command(help="Automatically reconstruct missing newlines and 4-space indentations in broken Python files in-place.")
+@app.command(
+    help="Automatically reconstruct missing newlines and 4-space indentations in broken Python files in-place."
+)
 def cli(
-    paths: Annotated[list[str] | None, typer.Argument(help="Python files or directories to fix in-place. Defaults to broken*.py in the current directory if omitted.")] = None,
-    dry_run: Annotated[bool, typer.Option("--dry-run", "--check", help="Analyze and report fixes without modifying files on disk.")] = False,
-    force: Annotated[bool, typer.Option("--force", help="Re-infer indentation even on files that already compile cleanly.")] = False,
-    beam_width: Annotated[int, typer.Option("--beam-width", help="Beam width for dataflow-guided indentation search (default: 64).")] = 64,
+    paths: Annotated[
+        list[str] | None,
+        typer.Argument(
+            help="Python files or directories to fix in-place. Defaults to broken*.py in the current directory if omitted."
+        ),
+    ] = None,
+    dry_run: Annotated[
+        bool, typer.Option("--dry-run", "--check", help="Analyze and report fixes without modifying files on disk.")
+    ] = False,
+    force: Annotated[
+        bool, typer.Option("--force", help="Re-infer indentation even on files that already compile cleanly.")
+    ] = False,
+    beam_width: Annotated[
+        int, typer.Option("--beam-width", help="Beam width for dataflow-guided indentation search (default: 64).")
+    ] = 64,
     json_output: Annotated[bool, typer.Option("--json", help="Output batch statistics as JSON.")] = False,
 ) -> None:
     paths = paths or []

@@ -3,12 +3,13 @@
 "Utilities for furl cli."
 
 import abc
-import re
-import urllib.parse
-import warnings
 from copy import deepcopy
 from posixpath import normpath
+import re
 from typing import Any, Callable, Final, Self
+import urllib.parse
+import warnings
+
 
 try:
     from icecream import ic
@@ -19,6 +20,7 @@ except ImportError:
 
 
 from orderedmultidict import omdict1D
+
 
 __title__: Final[str] = "furl"
 __version__: Final[str] = "2.1.4"

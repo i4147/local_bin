@@ -4,35 +4,35 @@
 
 import argparse
 import base64
+from dataclasses import dataclass
+from enum import Enum, StrEnum
 import io
 import math
 import os
 import re
 import shutil
 import sys
-import unicodedata
-import zlib
-from dataclasses import dataclass
-from enum import Enum
-
-import numpy as np
-from PIL import Image, ImageOps
-from enum import StrEnum
 from types import SimpleNamespace
 from typing import Annotated
+import unicodedata
+import zlib
 
 import click
+import numpy as np
+from PIL import Image, ImageOps
 import typer
 
 
 class Color_space(StrEnum):
-    'Enumerate the supported Color space values.'
+    "Enumerate the supported Color space values."
+
     rgb = "rgb"
     din99d = "din99d"
 
 
 class Dither2(StrEnum):
-    'Enumerate the supported Dither2 values.'
+    "Enumerate the supported Dither2 values."
+
     none = "none"
     ordered = "ordered"
     diffusion = "diffusion"
@@ -40,7 +40,8 @@ class Dither2(StrEnum):
 
 
 class Align(StrEnum):
-    'Enumerate the supported Align values.'
+    "Enumerate the supported Align values."
+
     start = "start"
     center = "center"
     end = "end"
@@ -68,18 +69,18 @@ class _ParserShim:
     """Stand-in for the removed argparse parser; hands back what Typer parsed."""
 
     def parse_args(self, args=None, namespace=None):
-        'Parse args.'
+        "Parse args."
         return _Args(**_STATE)
 
     def error(self, message):
         raise typer.BadParameter(message)
 
     def print_help(self, file=None):
-        'Print help.'
+        "Print help."
         typer.echo(click.get_current_context().get_help(), file=file)
 
     def print_usage(self, file=None):
-        'Print usage.'
+        "Print usage."
         typer.echo(click.get_current_context().get_usage(), file=file)
 
 
@@ -2272,32 +2273,86 @@ app = typer.Typer(
 )
 
 
-@app.command(help="Show images in your terminal (single-file chafa clone).", epilog="examples:\n  chafa.py photo.jpg\n  chafa.py -c none --symbols ascii in.png      # old-school art\n  chafa.py -f sixels -c full in.jpg               # graphics terminal\n\nsymbol classes for --symbols/--fill:\n  all none space solid stipple block border diagonal dot quad half\n  hhalf vhalf inverted braille sextant wedge technical geometric\n  ascii alpha digit narrow wide ambiguous ugly extra alnum bad\n  legacy latin import octant\ncombine with + and -, e.g. block+border-diagonal or all-wide;\nraw characters in [..], code point ranges like 2500..25ff\n")
+@app.command(
+    help="Show images in your terminal (single-file chafa clone).",
+    epilog="examples:\n  chafa.py photo.jpg\n  chafa.py -c none --symbols ascii in.png      # old-school art\n  chafa.py -f sixels -c full in.jpg               # graphics terminal\n\nsymbol classes for --symbols/--fill:\n  all none space solid stipple block border diagonal dot quad half\n  hhalf vhalf inverted braille sextant wedge technical geometric\n  ascii alpha digit narrow wide ambiguous ugly extra alnum bad\n  legacy latin import octant\ncombine with + and -, e.g. block+border-diagonal or all-wide;\nraw characters in [..], code point ranges like 2500..25ff\n",
+)
 def cli(
     files: Annotated[list[str] | None, typer.Argument(help="image file, or - for stdin", metavar="FILE")] = None,
     size: Annotated[str | None, typer.Option("-s", "--size", help="output size in cells", metavar="WxH")] = None,
-    colors: Annotated[str | None, typer.Option("-c", "--colors", help="none|2|8|16/8|16|240|256|full (default: auto)", metavar="MODE")] = None,
-    format: Annotated[str | None, typer.Option("-f", "--format", help="symbols|sixels|kitty|iterm|auto (default: symbols or auto-detected)", metavar="FMT")] = None,
+    colors: Annotated[
+        str | None, typer.Option("-c", "--colors", help="none|2|8|16/8|16|240|256|full (default: auto)", metavar="MODE")
+    ] = None,
+    format: Annotated[
+        str | None,
+        typer.Option(
+            "-f", "--format", help="symbols|sixels|kitty|iterm|auto (default: symbols or auto-detected)", metavar="FMT"
+        ),
+    ] = None,
     symbols: Annotated[str | None, typer.Option("--symbols", help="output symbols (see below)", metavar="SPEC")] = None,
     fill: Annotated[str | None, typer.Option("--fill", help="fill symbols for gradients", metavar="SPEC")] = None,
-    color_space: Annotated[Color_space | None, typer.Option("--color-space", help="color distance metric (default: din99d)")] = None,
-    work: Annotated[int | None, typer.Option("-w", "--work", help="work factor; 1-2 uses nearest-neighbor scaling (default: 5)", metavar="1..9")] = None,
+    color_space: Annotated[
+        Color_space | None, typer.Option("--color-space", help="color distance metric (default: din99d)")
+    ] = None,
+    work: Annotated[
+        int | None,
+        typer.Option(
+            "-w", "--work", help="work factor; 1-2 uses nearest-neighbor scaling (default: 5)", metavar="1..9"
+        ),
+    ] = None,
     dither: Annotated[Dither2 | None, typer.Option("--dither", help="dither mode (default: none)")] = None,
-    dither_intensity: Annotated[float | None, typer.Option("--dither-intensity", help="dither intensity (default: 1.0)", metavar="0..1")] = None,
-    dither_grain: Annotated[str | None, typer.Option("--dither-grain", help="dither grain size, 1/2/4/8 (default: 4x4)", metavar="WxH")] = None,
-    preprocess: Annotated[bool, typer.Option("--no-preprocess", help="disable auto-contrast/saturation preprocessing")] = True,
-    threshold: Annotated[float | None, typer.Option("-t", "--threshold", help="transparency threshold (default: 0.5; 1.0 = opaque)", metavar="0..1")] = None,
+    dither_intensity: Annotated[
+        float | None, typer.Option("--dither-intensity", help="dither intensity (default: 1.0)", metavar="0..1")
+    ] = None,
+    dither_grain: Annotated[
+        str | None, typer.Option("--dither-grain", help="dither grain size, 1/2/4/8 (default: 4x4)", metavar="WxH")
+    ] = None,
+    preprocess: Annotated[
+        bool, typer.Option("--no-preprocess", help="disable auto-contrast/saturation preprocessing")
+    ] = True,
+    threshold: Annotated[
+        float | None,
+        typer.Option("-t", "--threshold", help="transparency threshold (default: 0.5; 1.0 = opaque)", metavar="0..1"),
+    ] = None,
     fg: Annotated[str | None, typer.Option("--fg", help="default foreground color", metavar="COLOR")] = None,
     bg: Annotated[str | None, typer.Option("--bg", help="default background color", metavar="COLOR")] = None,
     fg_only: Annotated[bool, typer.Option("--fg-only", help="never emit background colors")] = False,
     invert: Annotated[bool, typer.Option("--invert", help="swap foreground and background colors")] = False,
     stretch: Annotated[bool, typer.Option("--stretch", help="stretch image to fill output dimensions")] = False,
     align: Annotated[Align | None, typer.Option("--align", help="horizontal alignment (default: start)")] = None,
-    animate: Annotated[bool | None, typer.Option("--animate/--still", help="dump all frames of animated input (default)")] = None,
-    version: Annotated[bool, typer.Option("-V", "--version", callback=_version_callback, is_eager=True, help="show program's version number and exit")] = False,
+    animate: Annotated[
+        bool | None, typer.Option("--animate/--still", help="dump all frames of animated input (default)")
+    ] = None,
+    version: Annotated[
+        bool,
+        typer.Option(
+            "-V", "--version", callback=_version_callback, is_eager=True, help="show program's version number and exit"
+        ),
+    ] = False,
 ) -> None:
     files = files or []
-    _STATE.update(files=files, size=size, colors=colors, format=format, symbols=symbols, fill=fill, color_space=color_space, work=work, dither=dither, dither_intensity=dither_intensity, dither_grain=dither_grain, preprocess=preprocess, threshold=threshold, fg=fg, bg=bg, fg_only=fg_only, invert=invert, stretch=stretch, align=align, animate=animate)
+    _STATE.update(
+        files=files,
+        size=size,
+        colors=colors,
+        format=format,
+        symbols=symbols,
+        fill=fill,
+        color_space=color_space,
+        work=work,
+        dither=dither,
+        dither_intensity=dither_intensity,
+        dither_grain=dither_grain,
+        preprocess=preprocess,
+        threshold=threshold,
+        fg=fg,
+        bg=bg,
+        fg_only=fg_only,
+        invert=invert,
+        stretch=stretch,
+        align=align,
+        animate=animate,
+    )
     _run()
 
 

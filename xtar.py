@@ -2,28 +2,26 @@
 "Extract supported archives; originals are removed after successful extraction."
 
 import argparse
+from collections.abc import Iterator
+from contextlib import contextmanager
 import gzip
 import io
 import lzma
+from multiprocessing import Pool
+from pathlib import Path
 import shutil
 import sys
 import tarfile
+from types import SimpleNamespace
+from typing import Annotated, BinaryIO
 import zipfile
-from collections.abc import Iterator
-from contextlib import contextmanager
-from multiprocessing import Pool
-from pathlib import Path
-from typing import BinaryIO
 
+import click
 import lz4.block
 import lz4.frame
 import py7zr
-import zstandard
-from types import SimpleNamespace
-from typing import Annotated
-
-import click
 import typer
+import zstandard
 
 
 _STATE: dict[str, object] = {}
@@ -42,18 +40,18 @@ class _ParserShim:
     """Stand-in for the removed argparse parser; hands back what Typer parsed."""
 
     def parse_args(self, args=None, namespace=None):
-        'Parse args.'
+        "Parse args."
         return _Args(**_STATE)
 
     def error(self, message):
         raise typer.BadParameter(message)
 
     def print_help(self, file=None):
-        'Print help.'
+        "Print help."
         typer.echo(click.get_current_context().get_help(), file=file)
 
     def print_usage(self, file=None):
-        'Print usage.'
+        "Print usage."
         typer.echo(click.get_current_context().get_usage(), file=file)
 
 
@@ -343,7 +341,10 @@ app = typer.Typer(
 
 @app.command(help="Extract supported archives; originals are removed after successful extraction.")
 def cli(
-    archives: Annotated[list[Path] | None, typer.Argument(help="archive files to extract; defaults to a recursive scan of the current directory")] = None,
+    archives: Annotated[
+        list[Path] | None,
+        typer.Argument(help="archive files to extract; defaults to a recursive scan of the current directory"),
+    ] = None,
 ) -> None:
     archives = archives or []
     _STATE.update(archives=archives)

@@ -10,19 +10,6 @@ import argparse
 import base64
 import binascii
 import codecs
-import hashlib
-import html as html_stdlib
-import ipaddress
-import json
-import mimetypes
-import quopri
-import re
-import socket
-import sys
-import threading
-import urllib.error
-import urllib.parse
-import urllib.request
 from collections import OrderedDict
 from collections.abc import Callable, Iterable, Iterator, Sequence
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -31,35 +18,49 @@ from email import policy
 from email.header import decode_header
 from email.message import Message
 from email.parser import BytesParser
-from enum import Enum
+from enum import Enum, StrEnum
+import hashlib
+import html as html_stdlib
 from http.client import HTTPMessage
+import ipaddress
+import json
+import mimetypes
 from pathlib import Path
-from typing import IO, Any, BinaryIO, ClassVar, Self, cast
-from urllib.parse import urlsplit
-
-import tinycss2
-from loguru import logger
-from lxml import etree
-from lxml import html as lxml_html
-from lxml_html_clean import Cleaner
-from tinycss2.ast import StringToken
-from enum import StrEnum
+import quopri
+import re
+import socket
+import sys
+import threading
 from types import SimpleNamespace
-from typing import Annotated
+from typing import IO, Annotated, Any, BinaryIO, ClassVar, Self, cast
+import urllib.error
+import urllib.parse
+from urllib.parse import urlsplit
+import urllib.request
 
 import click
+from loguru import logger
+from lxml import (
+    etree,
+    html as lxml_html,
+)
+from lxml_html_clean import Cleaner
+import tinycss2
+from tinycss2.ast import StringToken
 import typer
 
 
 class Resource_handling(StrEnum):
-    'Enumerate the supported Resource handling values.'
+    "Enumerate the supported Resource handling values."
+
     inline = "inline"
     external = "external"
     mixed = "mixed"
 
 
 class Log_level(StrEnum):
-    'Enumerate the supported Log level values.'
+    "Enumerate the supported Log level values."
+
     TRACE = "TRACE"
     DEBUG = "DEBUG"
     INFO = "INFO"
@@ -85,18 +86,18 @@ class _ParserShim:
     """Stand-in for the removed argparse parser; hands back what Typer parsed."""
 
     def parse_args(self, args=None, namespace=None):
-        'Parse args.'
+        "Parse args."
         return _Args(**_STATE)
 
     def error(self, message):
         raise typer.BadParameter(message)
 
     def print_help(self, file=None):
-        'Print help.'
+        "Print help."
         typer.echo(click.get_current_context().get_help(), file=file)
 
     def print_usage(self, file=None):
-        'Print usage.'
+        "Print usage."
         typer.echo(click.get_current_context().get_usage(), file=file)
 
 
@@ -2405,19 +2406,50 @@ app = typer.Typer(
 @app.command(help="Convert an MHTML archive to a self-contained HTML document.")
 def cli(
     input: Annotated[Path, typer.Argument(help="Input .mhtml or .mht file")],
-    output: Annotated[Path | None, typer.Option("-o", "--output", help="Output HTML path (default: beside input, with a .html suffix)")] = None,
-    profile: Annotated[str, typer.Option("--profile", help="Conversion preset (default: standard)")] = ConversionProfile.STANDARD.value,
-    fetch_external: Annotated[bool, typer.Option("--fetch-external", help="Allow fetching referenced public HTTP(S) assets")] = False,
-    allow_domain: Annotated[list[str], typer.Option("--allow-domain", help="Restrict external fetches to this domain; may be repeated", metavar="DOMAIN")] = [],
-    block_domain: Annotated[list[str], typer.Option("--block-domain", help="Block external fetches to this domain; may be repeated", metavar="DOMAIN")] = [],
-    resource_handling: Annotated[Resource_handling | None, typer.Option("--resource-handling", help="Override the profile's resource handling strategy")] = None,
+    output: Annotated[
+        Path | None,
+        typer.Option("-o", "--output", help="Output HTML path (default: beside input, with a .html suffix)"),
+    ] = None,
+    profile: Annotated[
+        str, typer.Option("--profile", help="Conversion preset (default: standard)")
+    ] = ConversionProfile.STANDARD.value,
+    fetch_external: Annotated[
+        bool, typer.Option("--fetch-external", help="Allow fetching referenced public HTTP(S) assets")
+    ] = False,
+    allow_domain: Annotated[
+        list[str],
+        typer.Option(
+            "--allow-domain", help="Restrict external fetches to this domain; may be repeated", metavar="DOMAIN"
+        ),
+    ] = [],
+    block_domain: Annotated[
+        list[str],
+        typer.Option("--block-domain", help="Block external fetches to this domain; may be repeated", metavar="DOMAIN"),
+    ] = [],
+    resource_handling: Annotated[
+        Resource_handling | None,
+        typer.Option("--resource-handling", help="Override the profile's resource handling strategy"),
+    ] = None,
     minify: Annotated[bool, typer.Option("--minify", help="Minify HTML and CSS output")] = False,
     log_level: Annotated[Log_level | None, typer.Option("--log-level", help="Set Loguru's minimum log level")] = None,
     progress: Annotated[bool, typer.Option("--progress", help="Print conversion progress to standard error")] = False,
 ) -> None:
     if profile is not None and profile not in [profile.value for profile in ConversionProfile]:
-        raise typer.BadParameter(f"invalid choice: {profile!r} (choose from {[profile.value for profile in ConversionProfile]})")
-    _STATE.update(input=input, output=output, profile=profile, fetch_external=fetch_external, allow_domain=allow_domain, block_domain=block_domain, resource_handling=resource_handling, minify=minify, log_level=log_level, progress=progress)
+        raise typer.BadParameter(
+            f"invalid choice: {profile!r} (choose from {[profile.value for profile in ConversionProfile]})"
+        )
+    _STATE.update(
+        input=input,
+        output=output,
+        profile=profile,
+        fetch_external=fetch_external,
+        allow_domain=allow_domain,
+        block_domain=block_domain,
+        resource_handling=resource_handling,
+        minify=minify,
+        log_level=log_level,
+        progress=progress,
+    )
     _run()
 
 

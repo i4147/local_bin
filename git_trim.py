@@ -72,18 +72,18 @@ Requires Python 3.12+ and a reasonably modern git (>= 2.28 recommended).
 
 import argparse
 import contextlib
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from enum import StrEnum
 import fnmatch
 import io
 import json
 import os
+from pathlib import Path
 import subprocess
 import sys
 import tempfile
 import time
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from enum import StrEnum
-from pathlib import Path
 from types import SimpleNamespace
 from typing import Annotated
 
@@ -113,18 +113,18 @@ class _ParserShim:
     """Stand-in for the removed argparse parser; hands back what Typer parsed."""
 
     def parse_args(self, args=None, namespace=None):
-        'Parse args.'
+        "Parse args."
         return _Args(**_STATE)
 
     def error(self, message):
         raise typer.BadParameter(message)
 
     def print_help(self, file=None):
-        'Print help.'
+        "Print help."
         typer.echo(click.get_current_context().get_help(), file=file)
 
     def print_usage(self, file=None):
-        'Print usage.'
+        "Print usage."
         typer.echo(click.get_current_context().get_usage(), file=file)
 
 
@@ -769,7 +769,6 @@ def build_parser() -> argparse.ArgumentParser:
     "Build parser."
     parser = _ParserShim()
 
-
     def common(sp: argparse.ArgumentParser) -> argparse.ArgumentParser:
         sp.add_argument("--json", action="store_true", help="machine-readable JSON output")
         sp.add_argument(
@@ -825,7 +824,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="only consider branches matching these globs, e.g. 'feat/*'",
     )
     sp.set_defaults(func=cmd_prune_remote)
-
 
     return parser
 
@@ -1810,8 +1808,15 @@ app = typer.Typer(
 
 @app.callback()
 def _root(
-    version: Annotated[bool, typer.Option("--version", callback=_version_callback, is_eager=True, help="show program's version number and exit")] = False,
-    repo: Annotated[str, typer.Option("-C", "--repo", help="repository to operate on (default: current directory)", metavar="PATH")] = ".",
+    version: Annotated[
+        bool,
+        typer.Option(
+            "--version", callback=_version_callback, is_eager=True, help="show program's version number and exit"
+        ),
+    ] = False,
+    repo: Annotated[
+        str, typer.Option("-C", "--repo", help="repository to operate on (default: current directory)", metavar="PATH")
+    ] = ".",
     no_color: Annotated[bool, typer.Option("--no-color", help="disable ANSI colors")] = False,
 ) -> None:
     _STATE.update(repo=repo, no_color=no_color)
@@ -1827,8 +1832,13 @@ def cmd_undo2(
 
 @app.command("demo", help="build a throwaway repo and walk through the whole workflow")
 def cmd_demo2(
-    dir: Annotated[str | None, typer.Option("--dir", help="directory for the demo repo (default: a fresh temp dir)", metavar="PATH")] = None,
-    bench: Annotated[int, typer.Option("--bench", help="also benchmark scan with N extra unmerged branches", metavar="N")] = 0,
+    dir: Annotated[
+        str | None,
+        typer.Option("--dir", help="directory for the demo repo (default: a fresh temp dir)", metavar="PATH"),
+    ] = None,
+    bench: Annotated[
+        int, typer.Option("--bench", help="also benchmark scan with N extra unmerged branches", metavar="N")
+    ] = 0,
 ) -> None:
     _STATE.update(dir=dir, bench=bench, command="demo", func=cmd_demo)
     _run2()

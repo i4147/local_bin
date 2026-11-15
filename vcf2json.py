@@ -2,16 +2,14 @@
 "Convert a vCard (.vcf) file to JSON or CSV."
 
 from __future__ import annotations
-
 import argparse
 import csv
 import json
+from pathlib import Path
 import re
 import sys
-from pathlib import Path
-from typing import Any
 from types import SimpleNamespace
-from typing import Annotated
+from typing import Annotated, Any
 
 import click
 import typer
@@ -33,18 +31,18 @@ class _ParserShim:
     """Stand-in for the removed argparse parser; hands back what Typer parsed."""
 
     def parse_args(self, args=None, namespace=None):
-        'Parse args.'
+        "Parse args."
         return _Args(**_STATE)
 
     def error(self, message):
         raise typer.BadParameter(message)
 
     def print_help(self, file=None):
-        'Print help.'
+        "Print help."
         typer.echo(click.get_current_context().get_help(), file=file)
 
     def print_usage(self, file=None):
-        'Print usage.'
+        "Print usage."
         typer.echo(click.get_current_context().get_usage(), file=file)
 
 
@@ -191,7 +189,6 @@ def build_parser() -> argparse.ArgumentParser:
     "Build parser."
     parser = _ParserShim()
 
-
     return parser
 
 
@@ -247,12 +244,23 @@ def cli(
     input: Annotated[Path, typer.Argument(help="Path to the input .vcf file")],
     format: Annotated[bool, typer.Option("--json", help="Write JSON output (the default)")] = False,
     format_2: Annotated[bool, typer.Option("--csv", help="Write CSV output")] = False,
-    remove: Annotated[bool, typer.Option("-r", "--remove", help="Remove the input file after a successful conversion")] = False,
-    output: Annotated[Path | None, typer.Option("-o", "--output", help="Output path (default: beside the input file with the selected extension)")] = None,
+    remove: Annotated[
+        bool, typer.Option("-r", "--remove", help="Remove the input file after a successful conversion")
+    ] = False,
+    output: Annotated[
+        Path | None,
+        typer.Option("-o", "--output", help="Output path (default: beside the input file with the selected extension)"),
+    ] = None,
     encoding: Annotated[str, typer.Option("--encoding", help="Input file encoding (default: utf-8-sig)")] = "utf-8-sig",
     compact: Annotated[bool, typer.Option("--compact", help="Write compact JSON instead of indented JSON")] = False,
 ) -> None:
-    if sum((bool(format), bool(format_2),)) > 1:
+    if (
+        sum((
+            bool(format),
+            bool(format_2),
+        ))
+        > 1
+    ):
         raise typer.BadParameter("--json, --csv are mutually exclusive")
     format = "json" if format else None
     format = "csv" if format else None

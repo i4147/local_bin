@@ -2,17 +2,18 @@
 "Auto format Python files and auto commit/push in a git repo."
 
 import concurrent.futures
+from datetime import datetime
 import json
-from loguru import logger
 import multiprocessing
 import os
+from pathlib import Path
 import subprocess
 import sys
-from datetime import datetime
-from pathlib import Path
 from typing import Annotated
 
+from loguru import logger
 import typer
+
 
 DEFAULT_CONFIG = {
     "skip_dirs": ["venv", ".venv", ".git", "__pycache__", ".mypy_cache", ".ruff_cache"],
@@ -49,7 +50,9 @@ def setup_logging(level_name: str):
     "Set up logging."
     logger.remove()
     lvl = level_name.upper() if level_name else "INFO"
-    logger.add(sys.stderr, level=lvl, format="{time:YYYY-MM-DD HH:mm:ss} <level>{level: <5}</level> auto_git_fmt: {message}")
+    logger.add(
+        sys.stderr, level=lvl, format="{time:YYYY-MM-DD HH:mm:ss} <level>{level: <5}</level> auto_git_fmt: {message}"
+    )
 
 
 def run_cmd(

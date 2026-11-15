@@ -4,8 +4,15 @@
 
 import argparse
 import ast
+from collections import defaultdict
+from collections.abc import Callable, Iterable, Sequence
+from concurrent.futures import ProcessPoolExecutor, as_completed
+from copy import deepcopy
 import csv
+from dataclasses import dataclass
+from datetime import datetime, timezone
 import difflib
+from enum import StrEnum
 import fnmatch
 import functools
 import hashlib
@@ -13,6 +20,7 @@ import importlib.util
 import io
 import json
 import os
+from pathlib import Path
 import random
 import re
 import shutil
@@ -21,27 +29,18 @@ import sys
 import threading
 import time
 import tokenize
-from collections import defaultdict
-from collections.abc import Callable, Iterable, Sequence
-from concurrent.futures import ProcessPoolExecutor, as_completed
-from copy import deepcopy
-from dataclasses import dataclass
-from datetime import datetime, timezone
-from pathlib import Path
-from typing import Any, TypeAlias
-
-from dh import MAX_WORKERS
-from loguru import logger
-from enum import StrEnum
 from types import SimpleNamespace
-from typing import Annotated
+from typing import Annotated, Any, TypeAlias
 
 import click
+from dh import MAX_WORKERS
+from loguru import logger
 import typer
 
 
 class Keep(StrEnum):
-    'Enumerate the supported Keep values.'
+    "Enumerate the supported Keep values."
+
     first = "first"
     oldest = "oldest"
     newest = "newest"
@@ -52,7 +51,8 @@ class Keep(StrEnum):
 
 
 class Mode(StrEnum):
-    'Enumerate the supported Mode values.'
+    "Enumerate the supported Mode values."
+
     strict = "strict"
     default = "default"
     loose = "loose"
@@ -60,7 +60,8 @@ class Mode(StrEnum):
 
 
 class Output_format(StrEnum):
-    'Enumerate the supported Output format values.'
+    "Enumerate the supported Output format values."
+
     text = "text"
     json = "json"
     ndjson = "ndjson"
@@ -68,7 +69,8 @@ class Output_format(StrEnum):
 
 
 class Log_format(StrEnum):
-    'Enumerate the supported Log format values.'
+    "Enumerate the supported Log format values."
+
     text = "text"
     json = "json"
 
@@ -95,18 +97,18 @@ class _ParserShim:
     """Stand-in for the removed argparse parser; hands back what Typer parsed."""
 
     def parse_args(self, args=None, namespace=None):
-        'Parse args.'
+        "Parse args."
         return _Args(**_STATE)
 
     def error(self, message):
         raise typer.BadParameter(message)
 
     def print_help(self, file=None):
-        'Print help.'
+        "Print help."
         typer.echo(click.get_current_context().get_help(), file=file)
 
     def print_usage(self, file=None):
-        'Print usage.'
+        "Print usage."
         typer.echo(click.get_current_context().get_usage(), file=file)
 
 
@@ -131,8 +133,7 @@ try:
 except ImportError:
     _tlsh = None
 try:
-    from concurrent.futures import \
-        InterpreterPoolExecutor as _InterpreterPoolExecutor
+    from concurrent.futures import InterpreterPoolExecutor as _InterpreterPoolExecutor
 except ImportError:
     _InterpreterPoolExecutor = None
 try:
@@ -1207,9 +1208,7 @@ def process_files(
         results.extend(_run_jobs(path_texts, cfg, worker_count, method))
         return results, cache_hits
     try:
-        from rich.progress import (BarColumn, Progress, SpinnerColumn,
-                                   TextColumn, TimeElapsedColumn,
-                                   TimeRemainingColumn)
+        from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeElapsedColumn, TimeRemainingColumn
     except ImportError:
         LOGGER.warning("rich is unavailable; falling back to basic progress output")
         if not sys.stderr.isatty():
@@ -2883,53 +2882,222 @@ app = typer.Typer(
 )
 
 
-@app.command(help="Find duplicate Python files, definitions, and near-duplicates using normalized AST fingerprints.", epilog="Exit codes: 0 success, 1 with --fail-on-dupes/--fail-on-error conditions, 2 fatal errors, 130 interrupted.")
+@app.command(
+    help="Find duplicate Python files, definitions, and near-duplicates using normalized AST fingerprints.",
+    epilog="Exit codes: 0 success, 1 with --fail-on-dupes/--fail-on-error conditions, 2 fatal errors, 130 interrupted.",
+)
 def cli(
-    paths: Annotated[list[str] | None, typer.Argument(help="files or directories to scan; '-' reads newline-separated paths from stdin", metavar="PATH")] = None,
-    root: Annotated[list[Path] | None, typer.Option("--root", help="directory root to scan (repeatable, enables cross-project comparison)", metavar="DIR")] = None,
-    remove: Annotated[bool, typer.Option("-r", "--remove", help="remove duplicate files (requires confirmation unless -y)")] = False,
+    paths: Annotated[
+        list[str] | None,
+        typer.Argument(
+            help="files or directories to scan; '-' reads newline-separated paths from stdin", metavar="PATH"
+        ),
+    ] = None,
+    root: Annotated[
+        list[Path] | None,
+        typer.Option(
+            "--root", help="directory root to scan (repeatable, enables cross-project comparison)", metavar="DIR"
+        ),
+    ] = None,
+    remove: Annotated[
+        bool, typer.Option("-r", "--remove", help="remove duplicate files (requires confirmation unless -y)")
+    ] = False,
     yes: Annotated[bool, typer.Option("-y", "--yes", help="skip interactive confirmation prompts")] = False,
-    dry_run: Annotated[bool, typer.Option("--dry-run", help="print a verbose deletion plan (keepers, removals, sizes, totals) without removing anything")] = False,
-    save_similar: Annotated[bool, typer.Option("-s", "--save-similar", help="compare ssdeep fuzzy hashes of all scanned files and save pairs scoring above 70 to simz.json")] = False,
-    tlsh: Annotated[bool, typer.Option("--tlsh", help="also compare TLSH fuzzy hashes and include pairs scoring above 70 in simz.json")] = False,
-    minhash: Annotated[bool, typer.Option("--minhash", help="also compare 128-bit MinHash signatures (LSH-banded token shingles) and include pairs scoring above 70 in simz.json")] = False,
-    simhash: Annotated[bool, typer.Option("--simhash", help="also compare 64-bit SimHash fingerprints (token shingles) and include pairs scoring above 70 in simz.json")] = False,
-    mp_method: Annotated[str, typer.Option("--mp-method", help="parallel engine: cf.{Process,Thread,Interpreter}PoolExecutor (default), mp.pool.{map,imap,imap_unordered,apply,apply_async,map_async,starmap,starmap_async}, joblib", metavar="NAME", parser=_mp_method_value)] = "cf.ProcessPoolExecutor",
-    to_trash: Annotated[bool, typer.Option("--to-trash", help="send duplicates to the system trash via send2trash instead of unlinking")] = False,
-    quarantine: Annotated[Path | None, typer.Option("--quarantine", help="move duplicates into DIR instead of unlinking them", metavar="DIR")] = None,
-    keep: Annotated[Keep, typer.Option("--keep", help="keeper selection policy for each duplicate group (default: first)")] = Keep.first,
-    pattern: Annotated[str | None, typer.Option("--pattern", help="keeper glob for --keep pattern", metavar="GLOB")] = None,
-    prefer: Annotated[str | None, typer.Option("--prefer", help="keeper path prefix for --keep prefer", metavar="PREFIX")] = None,
-    exclude: Annotated[list[str], typer.Option("--exclude", help="exclude paths matching GLOB (repeatable)", metavar="GLOB")] = [],
-    mode: Annotated[Mode, typer.Option("--mode", help="normalization level: strict (raw bytes), default (docstrings stripped), loose (also annotations/types), structural (AST + token stream)")] = Mode.loose,
-    similarity: Annotated[str | None, typer.Option("--similarity", help="report near-duplicate pairs with token n-gram Jaccard >= FLOAT, e.g. 0.9", metavar="FLOAT", parser=_similarity_value)] = None,
-    functions: Annotated[bool, typer.Option("--functions", help="report duplicate functions and classes within and across files")] = False,
-    ignore_imports: Annotated[bool, typer.Option("--ignore-imports", help="treat files differing only by import order or unused imports as duplicates")] = False,
-    changed_since: Annotated[str | None, typer.Option("--changed-since", help="only scan files changed since the given git ref", metavar="REF")] = None,
-    notebooks: Annotated[bool, typer.Option("--notebooks", help="include .ipynb notebooks (code cells are extracted)")] = False,
-    min_lines: Annotated[str, typer.Option("--min-lines", help="skip files with fewer than N non-blank lines", metavar="N", parser=_nonneg_int)] = 0,
-    min_bytes: Annotated[str, typer.Option("--min-bytes", help="skip files smaller than N bytes", metavar="N", parser=_nonneg_int)] = 0,
-    skip_empty: Annotated[bool, typer.Option("--skip-empty", help="skip files that normalize to an empty module")] = False,
-    fail_on_dupes: Annotated[bool, typer.Option("--fail-on-dupes", "--exit-code", help="exit with code 1 when duplicate groups are found")] = False,
-    fail_on_error: Annotated[bool, typer.Option("--fail-on-error", help="exit with code 1 when files fail to parse")] = False,
-    output_format: Annotated[Output_format, typer.Option("--format", help="report format (default: text)")] = Output_format.text,
+    dry_run: Annotated[
+        bool,
+        typer.Option(
+            "--dry-run",
+            help="print a verbose deletion plan (keepers, removals, sizes, totals) without removing anything",
+        ),
+    ] = False,
+    save_similar: Annotated[
+        bool,
+        typer.Option(
+            "-s",
+            "--save-similar",
+            help="compare ssdeep fuzzy hashes of all scanned files and save pairs scoring above 70 to simz.json",
+        ),
+    ] = False,
+    tlsh: Annotated[
+        bool,
+        typer.Option("--tlsh", help="also compare TLSH fuzzy hashes and include pairs scoring above 70 in simz.json"),
+    ] = False,
+    minhash: Annotated[
+        bool,
+        typer.Option(
+            "--minhash",
+            help="also compare 128-bit MinHash signatures (LSH-banded token shingles) and include pairs scoring above 70 in simz.json",
+        ),
+    ] = False,
+    simhash: Annotated[
+        bool,
+        typer.Option(
+            "--simhash",
+            help="also compare 64-bit SimHash fingerprints (token shingles) and include pairs scoring above 70 in simz.json",
+        ),
+    ] = False,
+    mp_method: Annotated[
+        str,
+        typer.Option(
+            "--mp-method",
+            help="parallel engine: cf.{Process,Thread,Interpreter}PoolExecutor (default), mp.pool.{map,imap,imap_unordered,apply,apply_async,map_async,starmap,starmap_async}, joblib",
+            metavar="NAME",
+            parser=_mp_method_value,
+        ),
+    ] = "cf.ProcessPoolExecutor",
+    to_trash: Annotated[
+        bool, typer.Option("--to-trash", help="send duplicates to the system trash via send2trash instead of unlinking")
+    ] = False,
+    quarantine: Annotated[
+        Path | None,
+        typer.Option("--quarantine", help="move duplicates into DIR instead of unlinking them", metavar="DIR"),
+    ] = None,
+    keep: Annotated[
+        Keep, typer.Option("--keep", help="keeper selection policy for each duplicate group (default: first)")
+    ] = Keep.first,
+    pattern: Annotated[
+        str | None, typer.Option("--pattern", help="keeper glob for --keep pattern", metavar="GLOB")
+    ] = None,
+    prefer: Annotated[
+        str | None, typer.Option("--prefer", help="keeper path prefix for --keep prefer", metavar="PREFIX")
+    ] = None,
+    exclude: Annotated[
+        list[str], typer.Option("--exclude", help="exclude paths matching GLOB (repeatable)", metavar="GLOB")
+    ] = [],
+    mode: Annotated[
+        Mode,
+        typer.Option(
+            "--mode",
+            help="normalization level: strict (raw bytes), default (docstrings stripped), loose (also annotations/types), structural (AST + token stream)",
+        ),
+    ] = Mode.loose,
+    similarity: Annotated[
+        str | None,
+        typer.Option(
+            "--similarity",
+            help="report near-duplicate pairs with token n-gram Jaccard >= FLOAT, e.g. 0.9",
+            metavar="FLOAT",
+            parser=_similarity_value,
+        ),
+    ] = None,
+    functions: Annotated[
+        bool, typer.Option("--functions", help="report duplicate functions and classes within and across files")
+    ] = False,
+    ignore_imports: Annotated[
+        bool,
+        typer.Option(
+            "--ignore-imports", help="treat files differing only by import order or unused imports as duplicates"
+        ),
+    ] = False,
+    changed_since: Annotated[
+        str | None,
+        typer.Option("--changed-since", help="only scan files changed since the given git ref", metavar="REF"),
+    ] = None,
+    notebooks: Annotated[
+        bool, typer.Option("--notebooks", help="include .ipynb notebooks (code cells are extracted)")
+    ] = False,
+    min_lines: Annotated[
+        str,
+        typer.Option(
+            "--min-lines", help="skip files with fewer than N non-blank lines", metavar="N", parser=_nonneg_int
+        ),
+    ] = 0,
+    min_bytes: Annotated[
+        str, typer.Option("--min-bytes", help="skip files smaller than N bytes", metavar="N", parser=_nonneg_int)
+    ] = 0,
+    skip_empty: Annotated[
+        bool, typer.Option("--skip-empty", help="skip files that normalize to an empty module")
+    ] = False,
+    fail_on_dupes: Annotated[
+        bool, typer.Option("--fail-on-dupes", "--exit-code", help="exit with code 1 when duplicate groups are found")
+    ] = False,
+    fail_on_error: Annotated[
+        bool, typer.Option("--fail-on-error", help="exit with code 1 when files fail to parse")
+    ] = False,
+    output_format: Annotated[
+        Output_format, typer.Option("--format", help="report format (default: text)")
+    ] = Output_format.text,
     rich: Annotated[bool, typer.Option("--rich", help="show rich progress while processing")] = False,
-    no_cache: Annotated[bool, typer.Option("--no-cache", help="disable the .pydup-cache.json fingerprint cache")] = False,
-    baseline: Annotated[Path | None, typer.Option("--baseline", help="only report duplicate groups not present in FILE", metavar="FILE")] = None,
+    no_cache: Annotated[
+        bool, typer.Option("--no-cache", help="disable the .pydup-cache.json fingerprint cache")
+    ] = False,
+    baseline: Annotated[
+        Path | None, typer.Option("--baseline", help="only report duplicate groups not present in FILE", metavar="FILE")
+    ] = None,
     print_keep: Annotated[bool, typer.Option("--print-keep", help="print only keeper paths, one per line")] = False,
-    manifest: Annotated[Path | None, typer.Option("--manifest", help="write a machine-readable deletion manifest to FILE", metavar="FILE")] = None,
-    diff: Annotated[tuple[Path, Path] | None, typer.Option("--diff", help="print a unified diff of two normalized files and exit")] = None,
+    manifest: Annotated[
+        Path | None,
+        typer.Option("--manifest", help="write a machine-readable deletion manifest to FILE", metavar="FILE"),
+    ] = None,
+    diff: Annotated[
+        tuple[Path, Path] | None, typer.Option("--diff", help="print a unified diff of two normalized files and exit")
+    ] = None,
     stats: Annotated[bool, typer.Option("--stats", help="print a run summary at the end")] = False,
-    watch: Annotated[bool, typer.Option("--watch", help="watch for changes and rescan continuously (report-only)")] = False,
-    verbose: Annotated[int, typer.Option("-v", "--verbose", count=True, help="increase log verbosity (repeatable)")] = 0,
+    watch: Annotated[
+        bool, typer.Option("--watch", help="watch for changes and rescan continuously (report-only)")
+    ] = False,
+    verbose: Annotated[
+        int, typer.Option("-v", "--verbose", count=True, help="increase log verbosity (repeatable)")
+    ] = 0,
     quiet: Annotated[bool, typer.Option("-q", "--quiet", help="only log errors")] = False,
     log_format: Annotated[Log_format, typer.Option("--log-format", help="log line format on stderr")] = Log_format.text,
-    version: Annotated[bool, typer.Option("--version", callback=_version_callback, is_eager=True, help="show program's version number and exit")] = False,
+    version: Annotated[
+        bool,
+        typer.Option(
+            "--version", callback=_version_callback, is_eager=True, help="show program's version number and exit"
+        ),
+    ] = False,
 ) -> None:
-    if sum((bool(to_trash), quarantine is not None,)) > 1:
+    if (
+        sum((
+            bool(to_trash),
+            quarantine is not None,
+        ))
+        > 1
+    ):
         raise typer.BadParameter("--to-trash, --quarantine are mutually exclusive")
     paths = paths or []
-    _STATE.update(paths=paths, root=root, remove=remove, yes=yes, dry_run=dry_run, save_similar=save_similar, tlsh=tlsh, minhash=minhash, simhash=simhash, mp_method=mp_method, to_trash=to_trash, quarantine=quarantine, keep=keep, pattern=pattern, prefer=prefer, exclude=exclude, mode=mode, similarity=similarity, functions=functions, ignore_imports=ignore_imports, changed_since=changed_since, notebooks=notebooks, min_lines=min_lines, min_bytes=min_bytes, skip_empty=skip_empty, fail_on_dupes=fail_on_dupes, fail_on_error=fail_on_error, output_format=output_format, rich=rich, no_cache=no_cache, baseline=baseline, print_keep=print_keep, manifest=manifest, diff=diff, stats=stats, watch=watch, verbose=verbose, quiet=quiet, log_format=log_format)
+    _STATE.update(
+        paths=paths,
+        root=root,
+        remove=remove,
+        yes=yes,
+        dry_run=dry_run,
+        save_similar=save_similar,
+        tlsh=tlsh,
+        minhash=minhash,
+        simhash=simhash,
+        mp_method=mp_method,
+        to_trash=to_trash,
+        quarantine=quarantine,
+        keep=keep,
+        pattern=pattern,
+        prefer=prefer,
+        exclude=exclude,
+        mode=mode,
+        similarity=similarity,
+        functions=functions,
+        ignore_imports=ignore_imports,
+        changed_since=changed_since,
+        notebooks=notebooks,
+        min_lines=min_lines,
+        min_bytes=min_bytes,
+        skip_empty=skip_empty,
+        fail_on_dupes=fail_on_dupes,
+        fail_on_error=fail_on_error,
+        output_format=output_format,
+        rich=rich,
+        no_cache=no_cache,
+        baseline=baseline,
+        print_keep=print_keep,
+        manifest=manifest,
+        diff=diff,
+        stats=stats,
+        watch=watch,
+        verbose=verbose,
+        quiet=quiet,
+        log_format=log_format,
+    )
     _run2()
 
 

@@ -4,23 +4,22 @@
 import codecs
 import contextlib
 import ctypes
+from html.parser import HTMLParser
+from io import BytesIO
 import locale
 import os
+from pathlib import Path
 import re
 import shutil
 import subprocess
 import sys
 import tempfile
-import xml.dom.minidom
-from html.parser import HTMLParser
-from io import BytesIO
-from pathlib import Path
 from types import SimpleNamespace
-
-from loguru import logger
 from typing import Annotated
+import xml.dom.minidom
 
 import click
+from loguru import logger
 import typer
 
 
@@ -46,18 +45,18 @@ class _ParserShim:
     """Stand-in for the removed argparse parser; hands back what Typer parsed."""
 
     def parse_args(self, args=None, namespace=None):
-        'Parse args.'
+        "Parse args."
         return _Args(**_STATE)
 
     def error(self, message):
         raise typer.BadParameter(message)
 
     def print_help(self, file=None):
-        'Print help.'
+        "Print help."
         typer.echo(click.get_current_context().get_help(), file=file)
 
     def print_usage(self, file=None):
-        'Print usage.'
+        "Print usage."
         typer.echo(click.get_current_context().get_usage(), file=file)
 
 
@@ -1887,7 +1886,12 @@ app = typer.Typer(
 
 @app.callback()
 def _root(
-    version: Annotated[bool, typer.Option("-v", "--version", callback=_version_callback, is_eager=True, help="show program's version number and exit")] = False,
+    version: Annotated[
+        bool,
+        typer.Option(
+            "-v", "--version", callback=_version_callback, is_eager=True, help="show program's version number and exit"
+        ),
+    ] = False,
 ) -> None:
     pass
 
@@ -1925,7 +1929,9 @@ def cmd_ocr(
     image: Annotated[str, typer.Argument()],
     tool: Annotated[str, typer.Option("-t", "--tool")] = "tesseract",
     lang: Annotated[str | None, typer.Option("-l", "--lang")] = None,
-    builder: Annotated[str, typer.Option("-b", "--builder", help="output builder: text, digit, word, line, digit_line, char")] = "text",
+    builder: Annotated[
+        str, typer.Option("-b", "--builder", help="output builder: text, digit, word, line, digit_line, char")
+    ] = "text",
 ) -> None:
     if tool is not None and tool not in list(_TOOLS_BY_NAME):
         raise typer.BadParameter(f"invalid choice: {tool!r} (choose from {list(_TOOLS_BY_NAME)})")

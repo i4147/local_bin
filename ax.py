@@ -5,27 +5,28 @@
 import contextlib
 import hashlib
 import html
+from pathlib import Path
 import re
 import sys
 import tempfile
 import time
+from typing import Any, Callable, Iterable, Optional
+from urllib.parse import urljoin
 import urllib.request
 import urllib.robotparser
 import webbrowser
-from pathlib import Path
-from typing import Any, Callable, Iterable, Optional
-from urllib.parse import urljoin
 
 import diskcache
 import just
 import justext
 import langdetect
 import lxml.html
-import requests
-import ujson as json
 from lxml.html import fromstring
 from metadate import parse_date
+import requests
 from tldextract import tldextract
+import ujson as json
+
 
 __project__ = "auto_extract"
 __version__ = "0.1.3"

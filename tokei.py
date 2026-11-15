@@ -27,30 +27,29 @@ child-language accounting (Markdown code blocks), and extra CSV/TOML outputs.
 """
 
 from __future__ import annotations
-
 import argparse
+from collections.abc import Iterable, Iterator, Sequence
+from concurrent.futures import ProcessPoolExecutor
 import csv
+from dataclasses import dataclass, replace
+from enum import StrEnum
 import io
 import json
 import os
+from pathlib import Path
 import re
 import shutil
 import sys
-from collections.abc import Iterable, Iterator, Sequence
-from concurrent.futures import ProcessPoolExecutor
-from dataclasses import dataclass, replace
-from pathlib import Path
-from typing import Literal
-from enum import StrEnum
 from types import SimpleNamespace
-from typing import Annotated
+from typing import Annotated, Literal
 
 import click
 import typer
 
 
 class Sort(StrEnum):
-    'Enumerate the supported Sort values.'
+    "Enumerate the supported Sort values."
+
     files = "files"
     lines = "lines"
     blanks = "blanks"
@@ -59,7 +58,8 @@ class Sort(StrEnum):
 
 
 class Output(StrEnum):
-    'Enumerate the supported Output values.'
+    "Enumerate the supported Output values."
+
     terminal = "terminal"
     json = "json"
     yaml = "yaml"
@@ -89,18 +89,18 @@ class _ParserShim:
     """Stand-in for the removed argparse parser; hands back what Typer parsed."""
 
     def parse_args(self, args=None, namespace=None):
-        'Parse args.'
+        "Parse args."
         return _Args(**_STATE)
 
     def error(self, message):
         raise typer.BadParameter(message)
 
     def print_help(self, file=None):
-        'Print help.'
+        "Print help."
         typer.echo(click.get_current_context().get_help(), file=file)
 
     def print_usage(self, file=None):
-        'Print usage.'
+        "Print usage."
         typer.echo(click.get_current_context().get_usage(), file=file)
 
 
@@ -1379,24 +1379,78 @@ app = typer.Typer(
 )
 
 
-@app.command(help="tokei.py -- a single-file Python reimplementation of tokei (https://github.com/XAMPPRocky/tokei). Counts files, lines, code, comments and blanks, grouped by language.")
+@app.command(
+    help="tokei.py -- a single-file Python reimplementation of tokei (https://github.com/XAMPPRocky/tokei). Counts files, lines, code, comments and blanks, grouped by language."
+)
 def cli(
-    input: Annotated[list[Path] | None, typer.Argument(help="file or directory to count (default: current directory)", metavar="PATH")] = None,
+    input: Annotated[
+        list[Path] | None,
+        typer.Argument(help="file or directory to count (default: current directory)", metavar="PATH"),
+    ] = None,
     files: Annotated[bool, typer.Option("-f", "--files", help="print statistics for individual files")] = False,
-    type: Annotated[list[str], typer.Option("-t", "--type", help="filter output by language type, comma separated (e.g. -t=Rust,Markdown)", metavar="LANG")] = [],
-    exclude: Annotated[list[str], typer.Option("-e", "--exclude", help="ignore all files and directories matching PATTERN (gitignore semantics)", metavar="PATTERN")] = [],
+    type: Annotated[
+        list[str],
+        typer.Option(
+            "-t",
+            "--type",
+            help="filter output by language type, comma separated (e.g. -t=Rust,Markdown)",
+            metavar="LANG",
+        ),
+    ] = [],
+    exclude: Annotated[
+        list[str],
+        typer.Option(
+            "-e",
+            "--exclude",
+            help="ignore all files and directories matching PATTERN (gitignore semantics)",
+            metavar="PATTERN",
+        ),
+    ] = [],
     hidden: Annotated[bool, typer.Option("--hidden", help="count hidden files")] = False,
-    no_ignore: Annotated[bool, typer.Option("--no-ignore", help="don't respect ignore files (.gitignore, .ignore, .tokeignore)")] = False,
-    sort: Annotated[Sort | None, typer.Option("-s", "--sort", help="sort languages by column (default: alphabetical)")] = None,
-    output: Annotated[Output, typer.Option("-o", "--output", help="output format (default: terminal)")] = Output.terminal,
-    columns: Annotated[int | None, typer.Option("-c", "--columns", help="strict column width for terminal output", metavar="N")] = None,
-    jobs: Annotated[int | None, typer.Option("-j", "--jobs", help="worker processes for counting (default: auto on big inputs)", metavar="N")] = None,
-    languages: Annotated[bool, typer.Option("-l", "--languages", help="print the supported languages and their extensions")] = False,
-    verbose: Annotated[bool, typer.Option("-v", "--verbose", help="list files whose type could not be recognized")] = False,
-    version: Annotated[bool, typer.Option("--version", callback=_version_callback, is_eager=True, help="show program's version number and exit")] = False,
+    no_ignore: Annotated[
+        bool, typer.Option("--no-ignore", help="don't respect ignore files (.gitignore, .ignore, .tokeignore)")
+    ] = False,
+    sort: Annotated[
+        Sort | None, typer.Option("-s", "--sort", help="sort languages by column (default: alphabetical)")
+    ] = None,
+    output: Annotated[
+        Output, typer.Option("-o", "--output", help="output format (default: terminal)")
+    ] = Output.terminal,
+    columns: Annotated[
+        int | None, typer.Option("-c", "--columns", help="strict column width for terminal output", metavar="N")
+    ] = None,
+    jobs: Annotated[
+        int | None,
+        typer.Option("-j", "--jobs", help="worker processes for counting (default: auto on big inputs)", metavar="N"),
+    ] = None,
+    languages: Annotated[
+        bool, typer.Option("-l", "--languages", help="print the supported languages and their extensions")
+    ] = False,
+    verbose: Annotated[
+        bool, typer.Option("-v", "--verbose", help="list files whose type could not be recognized")
+    ] = False,
+    version: Annotated[
+        bool,
+        typer.Option(
+            "--version", callback=_version_callback, is_eager=True, help="show program's version number and exit"
+        ),
+    ] = False,
 ) -> None:
     input = input or []
-    _STATE.update(input=input, files=files, type=type, exclude=exclude, hidden=hidden, no_ignore=no_ignore, sort=sort, output=output, columns=columns, jobs=jobs, languages=languages, verbose=verbose)
+    _STATE.update(
+        input=input,
+        files=files,
+        type=type,
+        exclude=exclude,
+        hidden=hidden,
+        no_ignore=no_ignore,
+        sort=sort,
+        output=output,
+        columns=columns,
+        jobs=jobs,
+        languages=languages,
+        verbose=verbose,
+    )
     _run()
 
 

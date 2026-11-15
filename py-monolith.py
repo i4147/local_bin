@@ -80,23 +80,21 @@ Design notes
 """
 
 from __future__ import annotations
-
 import argparse
 import base64
-import mimetypes
-import re
-import ssl
-import sys
-import urllib.error
-import urllib.request
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from html.parser import HTMLParser
+import mimetypes
 from pathlib import Path
-from typing import Callable
-from urllib.parse import urljoin
+import re
+import ssl
+import sys
 from types import SimpleNamespace
-from typing import Annotated
+from typing import Annotated, Callable
+import urllib.error
+from urllib.parse import urljoin
+import urllib.request
 
 import click
 import typer
@@ -124,18 +122,18 @@ class _ParserShim:
     """Stand-in for the removed argparse parser; hands back what Typer parsed."""
 
     def parse_args(self, args=None, namespace=None):
-        'Parse args.'
+        "Parse args."
         return _Args(**_STATE)
 
     def error(self, message):
         raise typer.BadParameter(message)
 
     def print_help(self, file=None):
-        'Print help.'
+        "Print help."
         typer.echo(click.get_current_context().get_help(), file=file)
 
     def print_usage(self, file=None):
-        'Print usage.'
+        "Print usage."
         typer.echo(click.get_current_context().get_usage(), file=file)
 
 
@@ -1006,7 +1004,9 @@ app = typer.Typer(
 @app.command(help="Save a web page as a single self-contained HTML file (pure-stdlib port of Y2Z/monolith).")
 def cli(
     url: Annotated[str, typer.Argument(help="URL to fetch, or '-' to read HTML from stdin")],
-    output: Annotated[str | None, typer.Option("-o", "--output", help="write output to file ('-' for stdout; default stdout)")] = None,
+    output: Annotated[
+        str | None, typer.Option("-o", "--output", help="write output to file ('-' for stdout; default stdout)")
+    ] = None,
     no_audio: Annotated[bool, typer.Option("-a", "--no-audio", help="exclude audio")] = False,
     no_css: Annotated[bool, typer.Option("-s", "--no-css", help="exclude CSS (upstream: -s exclude styles)")] = False,
     no_fonts: Annotated[bool, typer.Option("-f", "--no-fonts", help="exclude fonts")] = False,
@@ -1014,21 +1014,66 @@ def cli(
     no_images: Annotated[bool, typer.Option("-i", "--no-images", help="exclude images")] = False,
     no_js: Annotated[bool, typer.Option("-j", "--no-js", help="exclude JavaScript")] = False,
     no_links: Annotated[bool, typer.Option("-l", "--no-links", help="strip link/anchor hrefs (extension)")] = False,
-    no_metadata: Annotated[bool, typer.Option("-M", "--no-metadata", help="don't add timestamp/URL comment (upstream -M)")] = False,
+    no_metadata: Annotated[
+        bool, typer.Option("-M", "--no-metadata", help="don't add timestamp/URL comment (upstream -M)")
+    ] = False,
     no_video: Annotated[bool, typer.Option("-v", "--no-video", help="exclude video (extension)")] = False,
-    silent: Annotated[bool, typer.Option("-q", "--silent", help="suppress informational output (upstream: -q quiet)")] = False,
-    timeout: Annotated[float, typer.Option("-t", "--timeout", help="network request timeout in seconds")] = DEFAULT_TIMEOUT,
-    user_agent: Annotated[str, typer.Option("-u", "--user-agent", help="custom User-Agent string")] = DEFAULT_USER_AGENT,
-    base_url: Annotated[str | None, typer.Option("-b", "--base-url", help="custom base URL for resolving relative refs")] = None,
-    encoding: Annotated[str | None, typer.Option("-E", "--encoding", help="output encoding (upstream -E; default utf-8)")] = None,
+    silent: Annotated[
+        bool, typer.Option("-q", "--silent", help="suppress informational output (upstream: -q quiet)")
+    ] = False,
+    timeout: Annotated[
+        float, typer.Option("-t", "--timeout", help="network request timeout in seconds")
+    ] = DEFAULT_TIMEOUT,
+    user_agent: Annotated[
+        str, typer.Option("-u", "--user-agent", help="custom User-Agent string")
+    ] = DEFAULT_USER_AGENT,
+    base_url: Annotated[
+        str | None, typer.Option("-b", "--base-url", help="custom base URL for resolving relative refs")
+    ] = None,
+    encoding: Annotated[
+        str | None, typer.Option("-E", "--encoding", help="output encoding (upstream -E; default utf-8)")
+    ] = None,
     isolate: Annotated[bool, typer.Option("-I", "--isolate", help="isolate the document (inject strict CSP)")] = False,
-    no_color: Annotated[bool, typer.Option("--no-color", help="suppress ANSI color in stderr messages (extension)")] = False,
-    make_dirs: Annotated[bool, typer.Option("-D", "--make-dirs", help="create missing directories in the output path")] = False,
-    ignore_network_errors: Annotated[bool, typer.Option("-e", "--ignore-network-errors", help="ignore network errors when fetching assets")] = False,
+    no_color: Annotated[
+        bool, typer.Option("--no-color", help="suppress ANSI color in stderr messages (extension)")
+    ] = False,
+    make_dirs: Annotated[
+        bool, typer.Option("-D", "--make-dirs", help="create missing directories in the output path")
+    ] = False,
+    ignore_network_errors: Annotated[
+        bool, typer.Option("-e", "--ignore-network-errors", help="ignore network errors when fetching assets")
+    ] = False,
     insecure: Annotated[bool, typer.Option("-k", "--insecure", help="accept invalid X.509 (TLS) certificates")] = False,
-    version: Annotated[bool, typer.Option("-V", "--version", callback=_version_callback, is_eager=True, help="show program's version number and exit")] = False,
+    version: Annotated[
+        bool,
+        typer.Option(
+            "-V", "--version", callback=_version_callback, is_eager=True, help="show program's version number and exit"
+        ),
+    ] = False,
 ) -> None:
-    _STATE.update(url=url, output=output, no_audio=no_audio, no_css=no_css, no_fonts=no_fonts, no_frames=no_frames, no_images=no_images, no_js=no_js, no_links=no_links, no_metadata=no_metadata, no_video=no_video, silent=silent, timeout=timeout, user_agent=user_agent, base_url=base_url, encoding=encoding, isolate=isolate, no_color=no_color, make_dirs=make_dirs, ignore_network_errors=ignore_network_errors, insecure=insecure)
+    _STATE.update(
+        url=url,
+        output=output,
+        no_audio=no_audio,
+        no_css=no_css,
+        no_fonts=no_fonts,
+        no_frames=no_frames,
+        no_images=no_images,
+        no_js=no_js,
+        no_links=no_links,
+        no_metadata=no_metadata,
+        no_video=no_video,
+        silent=silent,
+        timeout=timeout,
+        user_agent=user_agent,
+        base_url=base_url,
+        encoding=encoding,
+        isolate=isolate,
+        no_color=no_color,
+        make_dirs=make_dirs,
+        ignore_network_errors=ignore_network_errors,
+        insecure=insecure,
+    )
     _run()
 
 

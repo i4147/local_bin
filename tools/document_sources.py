@@ -12,10 +12,11 @@ Usage:
 
 import argparse
 import ast
-import re
 from pathlib import Path
+import re
 
 import libcst as cst
+
 
 ROOT = Path(__file__).resolve().parent.parent
 DEST = ROOT / "documented"

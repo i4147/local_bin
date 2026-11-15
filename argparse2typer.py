@@ -28,17 +28,17 @@ Anything that cannot be converted faithfully is reported on stderr.
 """
 
 from __future__ import annotations
-
 import ast
+from dataclasses import dataclass, field
 import io
 import json
 import keyword
+from pathlib import Path
 import re
 import shutil
 import sys
 import tokenize
-from dataclasses import dataclass, field
-from pathlib import Path
+
 
 INDENT = "    "
 MISSING = object()

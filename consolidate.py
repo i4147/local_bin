@@ -2,20 +2,19 @@
 "Consolidate a multi-file Python package into one module."
 
 import ast
+from dataclasses import dataclass, field
+from pathlib import Path
 import re
 import sys
 import time
+from types import SimpleNamespace
+from typing import Annotated, NoReturn, Optional
 import warnings
-from dataclasses import dataclass, field
-from pathlib import Path
-from typing import NoReturn, Optional
 
 from dh import MAX_WORKERS
 from loguru import logger
-from types import SimpleNamespace
-from typing import Annotated
-
 import typer
+
 
 LOGURU_LOGFORMAT: str = "{time:YYYY-MM-DD HH:mm:ss.SSS} {level} {file.name}:{line} {message}"
 MERGED_FILE_HEADER_RE: re.Pattern[str] = re.compile(r"^#\s*File:\s*(.+?)\s*$", re.MULTILINE)
@@ -1053,10 +1052,29 @@ app = typer.Typer(
 
 @app.command(help="Consolidate a multi-file Python package into one module.")
 def main(
-    input: Annotated[Path | None, typer.Argument(help="package directory or .py file (default: current directory)")] = None,
-    merged_file: Annotated[Path | None, typer.Option("-f", "--merged-file", help="read source from a single merged file containing '# File: <path>' section headers")] = None,
-    output: Annotated[Path | None, typer.Option("-o", "--output", help="output file (default: <current folder name>.py in cwd; never overwrites, adds _1, _2, ...)")] = None,
-    log_file: Annotated[Path, typer.Option("-l", "--log-file", help="loguru log file (default: next to the output file with .log suffix)")] = "/data/data/com.termux/files/home/tmp/apps/consolidate.log",
+    input: Annotated[
+        Path | None, typer.Argument(help="package directory or .py file (default: current directory)")
+    ] = None,
+    merged_file: Annotated[
+        Path | None,
+        typer.Option(
+            "-f",
+            "--merged-file",
+            help="read source from a single merged file containing '# File: <path>' section headers",
+        ),
+    ] = None,
+    output: Annotated[
+        Path | None,
+        typer.Option(
+            "-o",
+            "--output",
+            help="output file (default: <current folder name>.py in cwd; never overwrites, adds _1, _2, ...)",
+        ),
+    ] = None,
+    log_file: Annotated[
+        Path,
+        typer.Option("-l", "--log-file", help="loguru log file (default: next to the output file with .log suffix)"),
+    ] = "/data/data/com.termux/files/home/tmp/apps/consolidate.log",
 ) -> int:
     "Run the command-line interface."
     args = SimpleNamespace(input=input, merged_file=merged_file, output=output, log_file=log_file)
