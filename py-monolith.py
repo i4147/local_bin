@@ -93,8 +93,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from html.parser import HTMLParser
 from pathlib import Path
-from typing import Any, Callable
-from urllib.parse import urljoin, urlparse
+from typing import Callable
+from urllib.parse import urljoin
 
 __all__ = ["Monolith", "FetchResult", "AssetFetchError", "default_fetcher"]
 

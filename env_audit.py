@@ -1,13 +1,13 @@
 #!/data/data/com.termux/files/usr/bin/env python
 """env-audit: Reconcile .env, .env.example, CI, and Python code via static AST analysis."""
 
+import argparse
 import ast
 import os
-import re
-import sys
-import argparse
 import pathlib
+import re
 import subprocess
+import sys
 from dataclasses import dataclass, field
 from typing import Any, Optional
 

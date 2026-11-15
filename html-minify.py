@@ -10,7 +10,8 @@ import tempfile
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 from typing import NamedTuple
-from dh import get_files, runcmd, mpf
+
+from dh import get_files, runcmd
 
 
 class FileResult(NamedTuple):

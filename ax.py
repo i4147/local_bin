@@ -5,7 +5,6 @@
 import contextlib
 import hashlib
 import html
-import os
 import re
 import sys
 import tempfile

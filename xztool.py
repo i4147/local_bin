@@ -66,8 +66,8 @@ from __future__ import annotations
 import argparse
 import importlib
 import io
-import lzma
 import logging
+import lzma
 import os
 import shutil
 import sys

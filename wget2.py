@@ -30,14 +30,8 @@ from urllib.parse import unquote, urljoin, urlparse
 import pycurl
 import typer
 from rich.console import Console
-from rich.progress import (
-    BarColumn,
-    Progress,
-    TaskID,
-    TextColumn,
-    TimeElapsedColumn,
-    TransferSpeedColumn,
-)
+from rich.progress import (BarColumn, Progress, TaskID, TextColumn,
+                           TimeElapsedColumn, TransferSpeedColumn)
 
 __version__ = "2.0.0-onefile"
 

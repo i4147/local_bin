@@ -7,7 +7,6 @@ import contextlib
 import difflib
 import json
 import logging
-import os
 import shutil
 import sys
 import tempfile
@@ -18,26 +17,17 @@ from multiprocessing import cpu_count
 from multiprocessing.dummy import Pool
 from pathlib import Path
 from subprocess import run
-from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple
+from typing import Any, Callable, Optional, Sequence
 
 import typer
 from autoflake import fix_code
-from black import (
-    DEFAULT_LINE_LENGTH,
-    FileMode,
-    NothingChanged,
-    format_file_contents,
-)
+from black import (DEFAULT_LINE_LENGTH, FileMode, NothingChanged,
+                   format_file_contents)
 from isort import code as isort_code
 from rich.console import Console
 from rich.logging import RichHandler
-from rich.progress import (
-    BarColumn,
-    Progress,
-    SpinnerColumn,
-    TaskProgressColumn,
-    TextColumn,
-)
+from rich.progress import (BarColumn, Progress, SpinnerColumn,
+                           TaskProgressColumn, TextColumn)
 from rich.table import Table
 
 try:
@@ -62,7 +52,8 @@ except ImportError:
     _pathspec = None  # type: ignore[assignment]
 
 try:
-    from watchdog.events import FileSystemEventHandler  # type: ignore[import-not-found]
+    from watchdog.events import \
+        FileSystemEventHandler  # type: ignore[import-not-found]
     from watchdog.observers import Observer  # type: ignore[import-not-found]
 
     _HAS_WATCHDOG = True

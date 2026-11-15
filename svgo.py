@@ -8,15 +8,13 @@ import json
 import math
 import os
 import re
-import signal
 import sys
 from concurrent.futures import ProcessPoolExecutor
-from concurrent.futures import Future
 from dataclasses import dataclass, field
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal
 from html.entities import html5 as _HTML5_ENTITIES
 from pathlib import Path
-from typing import Any, Callable, Iterable, Iterator, Mapping, Sequence
+from typing import Any, Callable, Iterator, Mapping, Sequence
 from xml.parsers import expat
 
 EXIT_SUCCESS: int = 0

@@ -5,7 +5,8 @@ import struct
 import sys
 import unicodedata
 from math import log
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Optional
+
 import typer
 
 app = typer.Typer(add_completion=False)
@@ -63,7 +64,8 @@ class DumbStatus:
 
 def get_terminal_width_termios() -> Optional[int]:
     try:
-        import fcntl, termios
+        import fcntl
+        import termios
     except ImportError:
         return None
     s = struct.pack("HHHH", 0, 0, 0, 0)

@@ -55,7 +55,6 @@ import fnmatch
 import hashlib
 import json
 import os
-from pathlib import Path
 import re
 import shutil
 import stat
@@ -64,8 +63,9 @@ import tempfile
 import time
 import tomllib
 import uuid
-import zipfile
 import xml.etree.ElementTree as ET
+import zipfile
+from pathlib import Path
 from typing import Any, Callable, Iterator, Mapping, Sequence
 
 VERSION = 1

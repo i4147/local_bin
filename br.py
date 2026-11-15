@@ -7,7 +7,6 @@ import multiprocessing as mp
 import os
 import shutil
 import struct
-import sys
 import tarfile
 import tempfile
 import time
@@ -23,7 +22,8 @@ try:
     from rich import box
     from rich.console import Console
     from rich.panel import Panel
-    from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
+    from rich.progress import (BarColumn, Progress, SpinnerColumn, TextColumn,
+                               TimeElapsedColumn)
     from rich.table import Table
     from rich.text import Text
 

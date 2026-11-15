@@ -16,7 +16,6 @@ from dataclasses import dataclass
 from enum import Enum
 
 import numpy as np
-
 from PIL import Image, ImageOps
 
 SYMP_W = 8

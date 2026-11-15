@@ -16,7 +16,6 @@ import math
 import pathlib
 import re
 import subprocess
-import sys
 import tokenize
 import zlib
 from typing import Any, Sequence

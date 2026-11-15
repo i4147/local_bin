@@ -17,9 +17,7 @@ bindings. A missing language binding affects only files of that language.
 
 import argparse
 import importlib
-import os
 import re
-import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final

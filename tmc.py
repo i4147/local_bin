@@ -25,7 +25,7 @@ import tokenize
 import traceback
 from collections.abc import Callable, Iterable, Iterator
 from contextlib import nullcontext
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from pathlib import Path
 from time import perf_counter
 from typing import TYPE_CHECKING, Any, Final, Protocol, TypeVar, cast

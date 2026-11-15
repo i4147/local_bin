@@ -1,12 +1,11 @@
 #!/data/data/com.termux/files/usr/bin/env python
 "Utilities for termux cleaner."
 
+import glob
 import os
 import shutil
-import glob
-import subprocess
 
-from dh import gsz, dsz
+from dh import gsz
 
 DIRS_TO_DELETE = [
     "$PREFIX/lib/python3.*/site-packages/**/test",

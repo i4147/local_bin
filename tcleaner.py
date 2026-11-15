@@ -1,13 +1,15 @@
 #!/data/data/com.termux/files/usr/bin/env python
 "Utilities for tcleaner."
 
+import glob
 import os
 import shutil
-import glob
 import subprocess
+
 from rich.console import Console
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
 from rich.panel import Panel
+from rich.progress import (BarColumn, Progress, SpinnerColumn,
+                           TaskProgressColumn, TextColumn)
 from rich.table import Table
 
 console = Console()

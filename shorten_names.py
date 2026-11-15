@@ -83,7 +83,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 from itertools import count, product
 from pathlib import Path
-from typing import Iterator, Optional, Union
+from typing import Iterator, Optional
 
 import libcst as cst
 from libcst.helpers import get_full_name_for_node

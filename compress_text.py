@@ -13,7 +13,6 @@ import os
 import queue
 import shutil
 import struct
-import sys
 import tarfile
 import tempfile
 import time
@@ -29,16 +28,9 @@ from typing import Final, TypeAlias
 from dh import MAX_WORKERS
 from rich.console import Console
 from rich.panel import Panel
-from rich.progress import (
-    BarColumn,
-    DownloadColumn,
-    Progress,
-    TaskID,
-    TaskProgressColumn,
-    TextColumn,
-    TimeElapsedColumn,
-    TransferSpeedColumn,
-)
+from rich.progress import (BarColumn, DownloadColumn, Progress, TaskID,
+                           TaskProgressColumn, TextColumn, TimeElapsedColumn,
+                           TransferSpeedColumn)
 from rich.table import Table
 from rich.text import Text
 

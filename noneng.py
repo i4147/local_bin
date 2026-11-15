@@ -17,11 +17,11 @@ from pathlib import Path
 from typing import Literal
 
 import typer
+from dh import SKIP_DIRS
 from rich.console import Console, Group
 from rich.live import Live
 from rich.table import Table
 from rich.text import Text
-from dh import SKIP_DIRS
 
 Backend = Literal["langdetect", "lingua", "pycld2", "gcld3", "py3langid", "langid"]
 

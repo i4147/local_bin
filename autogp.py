@@ -3,14 +3,14 @@
 
 import argparse
 import concurrent.futures
-from datetime import datetime
 import json
 import logging
 import multiprocessing
 import os
-from pathlib import Path
 import subprocess
 import sys
+from datetime import datetime
+from pathlib import Path
 
 DEFAULT_CONFIG = {
     "skip_dirs": ["venv", ".venv", ".git", "__pycache__", ".mypy_cache", ".ruff_cache"],

@@ -48,8 +48,8 @@ import sys
 import termios
 import time
 import tty
-import zlib
 import xml.etree.ElementTree as ET
+import zlib
 from array import array
 from collections import Counter
 

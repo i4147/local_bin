@@ -1,10 +1,10 @@
 #!/data/data/com.termux/files/usr/bin/env python
 "Utilities for shortener."
 
-from codeutils import shorten_names
-import sys
 from pathlib import Path
-from dh import get_pyfiles, mpf, rrs, gsz, fsz
+
+from codeutils import shorten_names
+from dh import get_pyfiles, gsz, mpf, rrs
 
 
 def process_file(path):

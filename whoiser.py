@@ -4,11 +4,9 @@
 from __future__ import annotations
 
 import argparse
-import contextlib
 import csv
 import datetime as dt
 import hashlib
-import io
 import json
 import os
 import platform
@@ -23,7 +21,7 @@ import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 from urllib.parse import urlencode
 
 import requests

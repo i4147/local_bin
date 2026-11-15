@@ -58,7 +58,6 @@ import json
 import logging
 import re
 import socket
-import sys
 import threading
 import time
 import urllib.error
@@ -67,13 +66,14 @@ import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Iterable, Optional, Sequence, Union
+from typing import Any, Callable, Iterable, Optional, Sequence
 
 __version__ = "2.1.0-py1"
 
 try:  # the single third-party dependency
-    import html5lib  # type: ignore
     from xml.dom import minidom  # type: ignore
+
+    import html5lib  # type: ignore
 except ImportError:  # pragma: no cover - reported at use time
     html5lib = None
     minidom = None  # type: ignore

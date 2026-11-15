@@ -11,11 +11,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final, cast
 
 import astor
+from dh import MAX_WORKERS
 from loguru import logger
 from rich.console import Console
 from rich.table import Table
-
-from dh import MAX_WORKERS
 
 if TYPE_CHECKING:
     from multiprocessing.pool import AsyncResult

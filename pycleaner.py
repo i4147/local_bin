@@ -20,7 +20,7 @@ from multiprocessing import Pool
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from dh import SKIP_DIRS, MAX_WORKERS
+from dh import MAX_WORKERS, SKIP_DIRS
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator
