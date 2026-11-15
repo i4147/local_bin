@@ -56,9 +56,10 @@ changed below, and produce the updated full source.
    `exclude_dirs`, and any new list-typed flag added below.
 8. **`_run()` recreates a `Typer()` app per call.** Hoist to module level:
    ```python
-   _app = typer.Typer(add_completion=False, no_args_is_help=False,
-                      pretty_exceptions_enable=False)
+   _app = typer.Typer(add_completion=False, no_args_is_help=False, pretty_exceptions_enable=False)
    _app.command()(_pyrg_command)
+
+
    def _run(argv=None) -> int:
        return CliRunner().invoke(_app, list(argv) if argv is not None else sys.argv[1:]).exit_code
    ```

@@ -1,7 +1,5 @@
 #!/data/data/com.termux/files/usr/bin/env python
 
-"Utilities for similarity check."
-
 import ast
 import collections
 import datetime as dt
@@ -13,499 +11,71 @@ import itertools
 import json
 import keyword
 import math
-import pathlib
+import os
+from pathlib import Path
 import re
-import subprocess
 import tokenize
+from concurrent.futures import ProcessPoolExecutor
 from types import SimpleNamespace
-from typing import Annotated, Any, Sequence
+from typing import Annotated, Any, Iterable, Sequence
 import zlib
 
 import typer
+from dh import should_skip
 
-
-ROOT = pathlib.Path(__file__).resolve().parent.parent
+ROOT = Path.cwd().resolve()
+MAX_FILE_BYTES = 2 * 1024 * 1024
+MAX_LEX_TOKENS = 30000
 
 STOPWORDS = frozenset([
-    "a",
-    "about",
-    "above",
-    "after",
-    "again",
-    "against",
-    "all",
-    "also",
-    "am",
-    "an",
-    "and",
-    "any",
-    "are",
-    "as",
-    "at",
-    "be",
-    "because",
-    "been",
-    "before",
-    "being",
-    "below",
-    "between",
-    "both",
-    "but",
-    "by",
-    "can",
-    "cannot",
-    "could",
-    "did",
-    "do",
-    "does",
-    "doing",
-    "down",
-    "during",
-    "each",
-    "few",
-    "for",
-    "from",
-    "further",
-    "had",
-    "has",
-    "have",
-    "having",
-    "he",
-    "her",
-    "here",
-    "hers",
-    "herself",
-    "him",
-    "himself",
-    "his",
-    "how",
-    "i",
-    "if",
-    "in",
-    "into",
-    "is",
-    "it",
-    "its",
-    "itself",
-    "just",
-    "me",
-    "more",
-    "most",
-    "my",
-    "myself",
-    "no",
-    "nor",
-    "not",
-    "now",
-    "of",
-    "off",
-    "on",
-    "once",
-    "only",
-    "or",
-    "other",
-    "our",
-    "ours",
-    "ourselves",
-    "out",
-    "over",
-    "own",
-    "same",
-    "she",
-    "should",
-    "so",
-    "some",
-    "such",
-    "than",
-    "that",
-    "the",
-    "their",
-    "theirs",
-    "them",
-    "themselves",
-    "then",
-    "there",
-    "these",
-    "they",
-    "this",
-    "those",
-    "through",
-    "to",
-    "too",
-    "under",
-    "until",
-    "up",
-    "very",
-    "was",
-    "we",
-    "were",
-    "what",
-    "when",
-    "where",
-    "which",
-    "while",
-    "who",
-    "whom",
-    "why",
-    "will",
-    "with",
-    "would",
-    "you",
-    "your",
-    "yours",
-    "yourself",
-    "yourselves",
-    "args",
-    "argv",
-    "arg",
-    "argument",
-    "arguments",
-    "call",
-    "called",
-    "code",
-    "command",
-    "commands",
-    "data",
-    "default",
-    "defaults",
-    "file",
-    "filename",
-    "files",
-    "function",
-    "functions",
-    "get",
-    "help",
-    "import",
-    "input",
-    "line",
-    "lines",
-    "list",
-    "main",
-    "module",
-    "name",
-    "names",
-    "none",
-    "null",
-    "option",
-    "options",
-    "output",
-    "path",
-    "paths",
-    "print",
-    "program",
-    "return",
-    "returns",
-    "run",
-    "script",
-    "scripts",
-    "self",
-    "set",
-    "str",
-    "string",
-    "strings",
-    "sys",
-    "true",
-    "false",
-    "type",
-    "types",
-    "use",
-    "used",
-    "user",
-    "value",
-    "values",
-    "var",
-    "version",
-    "versions",
-    "via",
-    "working",
-    "work",
-    "your",
-    "cli",
-    "tool",
-    "tools",
-    "utility",
-    "utils",
-    "com",
-    "termux",
-    "usr",
-    "local",
-    "home",
-    "data",
-    "files",
-    "env",
-    "python3",
-    "python",
-    "env",
-    "bin",
-    "sbin",
-    "opt",
-    "tmp",
-    "etc",
-    "dev",
-    "var",
-    "coding",
-    "utf",
-    "indent",
-    "expandtab",
-    "tabstop",
-    "shiftwidth",
-    "fileencoding",
-    "http",
-    "https",
-    "www",
-    "html",
-    "wwwwww",
-    "newline",
-    "endcode",
-    "operator",
-    "todo",
-    "note",
-    "fixme",
+    "a", "about", "above", "after", "again", "against", "all", "also", "am", "an", "and", "any", "are", "as",
+    "at", "be", "because", "been", "before", "being", "below", "between", "both", "but", "by", "can", "cannot",
+    "could", "did", "do", "does", "doing", "down", "during", "each", "few", "for", "from", "further", "had",
+    "has", "have", "having", "he", "her", "here", "hers", "herself", "him", "himself", "his", "how", "i", "if",
+    "in", "into", "is", "it", "its", "itself", "just", "me", "more", "most", "my", "myself", "no", "nor", "not",
+    "now", "of", "off", "on", "once", "only", "or", "other", "our", "ours", "ourselves", "out", "over", "own",
+    "same", "she", "should", "so", "some", "such", "than", "that", "the", "their", "theirs", "them",
+    "themselves", "then", "there", "these", "they", "this", "those", "through", "to", "too", "under", "until",
+    "up", "very", "was", "we", "were", "what", "when", "where", "which", "while", "who", "whom", "why", "will",
+    "with", "would", "you", "your", "yours", "yourself", "yourselves", "args", "argv", "arg", "argument",
+    "arguments", "call", "called", "code", "command", "commands", "data", "default", "defaults", "file",
+    "filename", "files", "function", "functions", "get", "help", "import", "input", "line", "lines", "list",
+    "main", "module", "name", "names", "none", "null", "option", "options", "output", "path", "paths", "print",
+    "program", "return", "returns", "run", "script", "scripts", "self", "set", "str", "string", "strings", "sys",
+    "true", "false", "type", "types", "use", "used", "user", "value", "values", "var", "version", "versions",
+    "via", "working", "work", "your", "cli", "tool", "tools", "utility", "utils", "com", "termux", "usr",
+    "local", "home", "data", "files", "env", "python3", "python", "env", "bin", "sbin", "opt", "tmp", "etc",
+    "dev", "var", "coding", "utf", "indent", "expandtab", "tabstop", "shiftwidth", "fileencoding", "http",
+    "https", "www", "html", "wwwwww", "newline", "endcode", "operator", "todo", "note", "fixme",
 ])
 
 GENERIC_STEM_TOKENS = frozenset([
-    "to",
-    "from",
-    "into",
-    "and",
-    "the",
-    "a",
-    "an",
-    "of",
-    "for",
-    "with",
-    "by",
-    "on",
-    "in",
-    "at",
-    "is",
-    "are",
-    "new",
-    "old",
-    "v1",
-    "v2",
-    "v3",
-    "py",
-    "python",
-    "simple",
-    "fast",
-    "auto",
-    "mini",
-    "test",
-    "tests",
-    "tools",
-    "tool",
-    "utils",
-    "util",
-    "utility",
-    "cli",
-    "x",
-    "xx",
-    "extra",
-    "super",
-    "better",
-    "best",
-    "small",
-    "big",
-    "my",
-    "run",
-    "runner",
-    "file",
-    "files",
-    "dir",
-    "dirs",
-    "the2",
-    "s",
-    "es",
-    "er",
-    "ing",
-    "ed",
-    "2",
-    "3",
-    "4",
-    "5",
-    "10",
-    "one",
-    "two",
-    "three",
+    "to", "from", "into", "and", "the", "a", "an", "of", "for", "with", "by", "on", "in", "at", "is", "are",
+    "new", "old", "v1", "v2", "v3", "py", "python", "simple", "fast", "auto", "mini", "test", "tests", "tools",
+    "tool", "utils", "util", "utility", "cli", "x", "xx", "extra", "super", "better", "best", "small", "big",
+    "my", "run", "runner", "file", "files", "dir", "dirs", "the2", "s", "es", "er", "ing", "ed", "2", "3", "4",
+    "5", "10", "one", "two", "three",
 ])
 
 STEM_SEED = frozenset([
-    "to",
-    "md",
-    "js",
-    "ts",
-    "rs",
-    "c",
-    "cpp",
-    "cc",
-    "cc",
-    "py",
-    "ipynb",
-    "txt",
-    "csv",
-    "json",
-    "xml",
-    "yaml",
-    "yml",
-    "toml",
-    "ini",
-    "cfg",
-    "sql",
-    "sqlite",
-    "db",
-    "pdf",
-    "png",
-    "jpg",
-    "jpeg",
-    "gif",
-    "webp",
-    "svg",
-    "img",
-    "image",
-    "images",
-    "html",
-    "htm",
-    "css",
-    "lua",
-    "rst",
-    "srt",
-    "vcf",
-    "pkl",
-    "whl",
-    "tar",
-    "zip",
-    "xz",
-    "gz",
-    "bz2",
-    "rar",
-    "7z",
-    "ttf",
-    "otf",
-    "woff",
-    "woff2",
-    "url",
-    "uri",
-    "http",
-    "https",
-    "www",
-    "web",
-    "api",
-    "cli",
-    "gui",
-    "ai",
-    "ml",
-    "nlp",
-    "ocr",
-    "tts",
-    "wav",
-    "mp3",
-    "mp4",
-    "mkv",
-    "avi",
-    "mov",
-    "vid",
-    "video",
-    "audio",
-    "font",
-    "fonts",
-    "doc",
-    "docs",
-    "docx",
-    "xls",
-    "xlsx",
-    "ppt",
-    "pptx",
-    "git",
-    "gh",
-    "repo",
-    "repos",
-    "pip",
-    "pypi",
-    "pkg",
-    "pkgs",
-    "lib",
-    "libs",
-    "env",
-    "venv",
-    "req",
-    "reqs",
-    "txt",
-    "github",
-    "gitlab",
-    "gist",
-    "ghpy",
-    "dh",
-    "log",
-    "logs",
-    "hash",
-    "dup",
-    "dedup",
-    "dups",
-    "dir",
-    "size",
-    "sizes",
-    "b64",
-    "base64",
-    "hex",
-    "bin",
-    "oct",
-    "elf",
-    "elf64",
-    "qr",
-    "qrc",
-    "em",
-    "emoji",
-    "utf",
-    "ascii",
-    "unicode",
-    "trans",
-    "transwords",
-    "translate",
-    "translator",
-    "langdict",
-    "dic",
-    "dict",
-    "word",
-    "words",
-    "list",
-    "clean",
-    "cleaner",
-    "cleanup",
-    "fmt",
-    "format",
-    "formatter",
-    "pretty",
-    "min",
-    "minify",
-    "strip",
-    "stripper",
-    "rmc",
-    "rmcts",
-    "rmca",
-    "rmcst",
-    "eximports",
-    "imports",
-    "importz",
-    "importtools",
-    "csv2json",
-    "pkl2json",
-    "sqltojson",
-    "sqlite2json",
-    "xml_yaml2json",
-    "vcf2json",
+    "to", "md", "js", "ts", "rs", "c", "cpp", "cc", "py", "ipynb", "txt", "csv", "json", "xml", "yaml", "yml",
+    "toml", "ini", "cfg", "sql", "sqlite", "db", "pdf", "png", "jpg", "jpeg", "gif", "webp", "svg", "img",
+    "image", "images", "html", "htm", "css", "lua", "rst", "srt", "vcf", "pkl", "whl", "tar", "zip", "xz", "gz",
+    "bz2", "rar", "7z", "ttf", "otf", "woff", "woff2", "url", "uri", "http", "https", "www", "web", "api", "cli",
+    "gui", "ai", "ml", "nlp", "ocr", "tts", "wav", "mp3", "mp4", "mkv", "avi", "mov", "vid", "video", "audio",
+    "font", "fonts", "doc", "docs", "docx", "xls", "xlsx", "ppt", "pptx", "git", "gh", "repo", "repos", "pip",
+    "pypi", "pkg", "pkgs", "lib", "libs", "env", "venv", "req", "reqs", "github", "gitlab", "gist", "ghpy",
+    "dh", "log", "logs", "hash", "dup", "dedup", "dups", "dir", "size", "sizes", "b64", "base64", "hex", "bin",
+    "oct", "elf", "elf64", "qr", "qrc", "em", "emoji", "utf", "ascii", "unicode", "trans", "transwords",
+    "translate", "translator", "langdict", "dic", "dict", "word", "words", "list", "clean", "cleaner",
+    "cleanup", "fmt", "format", "formatter", "pretty", "min", "minify", "strip", "stripper", "rmc", "rmcts",
+    "rmca", "rmcst", "eximports", "imports", "importz", "importtools", "csv2json", "pkl2json", "sqltojson",
+    "sqlite2json", "xml_yaml2json", "vcf2json",
 ])
 
 FEATURE_WEIGHTS = {
-    "lex": 1.0,
-    "anon": 0.7,
-    "ast": 0.9,
-    "call": 2.0,
-    "imp": 2.2,
-    "opt": 3.0,
-    "word": 1.1,
-    "stem": 3.2,
-    "def": 1.2,
+    "lex": 1.0, "anon": 0.7, "ast": 0.9, "call": 2.0, "imp": 2.2, "opt": 3.0,
+    "word": 1.1, "stem": 3.2, "def": 1.2,
 }
 
 API_PREFIXES = ("call", "imp", "opt")
@@ -513,34 +83,22 @@ LEX_N = 5
 AST_N = 6
 SHINGLE_SAMPLE = 3
 
+_LEXICON: set[str] = set()
+
 
 def _hash_shingle(s: str) -> int:
     return zlib.crc32(s.encode("utf-8", "replace")) & 0xFFFFFFFF
 
 
-def discover_files(root: pathlib.Path) -> list[pathlib.Path]:
-    "Discover files."
-    try:
-        out = subprocess.run(
-            ["git", "ls-files", "*.py"],
-            cwd=root,
-            capture_output=True,
-            text=True,
-            check=True,
-            timeout=30,
-        ).stdout.splitlines()
-        files = [root / p for p in out if "/" not in p and p.endswith(".py")]
-    except (OSError, subprocess.SubprocessError):
-        files = []
-    if not files:
-        files = [p for p in root.glob("*.py") if p.is_file()]
-    return sorted(p for p in files if p.is_file())
+def discover_files(root: Path) -> list[Path]:
+    return sorted(p for p in root.rglob("*") if p.is_file() and not should_skip(p))
 
 
-def read_source(path: pathlib.Path) -> tuple[str, str]:
-    "Read source."
+def read_source(path: Path) -> tuple[str, str]:
     raw = path.read_bytes()
-    for enc in ("utf-8-sig", "utf-8", "latin-1"):
+    if len(raw) > MAX_FILE_BYTES:
+        raw = raw[:MAX_FILE_BYTES]
+    for enc in ("utf-8", "utf-8-sig", "latin-1"):
         try:
             return raw.decode(enc), enc
         except UnicodeDecodeError:
@@ -549,10 +107,9 @@ def read_source(path: pathlib.Path) -> tuple[str, str]:
 
 
 def build_stem_lexicon(names: Iterable[str]) -> set[str]:
-    "Build stem lexicon."
     counts: collections.Counter[str] = collections.Counter()
     for name in names:
-        stem = (name.removesuffix(".py")).lower()
+        stem = Path(name).stem.lower()
         for tok in re.findall(r"[a-z]{2,}", re.sub(r"[0-9]+", " ", stem)):
             counts[tok] += 1
         for tok in re.findall(r"[a-z]{2,}", stem):
@@ -564,7 +121,7 @@ def build_stem_lexicon(names: Iterable[str]) -> set[str]:
 
 
 def normalise_stem(name: str, lexicon: set[str]) -> tuple[str, tuple[str, ...], tuple[str, ...]]:
-    stem = (name.removesuffix(".py")).lower()
+    stem = Path(name).stem.lower()
     letters = re.sub(r"[^a-z]", "", stem)
     best: list[tuple[float, list[str]]] = [(0.0, [])] + [(-1e9, [])] * len(letters)
     for i in range(len(letters)):
@@ -605,20 +162,28 @@ def _dotted(node: ast.AST) -> str:
     return ".".join(reversed(parts))
 
 
-def _lex_tokens(text: str) -> list[str]:
+def _generic_lex_tokens(text: str) -> list[str]:
+    toks: list[str] = []
+    for m in re.finditer(r"[A-Za-z_]\w*|[0-9]+(?:\.[0-9]+)?|[^\s\w]", text):
+        s = m.group()
+        c = s[0]
+        if c.isalpha() or c == "_":
+            toks.append("n:" + s.lower())
+        elif c.isdigit():
+            toks.append("NUM")
+        else:
+            toks.append("op:" + s)
+    return toks
+
+
+def _python_lex_tokens(text: str) -> list[str]:
     toks: list[str] = []
     try:
         for t in tokenize.generate_tokens(io.StringIO(text).readline):
             tt, s = t.type, t.string
             if tt in (
-                tokenize.COMMENT,
-                tokenize.NL,
-                tokenize.NEWLINE,
-                tokenize.INDENT,
-                tokenize.DEDENT,
-                tokenize.ENCODING,
-                tokenize.ENDMARKER,
-                tokenize.ERRORTOKEN,
+                tokenize.COMMENT, tokenize.NL, tokenize.NEWLINE, tokenize.INDENT, tokenize.DEDENT,
+                tokenize.ENCODING, tokenize.ENDMARKER, tokenize.ERRORTOKEN,
             ):
                 continue
             if tt == tokenize.NAME:
@@ -634,9 +199,7 @@ def _lex_tokens(text: str) -> list[str]:
     except (tokenize.TokenError, IndentationError, SyntaxError, ValueError):
         pass
     if not toks:
-        toks = [
-            "kw:" + m if keyword.iskeyword(m) else "n:" + m.lower() for m in re.findall(r"[A-Za-z_]\w*|[^\s\w]", text)
-        ]
+        toks = _generic_lex_tokens(text)
     return toks
 
 
@@ -651,10 +214,13 @@ def _shingles(seq: Sequence[str], n: int, prefix: str, sampled: bool = False) ->
     return out
 
 
-def extract(path: pathlib.Path, lexicon: set[str]) -> dict[str, Any]:
+def extract(path: Path, lexicon: set[str]) -> dict[str, Any]:
+    is_python = path.suffix.lower() == ".py"
     text, enc = read_source(path)
     info: dict[str, Any] = {
         "name": path.name,
+        "is_python": is_python,
+        "extension": path.suffix,
         "bytes": len(text.encode("utf-8", "replace")),
         "lines": text.count("\n") + 1,
         "sha256": hashlib.sha256(text.encode("utf-8", "replace")).hexdigest()[:16],
@@ -687,7 +253,8 @@ def extract(path: pathlib.Path, lexicon: set[str]) -> dict[str, Any]:
         if api_feature or prefix in API_PREFIXES:
             api[key] += FEATURE_WEIGHTS[prefix] * weight
 
-    lex = _lex_tokens(text)
+    lex = _python_lex_tokens(text) if is_python else _generic_lex_tokens(text)
+    lex = lex[:MAX_LEX_TOKENS]
     info["token_count"] = len(lex)
     lex_sh = _shingles(lex, LEX_N, "lex:")
     anon = ["ID" if t.startswith("n:") else t for t in lex]
@@ -697,7 +264,11 @@ def extract(path: pathlib.Path, lexicon: set[str]) -> dict[str, Any]:
     for h in _shingles(anon, LEX_N, "anon:", sampled=True):
         add("anon", str(h), 1.0)
 
-    raw_words = _words(" ".join(re.findall(r"#[^\n]*", text[:4000])))
+    comment_text = " ".join(re.findall(r"#[^\n]*", text[:4000]))
+    if is_python:
+        raw_words = _words(comment_text)
+    else:
+        raw_words = _words(text[:8000]) + _words(comment_text)
     info["doc_words"] = list(dict.fromkeys(raw_words))[:40]
     for w, c in collections.Counter(raw_words).most_common(60):
         add("word", w, 1.0 + math.log(c))
@@ -708,64 +279,65 @@ def extract(path: pathlib.Path, lexicon: set[str]) -> dict[str, Any]:
     if letters:
         add("stem", letters, 1.2)
 
-    try:
-        tree = ast.parse(text, filename=path.name)
-    except (SyntaxError, ValueError) as exc:
-        info["ast_ok"] = False
-        info["parse_error"] = f"{type(exc).__name__}: {exc.msg if isinstance(exc, SyntaxError) else exc}"
-        tree = None
+    if is_python:
+        try:
+            tree = ast.parse(text, filename=path.name)
+        except (SyntaxError, ValueError) as exc:
+            info["ast_ok"] = False
+            info["parse_error"] = f"{type(exc).__name__}: {exc.msg if isinstance(exc, SyntaxError) else exc}"
+            tree = None
 
-    if tree is not None:
-        doc = ast.get_docstring(tree) or ""
-        info["docstring"] = " ".join(doc.split())[:300]
-        doc_words = _words(doc)
-        for w, c in collections.Counter(doc_words).most_common(60):
-            add("word", w, 1.5 + 1.5 * math.log(c))
+        if tree is not None:
+            doc = ast.get_docstring(tree) or ""
+            info["docstring"] = " ".join(doc.split())[:300]
+            doc_words = _words(doc)
+            for w, c in collections.Counter(doc_words).most_common(60):
+                add("word", w, 1.5 + 1.5 * math.log(c))
 
-        skeleton: list[str] = []
-        stack = [tree]
-        while stack:
-            node = stack.pop()
-            skeleton.append(type(node).__name__)
-            for child in ast.iter_child_nodes(node):
-                stack.append(child)
-                if isinstance(child, ast.Call):
-                    dotted = _dotted(child.func)
-                    if dotted:
-                        info["calls"].append(dotted)
-                        add("call", dotted, 1.0)
-                        tail = dotted.split(".")[-1]
-                        add("call", tail, 0.6)
-                    for arg in child.args[:3]:
-                        if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
-                            v = arg.value.strip()
-                            if v.startswith("-") and len(v) <= 40:
-                                info["options"].append(v)
-                                add("opt", v, 1.0)
-                            elif len(v) < 40 and not v.startswith(("http", "/")):
-                                words = _words(v)
-                                info["doc_words"].extend(words)
-                                for w in words[:6]:
-                                    add("word", w, 0.5)
-                elif isinstance(child, ast.Import):
-                    for a in child.names:
-                        info["imports"].append(a.name)
-                        add("imp", a.name.split(".")[0], 1.0)
-                        add("imp", a.name, 0.6)
-                elif isinstance(child, ast.ImportFrom):
-                    if child.module:
-                        info["imports"].append(child.module)
-                        add("imp", child.module.split(".")[0], 1.0)
-                elif isinstance(child, ast.Attribute):
-                    d = _dotted(child)
-                    if d:
-                        add("call", d, 0.4)
-                elif isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
-                    info["defs"].append(child.name)
-                    for w in _words(child.name):
-                        add("def", w, 1.0)
-        for h in _shingles(skeleton, AST_N, "ast:", sampled=True):
-            add("ast", str(h), 1.0)
+            skeleton: list[str] = []
+            stack = [tree]
+            while stack:
+                node = stack.pop()
+                skeleton.append(type(node).__name__)
+                for child in ast.iter_child_nodes(node):
+                    stack.append(child)
+                    if isinstance(child, ast.Call):
+                        dotted = _dotted(child.func)
+                        if dotted:
+                            info["calls"].append(dotted)
+                            add("call", dotted, 1.0)
+                            tail = dotted.split(".")[-1]
+                            add("call", tail, 0.6)
+                        for arg in child.args[:3]:
+                            if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
+                                v = arg.value.strip()
+                                if v.startswith("-") and len(v) <= 40:
+                                    info["options"].append(v)
+                                    add("opt", v, 1.0)
+                                elif len(v) < 40 and not v.startswith(("http", "/")):
+                                    words = _words(v)
+                                    info["doc_words"].extend(words)
+                                    for w in words[:6]:
+                                        add("word", w, 0.5)
+                    elif isinstance(child, ast.Import):
+                        for a in child.names:
+                            info["imports"].append(a.name)
+                            add("imp", a.name.split(".")[0], 1.0)
+                            add("imp", a.name, 0.6)
+                    elif isinstance(child, ast.ImportFrom):
+                        if child.module:
+                            info["imports"].append(child.module)
+                            add("imp", child.module.split(".")[0], 1.0)
+                    elif isinstance(child, ast.Attribute):
+                        d = _dotted(child)
+                        if d:
+                            add("call", d, 0.4)
+                    elif isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                        info["defs"].append(child.name)
+                        for w in _words(child.name):
+                            add("def", w, 1.0)
+            for h in _shingles(skeleton, AST_N, "ast:", sampled=True):
+                add("ast", str(h), 1.0)
 
     for k in ("imports", "calls", "options", "defs"):
         info[k] = sorted(set(info[k]))
@@ -803,6 +375,15 @@ def extract(path: pathlib.Path, lexicon: set[str]) -> dict[str, Any]:
     info["api_features"] = dict(api)
     info["purpose_features"] = dict(purpose)
     return info
+
+
+def _init_worker(lexicon: set[str]) -> None:
+    global _LEXICON
+    _LEXICON = lexicon
+
+
+def _extract_path(path: Path) -> dict[str, Any]:
+    return extract(path, _LEXICON)
 
 
 def cosine_pairs(vecs: list[dict[str, float]], n: int, min_score: float, max_df: int) -> dict[tuple[int, int], float]:
@@ -979,7 +560,6 @@ def cluster(n: int, scores: dict[tuple[int, int], float], threshold: float) -> t
 
 
 def group_label(members: list[dict[str, Any]]) -> tuple[str, list[str], str]:
-    "Group label."
     name_counts: collections.Counter[str] = collections.Counter()
     word_counts: collections.Counter[str] = collections.Counter()
     for m in members:
@@ -996,24 +576,45 @@ def group_label(members: list[dict[str, Any]]) -> tuple[str, list[str], str]:
     return label, purpose[:6], base
 
 
-def build_report(root: pathlib.Path, threshold: float) -> dict[str, Any]:
-    "Build report."
+def build_report(root: Path, threshold: float, workers: int) -> dict[str, Any]:
     files = discover_files(root)
     n = len(files)
-    print(f"[1/5] extracting features from {n} Python files ...", flush=True)
+    print(f"[1/5] extracting features from {n} files ({workers} workers) ...", flush=True)
     lexicon = build_stem_lexicon([p.name for p in files])
-    infos = [extract(p, lexicon) for p in files]
+
+    if workers > 1 and n > 1:
+        chunksize = max(1, n // (workers * 8))
+        with ProcessPoolExecutor(max_workers=workers, initializer=_init_worker, initargs=(lexicon,)) as ex:
+            infos = list(ex.map(_extract_path, files, chunksize=chunksize))
+    else:
+        _init_worker(lexicon)
+        infos = [_extract_path(p) for p in files]
 
     print("[2/5] computing IDF-weighted cosine similarity ...", flush=True)
-    cos_all = cosine_pairs([i["features"] for i in infos], n, 0.05, 300)
-    cos_api = cosine_pairs([i["api_features"] for i in infos], n, 0.12, 400)
-    cos_purpose = cosine_pairs([i["purpose_features"] for i in infos], n, 0.12, 400)
+    f_all = [i["features"] for i in infos]
+    f_api = [i["api_features"] for i in infos]
+    f_purp = [i["purpose_features"] for i in infos]
+    lex_sets = [i["lex_shingles"] for i in infos]
+
+    if workers > 1:
+        with ProcessPoolExecutor(max_workers=min(workers, 4)) as ex:
+            fut_all = ex.submit(cosine_pairs, f_all, n, 0.05, 300)
+            fut_api = ex.submit(cosine_pairs, f_api, n, 0.12, 400)
+            fut_purp = ex.submit(cosine_pairs, f_purp, n, 0.12, 400)
+            fut_apx = ex.submit(approx_containment_pairs, lex_sets, 0.30)
+            cos_all = fut_all.result()
+            cos_api = fut_api.result()
+            cos_purpose = fut_purp.result()
+            approx = fut_apx.result()
+    else:
+        cos_all = cosine_pairs(f_all, n, 0.05, 300)
+        cos_api = cosine_pairs(f_api, n, 0.12, 400)
+        cos_purpose = cosine_pairs(f_purp, n, 0.12, 400)
+        approx = approx_containment_pairs(lex_sets, 0.30)
     print(f"      cos_all: {len(cos_all)}, cos_api: {len(cos_api)}, cos_purpose: {len(cos_purpose)} pairs", flush=True)
 
     print("[3/5] building candidate pairs and scoring ...", flush=True)
     name_pairs = name_candidates(infos)
-    lex_sets = [i["lex_shingles"] for i in infos]
-    approx = approx_containment_pairs(lex_sets, 0.30)
     candidates = set(cos_all) | set(cos_api) | set(cos_purpose) | name_pairs | set(approx)
     print(f"      candidate pairs: {len(candidates)}", flush=True)
 
@@ -1067,6 +668,7 @@ def build_report(root: pathlib.Path, threshold: float) -> dict[str, Any]:
                 "bytes": infos[i]["bytes"],
                 "sha256": infos[i]["sha256"],
                 "ast_ok": infos[i]["ast_ok"],
+                "is_python": infos[i]["is_python"],
                 "nearest_in_group": infos[nearest]["name"] if nearest is not None else None,
                 "nearest_score": round(ns, 4),
                 "imports": infos[i]["imports"][:18],
@@ -1133,12 +735,12 @@ def build_report(root: pathlib.Path, threshold: float) -> dict[str, Any]:
             "shared_cli_options": shared_opts[:15],
             "shared_definitions": shared_defs[:15],
             "recommendation": (
-                "near-duplicate: consolidate into one script"
+                "near-duplicate: consolidate into one file"
                 if (intra and max(intra) >= 0.88)
                 else (
-                    "strong overlap: pick one canonical script, retire the rest"
+                    "strong overlap: pick one canonical file, retire the rest"
                     if (intra and sum(intra) / len(intra) >= 0.7)
-                    else "review: scripts appear to do the same job"
+                    else "review: files appear to do the same job"
                 )
             ),
             "members": members,
@@ -1187,13 +789,16 @@ def build_report(root: pathlib.Path, threshold: float) -> dict[str, Any]:
     ]
     functional_families.sort(key=lambda d: (-d["scripts"], d["keyword"]))
 
+    python_files = [i for i in infos if i["is_python"]]
+    non_python_files = [i for i in infos if not i["is_python"]]
+
     report: dict[str, Any] = {
-        "schema_version": "1.0",
+        "schema_version": "1.1",
         "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
         "repository": "i4147/bin_oct",
         "root": str(root),
         "method": {
-            "goal": "group scripts that do nearly the same job",
+            "goal": "group files that do nearly the same job",
             "signals": dict(FEATURE_WEIGHTS.items()),
             "score_formula": (
                 "0.52*(0.55*cos_all + 0.30*containment + 0.15*cos_api) + "
@@ -1209,9 +814,10 @@ def build_report(root: pathlib.Path, threshold: float) -> dict[str, Any]:
                 "normalised filename variants (corpus-segmented words + prefixes)",
                 "approx. token containment >= 0.30",
             ],
-            "clustering": "frontier expansion from the densest script (a group may grow through "
+            "clustering": "frontier expansion from the densest file (a group may grow through "
             "any member) with a cohesion test and one conservative refinement pass",
             "group_threshold": threshold,
+            "workers": workers,
             "score_components": {
                 "cos_all": "IDF cosine over lexical/structural/semantic features",
                 "containment": "5-gram token overlap / smaller file",
@@ -1221,13 +827,16 @@ def build_report(root: pathlib.Path, threshold: float) -> dict[str, Any]:
                 "name_sim": "similarity of normalised, corpus-segmented filename stems",
             },
             "caveats": [
-                "Static analysis only: no script was executed.",
-                "Files that fail to parse on Python 3.11 use lexical features only.",
+                "Static analysis only: no file was executed.",
+                "Non-Python files use lexical, filename, and vocabulary features only (no AST).",
+                "Python files that fail to parse on Python 3.11 use lexical features only.",
                 "Similarity measures implementation/purpose overlap, not proven equivalence.",
             ],
         },
         "summary": {
             "files_analyzed": n,
+            "python_files": len(python_files),
+            "non_python_files": len(non_python_files),
             "groups": len(groups_out),
             "files_in_groups": sum(g["size"] for g in groups_out),
             "singletons": len(singles),
@@ -1236,18 +845,20 @@ def build_report(root: pathlib.Path, threshold: float) -> dict[str, Any]:
             "pairs_at_or_above_threshold": sum(1 for s in scores.values() if s >= threshold),
             "near_duplicate_pairs": sum(1 for s in scores.values() if s >= 0.88),
             "exact_duplicate_sets": len(exact),
-            "parse_failures": sum(1 for i in infos if not i["ast_ok"]),
+            "parse_failures": sum(1 for i in python_files if not i["ast_ok"]),
             "total_lines": sum(i["lines"] for i in infos),
         },
         "exact_duplicate_sets": exact,
         "functional_families": functional_families,
-        "unparseable_files": [i["name"] for i in infos if not i["ast_ok"]],
+        "unparseable_files": [i["name"] for i in python_files if not i["ast_ok"]],
         "groups": groups_out,
         "top_pairs": top_pairs,
         "singletons": sorted(infos[i]["name"] for i in singles),
         "files": [
             {
                 "name": i["name"],
+                "is_python": i["is_python"],
+                "extension": i["extension"],
                 "lines": i["lines"],
                 "bytes": i["bytes"],
                 "sha256": i["sha256"],
@@ -1279,20 +890,20 @@ def build_report(root: pathlib.Path, threshold: float) -> dict[str, Any]:
     return report
 
 
-def render_markdown(rep: dict[str, Any], out: pathlib.Path) -> None:
-    "Render markdown."
+def render_markdown(rep: dict[str, Any], out: Path) -> None:
     s = rep["summary"]
     L = [
-        "# Python script similarity report",
+        "# File similarity report",
         "",
         (
-            f"Generated {rep['generated_at']} · **{s['files_analyzed']} scripts** · "
-            f"**{s['groups']} groups** · {s['files_in_groups']} scripts belong to a group "
+            f"Generated {rep['generated_at']} · **{s['files_analyzed']} files** "
+            f"({s['python_files']} Python, {s['non_python_files']} other) · "
+            f"**{s['groups']} groups** · {s['files_in_groups']} files belong to a group "
             f"({s['singletons']} singletons)."
         ),
         "",
         (
-            "Scripts that do nearly the same job are placed in the same group. "
+            "Files that do nearly the same job are placed in the same group. "
             "The machine-readable version is `similarity_report.json`; the visual "
             "version is `similarity_report.svg`."
         ),
@@ -1300,18 +911,18 @@ def render_markdown(rep: dict[str, Any], out: pathlib.Path) -> None:
         "## Method (short)",
         "",
         (
-            "Each script is turned into a weighted feature vector built from normalised "
-            "token 5-grams, an AST node-type skeleton, imports, called APIs, CLI flags, "
-            "function names and documentation/filename vocabulary. Features are IDF "
-            "weighted so that boilerplate does not create false matches. Pairs are scored "
+            "Each file is turned into a weighted feature vector built from normalised "
+            "token 5-grams, an AST node-type skeleton (Python only), imports, called APIs, "
+            "CLI flags, function names and documentation/filename vocabulary. Features are "
+            "IDF weighted so that boilerplate does not create false matches. Pairs are scored "
             f"with `{rep['method']['score_formula']}`, and pairs at or above "
             f"`{rep['method']['group_threshold']}` are grouped by density-based leader "
-            "clustering around a medoid script."
+            "clustering around a medoid file."
         ),
         "",
         "## Overview",
         "",
-        "| Group | Scripts | Avg. score | Medoid (best keeper) | What they do |",
+        "| Group | Files | Avg. score | Medoid (best keeper) | What they do |",
         "|---|---:|---:|---|---|",
     ]
     for g in rep["groups"][:60]:
@@ -1326,7 +937,7 @@ def render_markdown(rep: dict[str, Any], out: pathlib.Path) -> None:
             f"### {g['id']} — {g['label']}",
             "",
             (
-                f"- **{g['size']} scripts**, avg similarity **{g['avg_similarity']:.3f}** "
+                f"- **{g['size']} files**, avg similarity **{g['avg_similarity']:.3f}** "
                 f"(range {g['min_similarity']:.3f}–{g['max_similarity']:.3f})"
             ),
             f"- **Suggested keeper:** `{g['medoid']}`",
@@ -1355,11 +966,11 @@ def render_markdown(rep: dict[str, Any], out: pathlib.Path) -> None:
         "## Functional domains",
         "",
         (
-            "Broad filename-derived job keywords, including scripts that remained "
+            "Broad filename-derived job keywords, including files that remained "
             "singletons (useful for deciding where to start consolidating)."
         ),
         "",
-        "| Keyword | Scripts | In a group | Examples |",
+        "| Keyword | Files | In a group | Examples |",
         "|---|---:|---:|---|",
     ]
     for d in rep["functional_families"][:40]:
@@ -1373,18 +984,8 @@ def render_markdown(rep: dict[str, Any], out: pathlib.Path) -> None:
 
 
 PALETTE = [
-    "#5eead4",
-    "#93c5fd",
-    "#fca5a5",
-    "#fcd34d",
-    "#c4b5fd",
-    "#86efac",
-    "#f9a8d4",
-    "#67e8f9",
-    "#fdba74",
-    "#a5b4fc",
-    "#bef264",
-    "#d8b4fe",
+    "#5eead4", "#93c5fd", "#fca5a5", "#fcd34d", "#c4b5fd", "#86efac",
+    "#f9a8d4", "#67e8f9", "#fdba74", "#a5b4fc", "#bef264", "#d8b4fe",
 ]
 
 E = lambda x: html.escape(str(x))
@@ -1457,8 +1058,7 @@ def squarify(
     return out
 
 
-def render_svg(rep: dict[str, Any], out: pathlib.Path) -> None:
-    "Render svg."
+def render_svg(rep: dict[str, Any], out: Path) -> None:
     s = rep["summary"]
     W, H = 1920, 1980
     svg: list[str] = [
@@ -1474,12 +1074,12 @@ def render_svg(rep: dict[str, Any], out: pathlib.Path) -> None:
         rect(0, 0, W, H, "url(#bg)"),
     ]
     svg += [
-        text(48, 62, "bin_oct  /  Python script similarity", 30, "#f1f5f9", font_weight="700"),
+        text(48, 62, "bin_oct  /  file similarity", 30, "#f1f5f9", font_weight="700"),
         text(
             48,
             92,
-            "Scripts that do nearly the same job are grouped together  ·  "
-            "IDF-weighted code + AST + API + CLI + purpose similarity",
+            "Files that do nearly the same job are grouped together  ·  "
+            "IDF-weighted token + AST (Python) + API + purpose similarity",
             15,
             "#94a3b8",
         ),
@@ -1488,7 +1088,7 @@ def render_svg(rep: dict[str, Any], out: pathlib.Path) -> None:
             W - 48,
             86,
             f"threshold {rep['method']['group_threshold']}  ·  "
-            f"{s['files_analyzed']} files  ·  {s['total_lines']:,} lines",
+            f"{s['files_analyzed']} files ({s['python_files']} Python)  ·  {s['total_lines']:,} lines",
             14,
             "#64748b",
             anchor="end",
@@ -1496,7 +1096,7 @@ def render_svg(rep: dict[str, Any], out: pathlib.Path) -> None:
         rect(48, 112, W - 96, 2, "#1e293b"),
     ]
     kpis = [
-        ("SCRIPTS", s["files_analyzed"], "#e2e8f0"),
+        ("FILES", s["files_analyzed"], "#e2e8f0"),
         ("GROUPS", s["groups"], "#5eead4"),
         ("IN A GROUP", s["files_in_groups"], "#93c5fd"),
         ("LARGEST GROUP", s["largest_group"], "#fcd34d"),
@@ -1520,37 +1120,25 @@ def render_svg(rep: dict[str, Any], out: pathlib.Path) -> None:
 
     groups = rep["groups"]
     frame(
-        48,
-        250,
-        1100,
-        690,
+        48, 250, 1100, 690,
         "Cluster map",
-        "each block = one group of scripts doing the same job · area ≈ number of scripts",
+        "each block = one group of files doing the same job · area ≈ number of files",
     )
     frame(
-        1172,
-        250,
-        700,
-        690,
+        1172, 250, 700, 690,
         "Similarity network",
         "top groups · each ring of nodes is a group · lines = strong pairwise similarity",
     )
     frame(
-        48,
-        962,
-        1100,
-        700,
+        48, 962, 1100, 700,
         "Similarity heatmap",
         "pairwise scores for the largest groups · blocks along the diagonal are the groups",
     )
     frame(1172, 962, 700, 700, "Strongest pairs & largest groups", "score = combined similarity")
     frame(
-        48,
-        1680,
-        W - 96,
-        240,
-        "Functional domains across all scripts",
-        "filename-derived job keywords · teal = scripts already in a group, grey = singletons",
+        48, 1680, W - 96, 240,
+        "Functional domains across all files",
+        "filename-derived job keywords · teal = files already in a group, grey = singletons",
     )
 
     shown = groups[:18]
@@ -1559,12 +1147,10 @@ def render_svg(rep: dict[str, Any], out: pathlib.Path) -> None:
     cells = squarify(sizes, 68, 320, 1060, 558)
     svg.append(
         text(
-            68,
-            908,
-            f"+ {len(other)} smaller groups ({sum(g['size'] for g in other)} scripts) "
+            68, 908,
+            f"+ {len(other)} smaller groups ({sum(g['size'] for g in other)} files) "
             f"and {s['singletons']} singletons — full list in similarity_report.json",
-            12,
-            "#64748b",
+            12, "#64748b",
         )
     )
     for key, x, y, w, h in cells:
@@ -1577,10 +1163,10 @@ def render_svg(rep: dict[str, Any], out: pathlib.Path) -> None:
             svg.append(text(x + 16, y + 46, "no close counterpart found", 11, "#64748b"))
         elif key == -2:
             svg.append(text(x + 16, y + 26, f"{len(other)} smaller groups", 15, "#94a3b8"))
-            svg.append(text(x + 16, y + 46, f"{sum(g['size'] for g in other)} scripts · see JSON", 11, "#64748b"))
+            svg.append(text(x + 16, y + 46, f"{sum(g['size'] for g in other)} files · see JSON", 11, "#64748b"))
         else:
             g = shown[key]
-            header = f"{g['id']} · {g['size']}" if w < 150 else f"{g['id']} · {g['size']} scripts"
+            header = f"{g['id']} · {g['size']}" if w < 150 else f"{g['id']} · {g['size']} files"
             svg.append(text(x + 14, y + 25, header, 13 if w < 150 else 14, col, font_weight="700"))
             if w < 118 or h < 62:
                 continue
@@ -1647,7 +1233,7 @@ def render_svg(rep: dict[str, Any], out: pathlib.Path) -> None:
         x, y = pos[nm]
         col = PALETTE[node_group[i] % len(PALETTE)]
         svg.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="4.2" fill="{col}" stroke="#0d1729" stroke-width="1"/>')
-    svg.append(text(cx, cy - 12, f"{N} scripts", 22, "#e2e8f0", anchor="middle", font_weight="700"))
+    svg.append(text(cx, cy - 12, f"{N} files", 22, "#e2e8f0", anchor="middle", font_weight="700"))
     svg.append(text(cx, cy + 14, f"{edges} strong links", 12, "#64748b", anchor="middle"))
 
     hm_groups = groups[:22]
@@ -1699,19 +1285,14 @@ def render_svg(rep: dict[str, Any], out: pathlib.Path) -> None:
                     hx - 10,
                     hy + i * cell + cell * 0.78,
                     nm if len(nm) <= 28 else nm[:27] + "…",
-                    fontsize,
-                    "#94a3b8",
-                    anchor="end",
+                    fontsize, "#94a3b8", anchor="end",
                 )
             )
     svg.append(
         text(
-            hx + m * cell,
-            hy + m * cell + 26,
-            f"{m} scripts from {len(bounds) - 1} groups · columns in the same order",
-            11,
-            "#64748b",
-            anchor="end",
+            hx + m * cell, hy + m * cell + 26,
+            f"{m} files from {len(bounds) - 1} groups · columns in the same order",
+            11, "#64748b", anchor="end",
         )
     )
     lx, ly = 70, 1040
@@ -1755,7 +1336,7 @@ def render_svg(rep: dict[str, Any], out: pathlib.Path) -> None:
             svg.append(rect(bx + 108, by, total_w, 13, "#2b3b55", rx=3))
             if grouped_w > 0:
                 svg.append(rect(bx + 108, by, grouped_w, 13, PALETTE[col % len(PALETTE)], rx=3))
-            svg.append(text(bx + 416, by + 11, f"{d['scripts']:>2} scripts · {d['in_groups']} grouped", 10, "#94a3b8"))
+            svg.append(text(bx + 416, by + 11, f"{d['scripts']:>2} files · {d['in_groups']} grouped", 10, "#94a3b8"))
 
     svg.append(rect(48, H - 52, W - 96, 1, "#1e293b"))
     svg.append(
@@ -1763,10 +1344,9 @@ def render_svg(rep: dict[str, Any], out: pathlib.Path) -> None:
             48,
             H - 24,
             "score = code duplication (shingles, AST, API) blended with purpose (imports, CLI, names)"
-            "   |   static analysis only — no script was executed"
+            "   |   static analysis only — no file was executed"
             "   |   see similarity_report.json for full data",
-            12,
-            "#64748b",
+            12, "#64748b",
         )
     )
     svg.append("</svg>")
@@ -1782,20 +1362,26 @@ app = typer.Typer(
 
 @app.command()
 def main(
-    root: Annotated[pathlib.Path, typer.Option("--root", help="repository root")] = ROOT,
-    out_dir: Annotated[pathlib.Path, typer.Option("--out-dir")] = pathlib.Path(__file__).resolve().parent,
+    root: Annotated[Path, typer.Option("--root", help="root directory to walk recursively")] = ROOT,
+    out_dir: Annotated[Path, typer.Option("--out-dir")] = Path.cwd().resolve(),
     threshold: Annotated[
-        float, typer.Option("--threshold", help="minimum score for two scripts to share a group")
-    ] = 0.55,
+        float, typer.Option("--threshold", help="minimum score for two files to share a group")
+    ] = 0.25,
+    workers: Annotated[
+        int, typer.Option("--workers", "-j", help="number of worker processes (default: cpu count)")
+    ] = 0,
     no_svg: Annotated[bool, typer.Option("--no-svg")] = False,
-    no_md: Annotated[bool, typer.Option("--no-md")] = False,
-) -> int:
-    "Run the command-line interface."
-    args = SimpleNamespace(root=root, out_dir=out_dir, threshold=threshold, no_svg=no_svg, no_md=no_md)
+    no_md: Annotated[bool, typer.Option("--no-md")] = True,
+) -> None:
+    args = SimpleNamespace(
+        root=root, out_dir=out_dir, threshold=threshold, workers=workers, no_svg=no_svg, no_md=no_md,
+    )
 
-    out_dir: pathlib.Path = args.out_dir
+    out_dir: Path = args.out_dir
     out_dir.mkdir(parents=True, exist_ok=True)
-    rep = build_report(args.root.resolve(), args.threshold)
+
+    w = args.workers if args.workers and args.workers > 0 else (os.cpu_count() or 1)
+    rep = build_report(args.root.resolve(), args.threshold, w)
 
     jp = out_dir / "similarity_report.json"
     jp.write_text(json.dumps(rep, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
@@ -1811,10 +1397,10 @@ def main(
     s = rep["summary"]
     print(
         f"done: {s['groups']} groups covering {s['files_in_groups']}/{s['files_analyzed']} "
-        f"scripts; {s['singletons']} singletons",
+        f"files; {s['singletons']} singletons "
+        f"({s['python_files']} Python, {s['non_python_files']} other)",
         flush=True,
     )
-    return
 
 
 if __name__ == "__main__":
