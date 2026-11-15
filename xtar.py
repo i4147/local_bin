@@ -1,4 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/env python
+"Extract supported archives; originals are removed after successful extraction."
+
 import argparse
 import gzip
 import io
@@ -76,6 +78,7 @@ ARCHIVE_ERRORS: tuple[type[BaseException], ...] = (
 
 
 def get_compression_type(path: Path) -> str | None:
+    "Return compression type."
     name: str = path.name.lower()
     for suffix, compression_type in SUFFIX_TYPES:
         if name.endswith(suffix):
@@ -84,7 +87,10 @@ def get_compression_type(path: Path) -> str | None:
 
 
 class BrotliStreamReader(io.RawIOBase):
+    "Provide a raw I/O stream for decompression."
+
     def __init__(self, source: BinaryIO) -> None:
+        "Initialize the instance state from the supplied arguments."
         super().__init__()
         self._source: BinaryIO = source
         self._decompressor: brotli.Decompressor = brotli.Decompressor()
@@ -150,6 +156,7 @@ def decompression_stream(path: Path, compression_type: str) -> Iterator[BinaryIO
 
 @contextmanager
 def open_tar(path: Path, compression_type: str) -> Iterator[tarfile.TarFile]:
+    "Open tar."
     mode: str | None = TARFILE_MODES.get(compression_type)
     if mode is not None:
         with tarfile.open(path, mode) as tar:
@@ -161,6 +168,7 @@ def open_tar(path: Path, compression_type: str) -> Iterator[tarfile.TarFile]:
 
 
 def check_integrity(archive_path: Path) -> bool:
+    "Check integrity."
     compression_type: str | None = get_compression_type(archive_path)
     if compression_type is None:
         return False
@@ -186,6 +194,7 @@ def check_integrity(archive_path: Path) -> bool:
 
 
 def scan_archives(directory: Path) -> list[Path]:
+    "Scan archives."
     found: set[Path] = set()
     for pattern in SUPPORTED_EXTENSIONS:
         found.update(path for path in directory.rglob(f"*{pattern}") if path.is_file())
@@ -208,6 +217,7 @@ def nested_candidates(extract_dir: Path, names: list[str]) -> list[Path]:
 
 
 def extract_archive(archive_path: Path) -> bool:
+    "Extract archive."
     archive_path = Path(archive_path)
     if not archive_path.exists():
         return False
@@ -254,10 +264,12 @@ def extract_archive(archive_path: Path) -> bool:
 
 
 def find_archives(directory: str = ".") -> list[Path]:
+    "Find archives."
     return scan_archives(Path(directory))
 
 
 def main() -> None:
+    "Run the command-line interface."
     parser: argparse.ArgumentParser = argparse.ArgumentParser(
         description="Extract supported archives; originals are removed after successful extraction."
     )
@@ -290,4 +302,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

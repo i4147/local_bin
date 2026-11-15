@@ -1,5 +1,7 @@
 #!/data/data/com.termux/files/usr/bin/env python
 
+"Strip comments and docstrings from Python files safely. Shebangs, module docstrings, tool directives, and commented-out code are always preserved."
+
 import argparse
 import ast
 import concurrent.futures as cf
@@ -58,17 +60,23 @@ _COOKIE_RE_BYTES: Final = re.compile(rb"coding[:=]\s*[-\w.]+")
 
 
 class SkipFile(Exception):
+    "Signal an error raised by this module."
+
     pass
 
 
 @dataclass(frozen=True, slots=True)
 class Mode:
+    "Store comments, docstrings."
+
     comments: bool
     docstrings: bool
 
 
 @dataclass(slots=True)
 class StripFileResult:
+    "Store path, saved, modified, error, elapsed and related state."
+
     path: Path
     saved: int = 0
     modified: bool = False
@@ -106,14 +114,13 @@ def _looks_like_code(values: Iterable[str]) -> bool:
 
 class Stripper(cst.CSTTransformer):
     def __init__(self, mode: Mode, *, remove_blank_lines: bool = False) -> None:
+        "Initialize the instance state from the supplied arguments."
         super().__init__()
         self._mode = mode
         self._remove_blank_lines = remove_blank_lines
         self._doc_suites: set[int] = set()
 
-    def on_leave(
-        self, original_node: N, updated_node: N
-    ) -> N | cst.RemovalSentinel | cst.FlattenSentinel[N]:
+    def on_leave(self, original_node: N, updated_node: N) -> N | cst.RemovalSentinel | cst.FlattenSentinel[N]:
         result = super().on_leave(original_node, updated_node)
         if not self._mode.comments or not isinstance(result, cst.CSTNode):
             return result
@@ -290,6 +297,7 @@ class Stripper(cst.CSTTransformer):
         backup: bool = False,
         show_diff: bool = False,
     ) -> StripFileResult:
+        "Strip file."
         started = perf_counter()
         result = StripFileResult(path)
         try:
@@ -332,6 +340,7 @@ class Stripper(cst.CSTTransformer):
 
 
 def make_diff(before: str, after: str, name: str) -> str:
+    "Create diff."
     output: list[str] = []
     for line in difflib.unified_diff(
         before.splitlines(keepends=True),
@@ -346,6 +355,7 @@ def make_diff(before: str, after: str, name: str) -> str:
 
 
 def create_backup(path: Path, original: bytes) -> Path:
+    "Create backup."
     backup = path.with_name(path.name + ".bak")
     with backup.open("xb") as stream:
         try:
@@ -360,6 +370,7 @@ def create_backup(path: Path, original: bytes) -> Path:
 
 
 def remove_blank_lines(source: str) -> str:
+    "Remove blank lines."
     protected: set[int] = set()
     for token in tokenize.generate_tokens(io.StringIO(source).readline):
         if token.start[0] != token.end[0]:
@@ -380,6 +391,8 @@ def remove_blank_lines(source: str) -> str:
 
 @dataclass(frozen=True)
 class FileOptions:
+    "Store comments, docstrings, blank_lines, dryrun, backup and related state."
+
     comments: bool = False
     docstrings: bool = False
     blank_lines: bool = False
@@ -390,6 +403,8 @@ class FileOptions:
 
 @dataclass(frozen=True)
 class Task:
+    "Store path, options."
+
     path: Path
     options: FileOptions
 
@@ -403,6 +418,7 @@ def _init_worker() -> None:
 
 
 def process_file(task: Task) -> StripFileResult:
+    "Process file."
     started = perf_counter()
     path, options = task.path, task.options
     try:
@@ -427,6 +443,7 @@ def process_file(task: Task) -> StripFileResult:
 
 
 def run_tasks(tasks: list[Task], workers: int, chunksize: int | None = None) -> Iterator[StripFileResult]:
+    "Run tasks."
     if not tasks:
         return
     workers = min(workers, len(tasks))
@@ -440,11 +457,15 @@ def run_tasks(tasks: list[Task], workers: int, chunksize: int | None = None) -> 
 
 
 class WalkFiles(Protocol):
-    def __call__(self, root: str | Path, /) -> list[Path]: ...
+    def __call__(self, root: str | Path, /) -> list[Path]:
+        "Invoke the behavior represented by this object."
+        ...
 
 
 @dataclass(frozen=True, slots=True)
 class DiscoveryIssue:
+    "Store path, error."
+
     path: Path
     error: str
 
@@ -457,10 +478,12 @@ def record_discovery_error(path: Path, exc: Exception, issues: list[DiscoveryIss
 
 
 def is_skip_dir(path: Path) -> bool:
+    "Return whether skip dir."
     return path.name in SKIP_DIRS or path.name.endswith(".egg-info")
 
 
 def is_python_file(path: Path, issues: list[DiscoveryIssue] | None = None) -> bool:
+    "Return whether python file."
     if path.suffix.lower() == ".py":
         return True
     if path.suffix:
@@ -497,6 +520,7 @@ def is_python_file(path: Path, issues: list[DiscoveryIssue] | None = None) -> bo
 
 
 def is_excluded(path: Path, root: Path, patterns: tuple[str, ...]) -> bool:
+    "Return whether excluded."
     if not patterns:
         return False
     try:
@@ -566,6 +590,7 @@ def iter_python_files(
     excludes: tuple[str, ...] = (),
     issues: list[DiscoveryIssue] | None = None,
 ) -> Iterator[Path]:
+    "Yield python files from the supplied input."
     root_dir = Path(Path(root_dir.expanduser()).absolute())
     mode = root_dir.lstat().st_mode
     if stat.S_ISLNK(mode):
@@ -607,6 +632,7 @@ def iter_input_files(
     excludes: tuple[str, ...] = (),
     issues: list[DiscoveryIssue] | None = None,
 ) -> Iterator[Path]:
+    "Yield input files from the supplied input."
     seen: set[Path] = set()
     for input_path in inputs:
         try:
@@ -628,6 +654,7 @@ def iter_input_files(
 
 
 def write_json_report(path: Path, report: dict[str, object]) -> None:
+    "Write json report."
     data = (json.dumps(report, indent=2, ensure_ascii=False) + "\n").encode("utf-8")
     fd, name = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
     temporary = Path(name)
@@ -661,6 +688,7 @@ def colorize_diff(diff: str, color: bool) -> str:
 
 
 def make_rich_ui(color_mode: str) -> tuple[Progress, Callable[[str], None]]:
+    "Create rich ui."
     from rich.console import Console
     from rich.progress import BarColumn
     from rich.progress import Progress as RichProgress
@@ -688,6 +716,7 @@ def make_rich_ui(color_mode: str) -> tuple[Progress, Callable[[str], None]]:
 
 
 def build_parser() -> argparse.ArgumentParser:
+    "Build parser."
     parser = argparse.ArgumentParser(
         description=(
             "Strip comments and docstrings from Python files safely. Shebangs, "
@@ -769,6 +798,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def configure_logging(args: argparse.Namespace, emit: Callable[[str], None] | None) -> bool:
+    "Configure logging."
     logger.remove()
     logger.configure(extra={"traceback": "", "file_path": ""})
     log_format = "<level>{level: <7}</level> | {message}"
@@ -809,6 +839,7 @@ def configure_logging(args: argparse.Namespace, emit: Callable[[str], None] | No
 
 
 def main() -> int:
+    "Run the command-line interface."
     parser = build_parser()
     args = parser.parse_intermixed_args()
     # -a is shorthand for -c -d.

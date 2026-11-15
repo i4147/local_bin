@@ -1,5 +1,7 @@
 #!/data/data/com.termux/files/usr/bin/env python
 
+"Utilities for csshtmlpret."
+
 import itertools
 import os
 import re
@@ -69,6 +71,7 @@ def _props_grouper(props, pgs):
 
 
 def sort_properties(css_unsorted_string: str) -> str:
+    "Sort properties."
     css_pgs = _compile_props(CSS_PROPS_TEXT, grouped=bool(args.group))
     pattern = re.compile(r"(.*?{\r?\n?)(.*?)(}.*?)|(.*)", re.DOTALL + re.MULTILINE)
     matched_patterns = pattern.findall(css_unsorted_string)
@@ -88,6 +91,7 @@ def sort_properties(css_unsorted_string: str) -> str:
 
 
 def remove_empty_rules(css: str) -> str:
+    "Remove empty rules."
     return re.sub(r"[^\}\{]+\{\}", "", css)
 
 
@@ -104,6 +108,7 @@ def condense_semicolons(css: str) -> str:
 
 
 def wrap_css_lines(css: str, line_length: int = 80) -> str:
+    "Wrap css lines."
     print(f"Wrapping lines to ~{line_length} max line lenght.")
     lines, line_start = ([], 0)
     for i, char in enumerate(css):
@@ -116,10 +121,12 @@ def wrap_css_lines(css: str, line_length: int = 80) -> str:
 
 
 def add_encoding(css: str) -> str:
+    "Add encoding."
     return "@charset utf-8;\n\n\n" + css if "@charset" not in css else css
 
 
 def normalize_whitespace(css: str) -> str:
+    "Normalize whitespace."
     css_no_trailing_whitespace = ""
     for line_of_css in css.splitlines():
         css_no_trailing_whitespace += line_of_css.rstrip() + "\n"
@@ -161,6 +168,7 @@ def justify_right(css: str) -> str:
 
 
 def split_long_selectors(css: str) -> str:
+    "Split long selectors."
     result = ""
     for line in css.splitlines():
         cond_1 = len(line) > 80 and "," in line and line.strip().endswith("{")
@@ -236,6 +244,7 @@ def walk2list(
 
 
 def process_multiple_files(path) -> None:
+    "Process multiple files."
     path = Path(path)
     print(f"Process {os.getpid()} is processing {path}.")
     if args.watch:
@@ -267,6 +276,7 @@ def prefixer_extensioner(path: str) -> str:
 
 
 def process_single_css_file(css_path: str) -> str:
+    "Process single css file."
     global args
     original_css = Path(css_path).read_text(encoding="utf-8-sig")
     pretty_css = css_prettify(original_css, args.justify, args.extraline)
@@ -279,6 +289,7 @@ def process_single_css_file(css_path: str) -> str:
 
 
 def process_single_html_file(html_path: str) -> str:
+    "Process single html file."
     with Path(html_path).open(encoding="utf-8-sig") as html_file:
         pretty_html = html_prettify(html_file.read(), args.extraline)
     html_path = prefixer_extensioner(html_path)
@@ -287,6 +298,7 @@ def process_single_html_file(html_path: str) -> str:
 
 
 def make_arguments_parser() -> Namespace:
+    "Create arguments parser."
     parser = ArgumentParser(
         description=__doc__,
         epilog="CSS-HTML-Prettify:\n    Takes file or folder full path string and process all CSS/SCSS/HTML found.\n    If argument is not file/folder will fail. Check Updates works on Python3.\n    StdIn to StdOut is deprecated since may fail with unicode characters.\n    CSS Properties are AlphaSorted,to help spot cloned ones,Selectors not.\n    Watch works for whole folders, with minimum of ~60 Secs between runs.",
@@ -333,6 +345,7 @@ def make_arguments_parser() -> Namespace:
 
 
 def main() -> None:
+    "Run the command-line interface."
     make_arguments_parser()
     global log
     if args.before and getoutput:

@@ -32,6 +32,8 @@ HIGH_ENTROPY_MIN_LEN: int = 20
 
 @dataclass
 class UsageRecord:
+    "Store key, source_file, line, is_read, is_write and related state."
+
     key: str
     source_file: str
     line: int
@@ -44,6 +46,8 @@ class UsageRecord:
 
 @dataclass
 class Finding:
+    "Store code, message, severity, key, file and related state."
+
     code: str
     message: str
     severity: str  # error, warning, info
@@ -96,6 +100,7 @@ def parse_dotenv(content: str) -> dict[str, str]:
 # --- AST Usage Visitor ---
 class UsageVisitor(ast.NodeVisitor):
     def __init__(self, filepath: str):
+        "Initialize the instance state from the supplied arguments."
         self.filepath = filepath
         self.usages: list[UsageRecord] = []
 
@@ -146,7 +151,7 @@ class UsageVisitor(ast.NodeVisitor):
             )
         )
 
-    def _handle_call_access(self, node: ast.Call):
+    def _handle_call_access(self, node: ast.Call) -> None:
         if not node.args:
             return
         key, is_dynamic = self._extract_key(node.args[0])
@@ -178,6 +183,7 @@ class UsageVisitor(ast.NodeVisitor):
 
 
 def scan_python_file(filepath: pathlib.Path) -> list[UsageRecord]:
+    "Scan python file."
     try:
         content = filepath.read_text(encoding="utf-8")
         tree = ast.parse(content, filename=str(filepath))
@@ -201,6 +207,7 @@ def scan_python_file(filepath: pathlib.Path) -> list[UsageRecord]:
 
 # --- CI & Config Scanner ---
 def scan_ci_files(root: pathlib.Path) -> set[str]:
+    "Scan ci files."
     keys: set[str] = set()
     wf_dir = root / ".github" / "workflows"
     if wf_dir.exists():
@@ -250,6 +257,7 @@ def _extract_keys_from_dockerfile(content: str) -> set[str]:
 
 # --- Secrets Detection ---
 def check_secrets(root: pathlib.Path, env_path: pathlib.Path) -> list[Finding]:
+    "Check secrets."
     findings: list[Finding] = []
     if not env_path.exists():
         return findings
@@ -406,7 +414,8 @@ def reconcile(
 
 
 # --- CLI & Main Logic ---
-def main():
+def main() -> None:
+    "Run the command-line interface."
     parser = argparse.ArgumentParser(description="env-audit: Reconcile .env, .env.example, CI, and Python code.")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -507,4 +516,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

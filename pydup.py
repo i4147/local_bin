@@ -1,5 +1,7 @@
 #!/data/data/com.termux/files/usr/bin/env python
 
+"Find duplicate Python files, definitions, and near-duplicates using normalized AST fingerprints."
+
 import argparse
 import ast
 import csv
@@ -109,6 +111,8 @@ def _digest(data: bytes) -> str:
 
 @dataclass(slots=True)
 class FileEntry:
+    "Store path, size, mtime_ns, ino, dev."
+
     path: Path
     size: int
     mtime_ns: int
@@ -118,6 +122,8 @@ class FileEntry:
 
 @dataclass(slots=True, frozen=True)
 class DefinitionRef:
+    "Store digest, path, lineno, name, kind."
+
     digest: str
     path: str
     lineno: int
@@ -140,6 +146,8 @@ class DefinitionRef:
 
 @dataclass(slots=True)
 class WorkerResult:
+    "Store path, digest, error, skipped, ast_hash and related state."
+
     path: str
     digest: str | None = None
     error: str | None = None
@@ -178,6 +186,8 @@ class WorkerResult:
 
 @dataclass(slots=True)
 class DuplicateGroup:
+    "Store digest, paths, sizes, keeper."
+
     digest: str
     paths: list[Path]
     sizes: dict[str, int]
@@ -186,18 +196,24 @@ class DuplicateGroup:
 
 @dataclass(slots=True)
 class NearPair:
+    "Store paths, similarity."
+
     paths: tuple[str, str]
     similarity: float
 
 
 @dataclass(slots=True)
 class DefinitionGroup:
+    "Store digest, members."
+
     digest: str
     members: list[DefinitionRef]
 
 
 @dataclass(slots=True)
 class SimilarPair:
+    "Store paths, score, method."
+
     paths: tuple[str, str]
     score: int
     method: str
@@ -205,6 +221,8 @@ class SimilarPair:
 
 @dataclass(slots=True)
 class RunStats:
+    "Store scanned, parsed, cache_hits, skipped, failures and related state."
+
     scanned: int = 0
     parsed: int = 0
     cache_hits: int = 0
@@ -218,6 +236,8 @@ class RunStats:
 
 @dataclass(slots=True)
 class ScanOutcome:
+    "Store entries, groups, near_pairs, definition_groups, similar_pairs and related state."
+
     entries: dict[str, FileEntry]
     groups: list[DuplicateGroup]
     near_pairs: list[NearPair]
@@ -229,6 +249,8 @@ class ScanOutcome:
 
 @dataclass(slots=True)
 class CacheEntry:
+    "Store mtime_ns, size, digest, ast_hash, token_hash and related state."
+
     mtime_ns: int
     size: int
     digest: str
@@ -242,6 +264,8 @@ class CacheEntry:
 
 @dataclass(frozen=True, slots=True)
 class WorkerConfig:
+    "Store mode, ignore_imports, skip_empty, min_lines, need_ngrams and related state."
+
     mode: str
     ignore_imports: bool
     skip_empty: bool
@@ -274,6 +298,8 @@ class WorkerConfig:
 
 @dataclass(slots=True)
 class ScanConfig:
+    "Store follow_symlinks, include_notebooks, min_bytes, exclude_patterns."
+
     follow_symlinks: bool
     include_notebooks: bool
     min_bytes: int
@@ -282,6 +308,7 @@ class ScanConfig:
 
 class SourceNormalizer(ast.NodeTransformer):
     def __init__(self, strip_annotations: bool, strip_type_nodes: bool) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.strip_annotations = strip_annotations
         self.strip_type_nodes = strip_type_nodes
 
@@ -392,6 +419,7 @@ class SourceNormalizer(ast.NodeTransformer):
 
 class _SimpleGitignore:
     def __init__(self, patterns: Sequence[str]) -> None:
+        "Initialize the instance state from the supplied arguments."
         self._rules: list[tuple[bool, bool, re.Pattern[str]]] = []
         for raw in patterns:
             line = raw.strip()
@@ -449,6 +477,7 @@ class _SimpleGitignore:
 
 class _PathMatcher:
     def __init__(self, patterns: Sequence[str], gitignore_style: bool) -> None:
+        "Initialize the instance state from the supplied arguments."
         cleaned = [p for p in patterns if p.strip() and not p.strip().startswith("#")]
         self._simple: _SimpleGitignore | None = None
         self._spec: Any = None
@@ -538,6 +567,7 @@ def _is_candidate_file(name: str, include_notebooks: bool) -> bool:
 
 
 def get_pyfiles(root: Path, cfg: ScanConfig) -> tuple[list[Path], list[ScanIssue]]:
+    "Return pyfiles."
     found: list[Path] = []
     issues: list[ScanIssue] = []
     root_filter = _build_root_filter(root, cfg)
@@ -825,6 +855,7 @@ def _simhash64(shingles: set[int]) -> int | None:
 
 
 def process_file(path_text: str, cfg: WorkerConfig) -> WorkerResult:
+    "Process file."
     path = Path(path_text)
     try:
         raw = path.read_bytes()
@@ -1055,6 +1086,7 @@ def process_files(
     show_progress: bool,
     method: str = "cf.ProcessPoolExecutor",
 ) -> tuple[list[WorkerResult], int]:
+    "Process files."
     pending: list[FileEntry] = []
     results: list[WorkerResult] = []
     cache_hits = 0
@@ -1107,6 +1139,7 @@ def process_files(
         width = 0
 
         def update_progress() -> None:
+            "Update progress."
             nonlocal completed, width
             completed += 1
             width = _print_progress_line(f"Processing Python files: {completed}/{total}", width)
@@ -2830,6 +2863,7 @@ def _watch(args: argparse.Namespace) -> int:
     pending: threading.Timer | None = None
 
     def run_scan() -> None:
+        "Run scan."
         try:
             outcome = _scan(args)
             if outcome is None:
@@ -2913,6 +2947,7 @@ def _run(args: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    "Run the command-line interface."
     args = _parse_args(argv)
     _configure_logging(args.verbose, args.quiet, args.log_format)
     try:

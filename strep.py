@@ -1,4 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/env python
+"Utilities for strep."
+
 import re
 import sys
 import tempfile
@@ -14,12 +16,14 @@ console = Console()
 
 
 def process_file(path: Path) -> int:
+    "Process file."
     before = path.stat().st_size
     runcmd(["strip", str(path)], show_output=True)
     return before - path.stat().st_size
 
 
 def process_whl(whl_path: Path) -> int:
+    "Process whl."
     before = whl_path.stat().st_size
     with tempfile.TemporaryDirectory() as tmpdir:
         tmpdir_path = Path(tmpdir)
@@ -36,6 +40,7 @@ def process_whl(whl_path: Path) -> int:
 
 
 def collect_files(cwd: Path, args: list[str]) -> list[Path]:
+    "Collect files."
     if args:
         return [Path(p) for p in args]
     so_files = [p for p in cwd.rglob("*") if SO_RE.search(p.name) and p.is_file()]
@@ -44,12 +49,14 @@ def collect_files(cwd: Path, args: list[str]) -> list[Path]:
 
 
 def has_so(path: str | Path) -> bool:
+    "Return whether so."
     path = Path(path)
     with ZipFile(path, "r") as zf:
         return any(SO_RE.search(name) for name in zf.namelist())
 
 
 def print_row(idx: int, total: int, name: str, saved: int) -> None:
+    "Print row."
     idx_str = f"[{idx}/{total}]"
     saved_str = str(saved)
     name_width = max(console.width - len(idx_str) - len(saved_str) - 4, 10)

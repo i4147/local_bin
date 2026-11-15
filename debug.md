@@ -14,7 +14,7 @@ Identify how the project expects code to be run and tested.
   note that it was skipped for that reason and continue with other checks.
 - Make the smallest targeted changes that resolve confirmed errors.
   Avoid unrelated refactoring, formatting changes, or feature additions.
-- Preserve intended behavior and existing APIs.
+- Preserve intended behavior and existing API s.
   If the intended behavior is unclear, don’t guess—flag the issue for me.
 - Add or update tests when practical to cover each fix.
   Don’t weaken or delete tests just to make them pass.

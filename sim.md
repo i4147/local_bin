@@ -1,7 +1,7 @@
 Analyze all Python files in this repository recursively for similarity
 and overlapping functionality.
 Do not modify source files.
-First, inspect the repository structure and identify generated, vendored, virtual-environment,
+First, inspect the repository structure and identify generated, vendor ed, virtual-environment,
 build, and cache directories to exclude.
 Respect existing ignore files and project conventions where applicable.
 Include the exclusions and analysis method in the report.

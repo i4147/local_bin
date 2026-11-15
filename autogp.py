@@ -1,4 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/env python
+"Auto format Python files and auto commit/push in a git repo."
+
 import argparse
 import concurrent.futures
 from datetime import datetime
@@ -28,6 +30,7 @@ DEFAULT_GITIGNORE_CONTENT = "\n.vscode/\n.idea/\n*.swp\n*.swo\n*.sublime-project
 
 
 def load_config() -> dict:
+    "Load config."
     cfg = DEFAULT_CONFIG.copy()
     if CONFIG_PATH.exists():
         try:
@@ -41,6 +44,7 @@ def load_config() -> dict:
 
 
 def setup_logging(level_name: str):
+    "Set up logging."
     level = getattr(logging, level_name.upper(), logging.INFO)
     logging.basicConfig(level=level, format="%(asctime)s %(levelname)-5s %(name)s: %(message)s")
 
@@ -48,6 +52,7 @@ def setup_logging(level_name: str):
 def run_cmd(
     cmd: list[str], cwd: Path | None = None, capture: bool = False, check: bool = False
 ) -> subprocess.CompletedProcess:
+    "Run cmd."
     LOG.debug("Running: %s (cwd=%s)", " ".join(cmd), cwd)
     try:
         return subprocess.run(
@@ -64,6 +69,7 @@ def run_cmd(
 
 
 def is_inside_git_repo() -> bool:
+    "Return whether inside git repo."
     try:
         res = run_cmd(["git", "rev-parse", "--is-inside-work-tree"], capture=True)
         return res.returncode == 0 and (res.stdout or "").strip() == "true"
@@ -82,6 +88,7 @@ def git_repo_root() -> Path | None:
 
 
 def is_repo_clean(repo_root: Path) -> bool:
+    "Return whether repo clean."
     try:
         unstaged = run_cmd(["git", "diff", "--quiet"], cwd=repo_root)
         staged = run_cmd(["git", "diff", "--cached", "--quiet"], cwd=repo_root)
@@ -116,6 +123,7 @@ def staged_changes_only_whitespace(repo_root: Path) -> bool:
 
 
 def read_lines_safe(path: Path) -> list[str]:
+    "Read lines safe."
     try:
         with path.open("r", encoding="utf-8") as fh:
             return [ln.rstrip("\n") for ln in fh]
@@ -124,6 +132,7 @@ def read_lines_safe(path: Path) -> list[str]:
 
 
 def write_lines_safe(path: Path, lines: list[str]):
+    "Write lines safe."
     try:
         with path.open("w", encoding="utf-8") as fh:
             fh.write("\n".join(lines) + ("\n" if lines else ""))
@@ -132,6 +141,7 @@ def write_lines_safe(path: Path, lines: list[str]):
 
 
 def ensure_gitignore(repo_root: Path):
+    "Ensure gitignore."
     repo_gitignore = repo_root / ".gitignore"
     repo_lines = read_lines_safe(repo_gitignore) if repo_gitignore.exists() else []
     global_lines = read_lines_safe(GLOBAL_GITIGNORE) if GLOBAL_GITIGNORE.exists() else []
@@ -149,6 +159,7 @@ def ensure_gitignore(repo_root: Path):
 
 
 def iter_files(repo_root: Path, skip_dirs: set[str]) -> list[Path]:
+    "Yield files from the supplied input."
     files = []
     for root, dirs, filenames in os.walk(repo_root):
         dirs[:] = [d for d in dirs if d not in skip_dirs]
@@ -167,6 +178,7 @@ def looks_like_python_by_shebang(p: Path) -> bool:
 
 
 def check_py_compile(path_str: str) -> bool:
+    "Check py compile."
     try:
         res = subprocess.run(
             [sys.executable, "-m", "py_compile", path_str], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
@@ -177,6 +189,7 @@ def check_py_compile(path_str: str) -> bool:
 
 
 def detect_python_files(repo_root: Path, skip_dirs: set[str], cfg: dict) -> list[Path]:
+    "Detect python files."
     LOG.info("Scanning for python files...")
     all_candidates = iter_files(repo_root, skip_dirs)
     py_files: set[Path] = set()
@@ -212,6 +225,7 @@ def detect_python_files(repo_root: Path, skip_dirs: set[str], cfg: dict) -> list
 
 
 def run_black_on_files(repo_root: Path, files: list[Path], cfg: dict) -> bool:
+    "Run black on files."
     if not files:
         LOG.info("No python files to format.")
         return True
@@ -311,7 +325,8 @@ def git_commit_and_push(repo_root: Path, cfg: dict) -> bool:
 PRECOMMIT_YAML = "repos:\n  - repo: https://github.com/psf/black\n    rev: stable\n    hooks:\n      - id: black\n"
 
 
-def ensure_precommit(repo_root: Path, cfg: dict):
+def ensure_precommit(repo_root: Path, cfg: dict) -> None:
+    "Ensure precommit."
     if not cfg.get("precommit", True):
         LOG.debug("Pre-commit disabled in config.")
         return
@@ -336,6 +351,7 @@ def ensure_precommit(repo_root: Path, cfg: dict):
 
 
 def main(argv=None) -> int:
+    "Run the command-line interface."
     cfg = load_config()
     parser = argparse.ArgumentParser(
         prog="auto-git-fmt", description="Auto format Python files and auto commit/push in a git repo."

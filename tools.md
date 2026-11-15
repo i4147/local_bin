@@ -27,6 +27,6 @@ Don’t install or upgrade tools or dependencies unless I explicitly approve it.
 - Do not modify Python source files or project configuration.
   Only create the requested reports.
 - Do not suppress or fix diagnostics.
-  Preserve the tools’ output so the reports reflect what they actually found.
+  Preserve the tools output so the reports reflect what they actually found.
 After running the tools, summarize which ones ran, where each report was saved,
 and any tools that were unavailable or encountered errors.

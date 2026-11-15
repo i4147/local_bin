@@ -21,7 +21,7 @@ For every refactored file, identical before and after:
 2. `--help` output content (formatting may differ; every option + description must
    still be present and accurate).
 3. Exit codes on success, invalid args, `--help`, `--version`.
-4. Env-var handling (argparse env patterns, click `envvar=`).
+4. Env-var handling (argparse env patterns, click `env-var=`).
 5. Prompts/confirmations.
 6. Still runnable as `python path/to/file.py ...`, via existing shebang, and via any
    existing console entry point.
@@ -110,7 +110,7 @@ Everything else: record in the ledger and keep going.
 - `@click.option(...)` → move names/default/help/type into `typer.Option(...)` + a
   type annotation.
 - `@click.argument(...)` → `typer.Argument(...)`.
-- `click.echo/style/secho/confirm/prompt/progressbar` → the `typer.*` equivalents.
+- `click.echo/style/echo/confirm/prompt/progressbar` → the `typer.*` equivalents.
 - `@click.pass_context` + `ctx` → add `ctx: typer.Context` as the first parameter.
 - `@click.pass_obj` / `ctx.obj` → use `ctx: typer.Context` and `ctx.obj`; if it
   becomes invasive, mark `SKIPPED-NEEDS-REVIEW` and continue.

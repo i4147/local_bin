@@ -1,5 +1,7 @@
 #!/data/data/com.termux/files/usr/bin/env python
 
+"Consolidate a pure-Python package or script into a single self-contained file."
+
 import argparse
 import ast
 import base64
@@ -62,20 +64,27 @@ _ENTRY_CANDIDATES: tuple[str, ...] = ("main", "cli", "app", "run")
 
 
 class ConsolidatorError(Exception):
+    "Signal an error raised by this module."
+
     pass
 
 
 @dataclass(frozen=True, slots=True)
 class PlanWarning:
+    "Store kind, message."
+
     kind: str
     message: str
 
     def __str__(self) -> str:
+        "Return the object's display string."
         return f"[{self.kind}] {self.message}"
 
 
 @dataclass(frozen=True, slots=True)
 class BundledModule:
+    "Store name, source, is_package."
+
     name: str
     source: Path
     is_package: bool
@@ -104,6 +113,8 @@ class _ThirdPartyPackage:
 
 @dataclass
 class ConsolidationPlan:
+    "Store entry, entry_module, entry_archive, search_paths, modules and related state."
+
     entry: Path
     entry_module: str | None
     entry_archive: str | None
@@ -292,6 +303,7 @@ def _dynamic_import_target(func: ast.expr) -> str | None:
 
 class _ImportScanner(ast.NodeVisitor):
     def __init__(self, module_name: str, is_package: bool, filename: str) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.filename = filename
         if is_package:
             self.package = module_name
@@ -699,6 +711,7 @@ def analyze(
             embed_module(name, located.file, located.is_package)
 
     def handle_import(name: str, strict: bool, importer: str) -> None:
+        "Handle import."
         top = name.split(".")[0]
         if name in modules:
             return
@@ -745,6 +758,7 @@ def analyze(
             )
 
     def process_scan(result: _ScanResult, importer: str) -> None:
+        "Process scan."
         for note in result.notes:
             if note not in warnings:
                 warnings.append(note)
@@ -752,6 +766,7 @@ def analyze(
             handle_import(name, strict, importer)
 
     def ensure_main_module(pkg_dir: Path, pkg_module_name: str) -> None:
+        "Ensure main module."
         archive = f"{pkg_module_name.replace('.', '/')}/__main__.py"
         real_main = pkg_dir / "__main__.py"
         if main_module is not None:
@@ -1196,6 +1211,7 @@ def render(
 
 
 def write_output(text: str, output: str | Path | None) -> Path | None:
+    "Write output."
     if output is None or str(output) == "-":
         sys.stdout.write(text)
         return None
@@ -1271,6 +1287,7 @@ class _PackageDataAction(argparse.Action):
         values: object,
         option_string: str | None = None,
     ) -> None:
+        "Invoke the behavior represented by this object."
         names = list(values) if values else ["*"]  # type: ignore[arg-type]
         current = list(getattr(namespace, self.dest, None) or [])
         current.extend(names)
@@ -1289,6 +1306,7 @@ def _default_output_name(entry: str) -> str:
 
 
 def build_parser() -> argparse.ArgumentParser:
+    "Build parser."
     parser = argparse.ArgumentParser(
         prog="consolidator",
         description=("Consolidate a pure-Python package or script into a single self-contained file."),
@@ -1471,6 +1489,7 @@ examples:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    "Run the command-line interface."
     args = build_parser().parse_args(argv)
     if args.quiet:
         level = logging.ERROR

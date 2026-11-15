@@ -1,4 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/env python
+"Merge JSON files with matching schemas, including bilingual string dictionaries."
+
 import argparse
 import glob
 import json
@@ -41,6 +43,7 @@ def reject_nonstandard_constant(value: str) -> NoReturn:
 
 
 def read_json(path: Path) -> tuple[Any | None, str | None]:
+    "Read json."
     try:
         with path.open("rb") as file:
             file_size = os.fstat(file.fileno()).st_size
@@ -160,6 +163,7 @@ def new_output_path(directory: Path) -> Path:
 
 
 def write_json_exclusively(path: Path, value: Any, sort_keys: bool = False) -> None:
+    "Write json exclusively."
     created = False
     try:
         with path.open("x", encoding="utf-8", newline="\n") as file:
@@ -180,6 +184,7 @@ def write_json_exclusively(path: Path, value: Any, sort_keys: bool = False) -> N
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
+    "Parse args."
     parser = argparse.ArgumentParser(
         description="Merge JSON files with matching schemas, including bilingual string dictionaries."
     )
@@ -226,6 +231,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    "Run the command-line interface."
     args = parse_args(argv)
     input_paths, failed = expand_inputs(args.inputs)
 

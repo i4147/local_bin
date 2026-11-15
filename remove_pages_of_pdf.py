@@ -1,4 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/env python
+"Utilities for remove pages of pdf."
+
 from __future__ import annotations
 
 import importlib
@@ -107,6 +109,7 @@ def main(
     start: int = typer.Argument(..., min=1),
     end: int = typer.Argument(..., min=1),
 ) -> None:
+    "Run the command-line interface."
     if start > end:
         raise typer.BadParameter("start must be <= end")
 

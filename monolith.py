@@ -276,6 +276,7 @@ class _Rewriter(HTMLParser):
     """Streaming HTML rewriter that inlines external resources in place."""
 
     def __init__(self, ctx: "Monolith", base: str, depth: int) -> None:
+        "Initialize the instance state from the supplied arguments."
         super().__init__(convert_charrefs=True)
         self.ctx = ctx
         self._base = base
@@ -304,27 +305,33 @@ class _Rewriter(HTMLParser):
 
     # -- HTMLParser callbacks --------------------------------------------- #
     def handle_decl(self, decl: str) -> None:
+        "Handle decl."
         if self._skip_until:
             return
         self.out.append("<!%s>" % decl)
 
     def handle_comment(self, data: str) -> None:
+        "Handle comment."
         if self._skip_until:
             return
         self.out.append("<!--%s-->" % data)
 
     def handle_pi(self, data: str) -> None:
+        "Handle pi."
         if self._skip_until:
             return
         self.out.append("<?%s>" % data)
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        "Handle starttag."
         self._dispatch(tag, attrs, self_closing=False)
 
     def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        "Handle startendtag."
         self._dispatch(tag, attrs, self_closing=True)
 
     def handle_endtag(self, tag: str) -> None:
+        "Handle endtag."
         tag_l = tag.lower()
         if self._skip_until:
             if tag_l == self._skip_until:
@@ -343,6 +350,7 @@ class _Rewriter(HTMLParser):
         self.out.append("</%s>" % tag)
 
     def handle_data(self, data: str) -> None:
+        "Handle data."
         if self._skip_until:
             return
         if self._in_style:
@@ -548,6 +556,7 @@ class Monolith:
     """
 
     def __init__(self, url: str, *, fetcher: Fetcher | None = None) -> None:
+        "Initialize the instance state from the supplied arguments."
         self._url = url
         self._fetcher: Fetcher = fetcher or default_fetcher
         self._source_html: str | None = None
@@ -644,6 +653,7 @@ class Monolith:
         return self
 
     def make_dirs(self, value: bool = True) -> "Monolith":
+        "Create dirs."
         self._make_dirs = value
         return self
 
@@ -876,6 +886,7 @@ class Monolith:
 # CLI
 # --------------------------------------------------------------------------- #
 def build_parser() -> argparse.ArgumentParser:
+    "Build parser."
     p = argparse.ArgumentParser(
         prog="monolith",
         description=("Save a web page as a single self-contained HTML file (pure-stdlib port of Y2Z/monolith)."),
@@ -916,6 +927,7 @@ def _ansi(code: str, text: str, enabled: bool) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
+    "Run the command-line interface."
     args = build_parser().parse_args(argv)
     use_color = (not args.no_color) and sys.stderr.isatty()
     m = Monolith(args.url)
@@ -965,4 +977,4 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    raise SystemExit(main())

@@ -1,4 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/env python
+"📦 Recursively compress/decompress files using Brotli with parallel processing (deletes originals by default)"
+
 import argparse
 import hashlib
 import multiprocessing as mp
@@ -123,6 +125,7 @@ class ParallelBrotliCompressor:
         mode: int = brotli.MODE_GENERIC,
         progress_callback: Optional[Callable[[int, int], None]] = None,
     ) -> None:
+        "Initialize the instance state from the supplied arguments."
         if not 0 <= quality <= 11:
             raise ValueError("quality must be between 0 and 11")
         if chunk_size < 64 * 1024:
@@ -210,6 +213,8 @@ def _compress_worker(task: tuple[int, bytes, int, int]) -> tuple[int, bytes, int
 
 @dataclass
 class CompressionResult:
+    "Store file_path, original_size, processed_size, success, error and related state."
+
     file_path: Path
     original_size: int
     processed_size: int
@@ -223,6 +228,7 @@ class CompressionResult:
 
 
 def format_size(size_bytes: float) -> str:
+    "Format size."
     size: float = float(size_bytes)
     for unit in ["B", "KB", "MB", "GB", "TB"]:
         if size < 1024.0:
@@ -457,6 +463,7 @@ def untar_file(tar_path: Path, extract_dir: Path, delete_tar: bool = False) -> b
 
 
 def find_subdirs_to_tar(directories: Sequence[Path], exclude_patterns: Optional[list[str]] = None) -> list[Path]:
+    "Find subdirs to tar."
     patterns: list[str] = exclude_patterns or []
     subdirs: list[Path] = []
     for directory in directories:
@@ -474,6 +481,7 @@ def find_subdirs_to_tar(directories: Sequence[Path], exclude_patterns: Optional[
 
 
 def report_tar_result(result: CompressionResult, index: int, total: int) -> None:
+    "Report tar result."
     if result.success:
         ratio: float = (1 - result.processed_size / result.original_size) * 100 if result.original_size else 0.0
         print(f"  ✅ [{index}/{total}] {result.file_path.name} → {result.file_path.name}.br")
@@ -493,6 +501,7 @@ def process_subdirs_with_tar(
     chunk_size: int = DEFAULT_CHUNK_SIZE,
     verify: bool = False,
 ) -> list[CompressionResult]:
+    "Process subdirs with tar."
     results: list[CompressionResult] = []
     if not subdirs:
         print("📁 No subdirectories found to tar")
@@ -574,6 +583,7 @@ def find_files_to_compress(
     extensions_filter: Optional[Sequence[str]] = None,
     skip_subdirs: bool = False,
 ) -> list[Path]:
+    "Find files to compress."
     extensions: set[str] = EXCLUDED_EXTENSIONS if exclude_extensions is None else exclude_extensions
     patterns: list[str] = exclude_patterns or []
     files: list[Path] = []
@@ -595,6 +605,7 @@ def find_files_to_compress(
 
 
 def find_files_to_decompress(directory: Path, exclude_patterns: Optional[list[str]] = None) -> list[Path]:
+    "Find files to decompress."
     patterns: list[str] = exclude_patterns or []
     files: list[Path] = []
     for file_path in directory.rglob("*.br"):
@@ -615,6 +626,7 @@ def collect_compress_targets(
     extensions_filter: Optional[Sequence[str]],
     tar_subdirs_first: bool,
 ) -> tuple[list[Path], list[Path]]:
+    "Collect compress targets."
     files: list[Path] = []
     subdirs: list[Path] = []
     for p in input_paths:
@@ -647,6 +659,7 @@ def collect_compress_targets(
 
 
 def collect_decompress_targets(input_paths: Sequence[Path], exclude_patterns: list[str]) -> list[Path]:
+    "Collect decompress targets."
     files: list[Path] = []
     for p in input_paths:
         if p.is_file():
@@ -659,6 +672,7 @@ def collect_decompress_targets(input_paths: Sequence[Path], exclude_patterns: li
 
 
 def get_file_type_stats(files: list[Path]) -> dict[str, int]:
+    "Return file type stats."
     type_stats: dict[str, int] = {}
     for file_path in files:
         ext: str = file_path.suffix.lower() or "[no extension]"
@@ -676,6 +690,7 @@ def run_jobs(
     verify: bool,
     allow_truncated: bool,
 ) -> Iterator[CompressionResult]:
+    "Run jobs."
     for input_path, output_path in jobs:
         if operation == "compress":
             yield compress_file_streaming(
@@ -710,6 +725,7 @@ def process_files(
     verify: bool = False,
     allow_truncated: bool = False,
 ) -> list[CompressionResult]:
+    "Process files."
     results: list[CompressionResult] = []
     jobs: list[tuple[Path, Path]] = []
     for file_path in files:
@@ -768,6 +784,7 @@ def process_files(
 
 
 def extract_decompressed_tars(results: list[CompressionResult], keep_tar: bool) -> tuple[int, int, int]:
+    "Extract decompressed tars."
     extracted: int = 0
     failed: int = 0
     processed: int = 0
@@ -789,6 +806,7 @@ def extract_decompressed_tars(results: list[CompressionResult], keep_tar: bool) 
 
 
 def print_results_rich(results: list[CompressionResult], base_dir: Path, operation: str) -> None:
+    "Print results rich."
     console = Console()
     successful: list[CompressionResult] = [r for r in results if r.success]
     failed: list[CompressionResult] = [r for r in results if not r.success]
@@ -911,6 +929,7 @@ def print_results_rich(results: list[CompressionResult], base_dir: Path, operati
 
 
 def print_results_basic(results: list[CompressionResult], base_dir: Path, operation: str) -> None:
+    "Print results basic."
     successful: list[CompressionResult] = [r for r in results if r.success]
     failed: list[CompressionResult] = [r for r in results if not r.success]
     total_original: int = sum(r.original_size for r in successful)
@@ -996,6 +1015,7 @@ def print_dry_run(
     operation: str,
     subdirs: Optional[list[Path]] = None,
 ) -> None:
+    "Print dry run."
     total_size: int = 0
     for file_path in files:
         try:
@@ -1038,6 +1058,7 @@ def print_header(
     tar_mode: bool,
     verify: bool,
 ) -> None:
+    "Print header."
     emoji: str = "📦" if operation == "compress" else "📂"
     action: str = "Compressing" if operation == "compress" else "Decompressing"
     details: str = f"workers: {workers} | {'keep originals' if keep_original else 'delete originals'}"
@@ -1076,6 +1097,7 @@ def swallowed_directory(args: argparse.Namespace) -> Optional[str]:
 
 
 def main() -> int:
+    "Run the command-line interface."
     parser = argparse.ArgumentParser(
         description=(
             "📦 Recursively compress/decompress files using Brotli with parallel processing "
@@ -1333,4 +1355,4 @@ Examples:
 
 if __name__ == "__main__":
     mp.freeze_support()
-    sys.exit(main())
+    raise SystemExit(main())

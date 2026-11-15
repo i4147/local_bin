@@ -1,5 +1,7 @@
 #!/data/data/com.termux/files/usr/bin/env python
 
+"Sort and deduplicate lines in a file with sort(1)/uniq(1) semantics; uses mmap and external merge sort for large files."
+
 import argparse
 import csv
 import heapq
@@ -44,13 +46,16 @@ class _CountingIterator(Iterator[str]):
     __slots__ = ("count", "_iterator")
 
     def __init__(self, iterator: Iterator[str]) -> None:
+        "Initialize the instance state from the supplied arguments."
         self._iterator = iterator
         self.count = 0
 
     def __iter__(self) -> "_CountingIterator":
+        "Return an iterator over the object's items."
         return self
 
     def __next__(self) -> str:
+        "Return the next item from the iterator."
         value = next(self._iterator)
         self.count += 1
         return value
@@ -143,6 +148,7 @@ class SortKeyFactory:
         locale_name: str | None = None,
         dedupe_by_key: int | None = None,
     ) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.numeric = numeric
         self.version = version
         self.human = human
@@ -198,12 +204,14 @@ class SortKeyFactory:
         return text
 
     def __call__(self, line: str) -> Any:
+        "Invoke the behavior represented by this object."
         primary = self._primary(line)
         if self._has_modifiers or self.by_length:
             return (primary, line)
         return primary
 
     def group_key(self, line: str) -> Any:
+        "Group key."
         if self.dedupe_by_key:
             return self._normalize(self._extract(line))
         return line
@@ -211,6 +219,7 @@ class SortKeyFactory:
 
 class LineProcessor:
     def __init__(self, *, verbose: bool = False) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.verbose = verbose
 
     def log(self, message: str) -> None:
@@ -219,6 +228,7 @@ class LineProcessor:
 
     @staticmethod
     def get_file_size(path: Path | str) -> int:
+        "Return file size."
         return Path(path).stat().st_size
 
 
@@ -231,6 +241,7 @@ class LineReader(LineProcessor):
         mmap_threshold: int = MMAP_THRESHOLD_BYTES,
         buffer_size: int = DEFAULT_BUFFER_SIZE,
     ) -> None:
+        "Initialize the instance state from the supplied arguments."
         super().__init__(verbose=verbose)
         self.use_mmap = use_mmap
         self.mmap_threshold = mmap_threshold
@@ -262,6 +273,7 @@ class LineReader(LineProcessor):
                 yield raw_line.rstrip("\r\n")
 
     def read_file(self, path: Path, encoding: str = "utf-8") -> Iterator[str]:
+        "Read file."
         try:
             if self.use_mmap and self.get_file_size(path) > self.mmap_threshold:
                 yield from self._read_mmap(path, encoding)
@@ -271,6 +283,7 @@ class LineReader(LineProcessor):
             raise OSError(f"unable to read {path}") from exc
 
     def read_stdin(self, encoding: str = "utf-8") -> Iterator[str]:
+        "Read stdin."
         self.log("Reading from stdin")
         for raw_line in sys.stdin:
             yield raw_line.rstrip("\r\n")
@@ -298,6 +311,7 @@ class LineFilter(LineProcessor):
         skip_empty: bool = False,
         reverse_lines: bool = False,
     ) -> None:
+        "Initialize the instance state from the supplied arguments."
         super().__init__(verbose=verbose)
         self.regex = re.compile(match) if match else None
         self.invert_match = invert_match
@@ -338,6 +352,7 @@ class LineFilter(LineProcessor):
 
 class LineRangeFilter(LineProcessor):
     def __init__(self, *, start: int | None = None, end: int | None = None, verbose: bool = False) -> None:
+        "Initialize the instance state from the supplied arguments."
         super().__init__(verbose=verbose)
         self.start = start
         self.end = end
@@ -353,6 +368,7 @@ class LineRangeFilter(LineProcessor):
 
 class LineSorter(LineProcessor):
     def sort_in_memory(self, lines: list[str], *, key, reverse: bool) -> list[str]:
+        "Sort in memory."
         self.log(f"Sorting {len(lines):,} lines in memory")
         return sorted(lines, key=key, reverse=reverse)
 
@@ -374,6 +390,7 @@ class LineSorter(LineProcessor):
         key,
         encoding: str,
     ) -> list[Path]:
+        "Create sorted chunks."
         self.log(f"External sort enabled (chunk size: {chunk_size:,} lines)")
         temp_dir = Path(tempfile.gettempdir())
         temp_files: list[Path] = []
@@ -493,9 +510,11 @@ def coalesce(
 
 class LineDeduplicator(LineProcessor):
     def __init__(self, *, verbose: bool = False) -> None:
+        "Initialize the instance state from the supplied arguments."
         super().__init__(verbose=verbose)
 
     def __call__(self, lines: Iterable[str], *, group_key, mode: str, show_count: bool, keep: str) -> Iterator[str]:
+        "Invoke the behavior represented by this object."
         yield from coalesce(
             lines,
             group_key=group_key,
@@ -528,6 +547,7 @@ class LineTransformer(LineProcessor):
         suffix: str = "",
         number: bool = False,
     ) -> None:
+        "Initialize the instance state from the supplied arguments."
         super().__init__(verbose=verbose)
         self.lower = lower
         self.upper = upper
@@ -561,6 +581,7 @@ class LineFormatter(LineProcessor):
         crlf: bool = False,
         stats: Stats | None = None,
     ) -> None:
+        "Initialize the instance state from the supplied arguments."
         super().__init__(verbose=verbose)
         self.output_format = output_format
         self.null_terminated = null_terminated
@@ -621,6 +642,7 @@ class OutputWriter(LineProcessor):
         preserve_mtime: bool = False,
         encoding: str = "utf-8",
     ) -> None:
+        "Initialize the instance state from the supplied arguments."
         super().__init__(verbose=verbose)
         self.dry_run = dry_run
         self.fsync = fsync
@@ -690,6 +712,7 @@ class FileSorter(LineProcessor):
         quiet: bool = False,
         no_stats: bool = False,
     ) -> None:
+        "Initialize the instance state from the supplied arguments."
         super().__init__(verbose=verbose)
         self.dry_run = dry_run
         self.quiet = quiet
@@ -781,6 +804,7 @@ class FileSorter(LineProcessor):
         *,
         args: argparse.Namespace,
     ) -> Stats:
+        "Process file."
         input_path = Path(path) if path != "-" else None
         if input_path is not None and not input_path.exists():
             raise FileNotFoundError(f"input file not found: {input_path}")
@@ -1185,6 +1209,7 @@ class FileSorter(LineProcessor):
             print(f"Error saving stats: {exc}", file=sys.stderr)
 
     def print_stats(self, stats: Stats) -> None:
+        "Print stats."
         if self.quiet or self.no_stats:
             return
         if "check_sorted" in stats:
@@ -1198,6 +1223,7 @@ class FileSorter(LineProcessor):
             print("no duplicate line")
 
     def save_report(self, stats: Stats, report_file: str | None = None) -> None:
+        "Save report."
         if report_file is None:
             report_file = "sort_report.json"
         report = {
@@ -1235,6 +1261,7 @@ def _reservoir_sample(lines: Iterable[str], k: int) -> Iterator[str]:
 
 class FileAnalyzer(LineProcessor):
     def __init__(self, *, verbose: bool = False) -> None:
+        "Initialize the instance state from the supplied arguments."
         super().__init__(verbose=verbose)
         self.reader = LineReader(verbose=verbose)
 
@@ -1266,6 +1293,7 @@ class FileAnalyzer(LineProcessor):
         }
 
     def print_analysis(self, path: Path, encoding: str = "utf-8") -> None:
+        "Print analysis."
         a = self.analyze_file(path, encoding)
         print(f"\n{'=' * 40}")
         print(f"File Analysis: {path.name}")
@@ -1480,6 +1508,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    "Run the command-line interface."
     parser = _build_parser()
     args = parser.parse_args(argv)
     if args.analyze:
@@ -1564,4 +1593,4 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    raise SystemExit(main())

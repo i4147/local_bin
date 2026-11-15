@@ -1,5 +1,7 @@
 #!/data/data/com.termux/files/usr/bin/env python
 
+"Fuzzy text comparison CLI"
+
 import argparse
 import hashlib
 import math
@@ -64,6 +66,7 @@ def normalize_text(
     collapse_ws: bool = True,
     strip: bool = True,
 ) -> str:
+    "Normalize text."
     if lowercase:
         text = text.lower()
     if strip_punct:
@@ -92,9 +95,11 @@ class SimilarityMetric(ABC):
         return 1.0 - self.similarity(a, b)
 
     def __call__(self, a: str, b: str) -> float:
+        "Invoke the behavior represented by this object."
         return self.similarity(a, b)
 
     def __repr__(self) -> str:
+        "Return the object's developer-facing representation."
         return f"{type(self).__name__}()"
 
 
@@ -161,6 +166,7 @@ class Hamming(EditDistanceMetric):
     name = "hamming"
 
     def __init__(self, strict: bool = False) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.strict = strict
 
     def edit_distance(self, a: str, b: str) -> int:
@@ -214,6 +220,7 @@ class JaroWinkler(Jaro):
     name = "jaro_winkler"
 
     def __init__(self, prefix_scale: float = 0.1, max_prefix: int = 4) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.prefix_scale = prefix_scale
         self.max_prefix = max_prefix
 
@@ -229,6 +236,7 @@ class JaroWinkler(Jaro):
         return j + prefix * self.prefix_scale * (1.0 - j)
 
     def __repr__(self) -> str:
+        "Return the object's developer-facing representation."
         return f"JaroWinkler(prefix_scale={self.prefix_scale}, max_prefix={self.max_prefix})"
 
 
@@ -236,6 +244,7 @@ class Jaccard(SimilarityMetric):
     name = "jaccard"
 
     def __init__(self, tokenizer: Callable[[str], list[str]] = default_tokenize) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.tokenizer = tokenizer
 
     def similarity(self, a: str, b: str) -> float:
@@ -250,6 +259,7 @@ class Dice(SimilarityMetric):
     name = "dice"
 
     def __init__(self, tokenizer: Callable[[str], list[str]] = default_tokenize) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.tokenizer = tokenizer
 
     def similarity(self, a: str, b: str) -> float:
@@ -269,6 +279,7 @@ class Cosine(SimilarityMetric):
         tokenizer: Callable[[str], list[str]] = default_tokenize,
         idf: dict[str, float] | None = None,
     ) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.tokenizer = tokenizer
         self.idf = idf or {}
 
@@ -323,6 +334,7 @@ class NGram(SimilarityMetric):
     name = "ngram"
 
     def __init__(self, n: int = 2) -> None:
+        "Initialize the instance state from the supplied arguments."
         if n < 1:
             raise ValueError("n must be >= 1")
         self.n = n
@@ -341,6 +353,7 @@ class NGram(SimilarityMetric):
         return 2.0 * overlap / total
 
     def __repr__(self) -> str:
+        "Return the object's developer-facing representation."
         return f"NGram(n={self.n})"
 
 
@@ -553,6 +566,7 @@ class _PhoneticMetric(SimilarityMetric):
     encoder: Callable[[str], str] = staticmethod(lambda s: s)
 
     def __init__(self, code_metric: SimilarityMetric | None = None) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.code_metric = code_metric or JaroWinkler()
 
     def code(self, text: str) -> str:
@@ -600,6 +614,7 @@ class MinHash(SimilarityMetric):
         seed: int = 42,
         tokenizer: Callable[[str], list[str]] | None = None,
     ) -> None:
+        "Initialize the instance state from the supplied arguments."
         if num_perm < 1:
             raise ValueError("num_perm must be >= 1")
         self.num_perm = num_perm
@@ -636,6 +651,7 @@ class MinHash(SimilarityMetric):
         return equal / self.num_perm
 
     def __repr__(self) -> str:
+        "Return the object's developer-facing representation."
         return f"MinHash(num_perm={self.num_perm}, shingle_size={self.shingle_size})"
 
 
@@ -648,6 +664,7 @@ class SimHash(SimilarityMetric):
         tokenizer: Callable[[str], list[str]] = default_tokenize,
         weights: dict[str, float] | None = None,
     ) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.bits = bits
         self.tokenizer = tokenizer
         self.weights = weights or {}
@@ -676,6 +693,7 @@ class SimHash(SimilarityMetric):
         return 1.0 - bin(fa ^ fb).count("1") / self.bits
 
     def __repr__(self) -> str:
+        "Return the object's developer-facing representation."
         return f"SimHash(bits={self.bits})"
 
 
@@ -687,6 +705,7 @@ class TokenSort(SimilarityMetric):
         base: SimilarityMetric | None = None,
         tokenizer: Callable[[str], list[str]] = default_tokenize,
     ) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.base = base or Levenshtein()
         self.tokenizer = tokenizer
 
@@ -706,6 +725,7 @@ class TokenSet(SimilarityMetric):
         base: SimilarityMetric | None = None,
         tokenizer: Callable[[str], list[str]] = default_tokenize,
     ) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.base = base or Levenshtein()
         self.tokenizer = tokenizer
 
@@ -730,6 +750,7 @@ class PartialRatio(SimilarityMetric):
     name = "partial"
 
     def __init__(self, base: SimilarityMetric | None = None) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.base = base or Levenshtein()
 
     def similarity(self, a: str, b: str) -> float:
@@ -777,6 +798,7 @@ class FuzzyComparator:
         normalize: bool = False,
         **metric_kwargs: object,
     ) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.normalize = normalize
         self.metric = self._resolve(metric, **metric_kwargs)
 
@@ -806,6 +828,7 @@ class FuzzyComparator:
         metrics: Sequence[str] | None = None,
         **overrides: dict[str, object],
     ) -> dict[str, float]:
+        "Compare all."
         names = list(metrics) if metrics else list(DEFAULT_METRICS)
         results: dict[str, float] = {}
         for name in names:
@@ -847,14 +870,18 @@ class FuzzyComparator:
         return sorted(scored, key=lambda t: t[1], reverse=True)
 
     def __call__(self, a: str, b: str) -> float:
+        "Invoke the behavior represented by this object."
         return self.similarity(a, b)
 
     def __repr__(self) -> str:
+        "Return the object's developer-facing representation."
         return f"FuzzyComparator(metric={self.metric!r}, normalize={self.normalize})"
 
 
 @dataclass
 class DiffOp:
+    "Store tag, line_a, line_b, index_a, index_b and related state."
+
     tag: str
     line_a: str | None
     line_b: str | None
@@ -863,6 +890,7 @@ class DiffOp:
     score: float = 0.0
 
     def __str__(self) -> str:
+        "Return the object's display string."
         marker = {"equal": "  ", "replace": "~ ", "delete": "- ", "insert": "+ "}[self.tag]
         if self.tag == "equal":
             return f"{marker}{self.line_a}"
@@ -875,6 +903,8 @@ class DiffOp:
 
 @dataclass
 class FileComparison:
+    "Store path_a, path_b, metric, similarity, line_similarity and related state."
+
     path_a: str
     path_b: str
     metric: str
@@ -911,6 +941,7 @@ class FileComparison:
         return "\n".join(lines)
 
     def __str__(self) -> str:
+        "Return the object's display string."
         return self.report()
 
 
@@ -969,6 +1000,7 @@ def align_lines(
 
 class _NormalizedWrapper(SimilarityMetric):
     def __init__(self, base: SimilarityMetric) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.base = base
         self.name = base.name
 
@@ -986,6 +1018,7 @@ class FileComparator:
         encoding: str = "utf-8",
         errors: str = "replace",
     ) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.comparator = FuzzyComparator(metric, normalize=normalize)
         self.metric = self.comparator.metric
         self.normalize = normalize
@@ -1059,6 +1092,7 @@ class FileComparator:
 
 
 def build_parser() -> argparse.ArgumentParser:
+    "Build parser."
     parser = argparse.ArgumentParser(prog="fuzzycmp", description="Fuzzy text comparison CLI")
     parser.add_argument("--version", action="version", version="fuzzycmp 1.0.0")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -1201,6 +1235,7 @@ _DISPATCH: dict[str, Callable[[argparse.Namespace], int]] = {
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    "Run the command-line interface."
     parser = build_parser()
     args = parser.parse_args(argv)
     handler = _DISPATCH[args.command]

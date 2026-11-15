@@ -220,6 +220,7 @@ class _NameCollector(cst.CSTVisitor):
     """Collect every ``cst.Name`` node inside a subtree."""
 
     def __init__(self) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.names: list[cst.Name] = []
 
     def visit_Name(self, node: cst.Name) -> bool:
@@ -261,6 +262,7 @@ class _AllScanner(cst.CSTVisitor):
     """Statically collect ``__all__`` entries at module flow level."""
 
     def __init__(self) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.names: set[str] = set()
         self.unknown = False
         self.handled: set[int] = set()
@@ -418,6 +420,7 @@ class _Analyzer(cst.CSTVisitor):
         registry: dict[str, Path],
         primary: dict[Path, str],
     ) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.f = facts
         self.registry = registry
         self.primary = primary
@@ -638,6 +641,7 @@ class _Plan:
     """Package-wide rename decisions."""
 
     def __init__(self, facts: dict[str, _ModuleFacts]) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.facts = facts
         self.frozen_module: set[str] = set()
         self.frozen_kwargs: set[str] = set()
@@ -793,6 +797,7 @@ class _Rewriter(cst.CSTTransformer):
         decisions: dict[str, str],
         alias_edits: dict[tuple[int, int], str],
     ) -> None:
+        "Initialize the instance state from the supplied arguments."
         self._decisions = decisions
         self._alias_edits = alias_edits
         self._import_depth = 0

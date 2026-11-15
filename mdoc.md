@@ -115,7 +115,7 @@ Process per file:
    imports…"). Do not mention "This module" as filler — describe the thing directly.
 
 Examples of the right shape:
-- `"""Load, validate, and summarise the project configuration file."""`
+- `"""Load, validate, and summarize the project configuration file."""`
 - `"""Command-line entry point for the ingest pipeline."""`
 - `"""Data models shared by the scheduler and worker processes."""`
 
@@ -135,7 +135,7 @@ If after reading the file you genuinely cannot determine what it does, mark
 
 ## Do NOT
 - Modify files that already have a module docstring.
-- Reformat, rewrap, or reword an existing docstring.
+- Reformat, re wrap, or reword an existing docstring.
 - Change code, imports, blank-line layout outside the inserted block, or encoding.
 - Touch files outside the repo root, or non-`.py` files.
 - Add `# -*- coding:` lines or shebangs.

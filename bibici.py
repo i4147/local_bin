@@ -1,5 +1,7 @@
 #!/data/data/com.termux/files/usr/bin/env python
 
+"Utilities for bibici."
+
 import argparse
 import contextlib
 import datetime as dt
@@ -26,14 +28,17 @@ CACHED_JOURNALS: dict[str, str] = {}
 
 
 def get_bibparser() -> BibTexParser:
+    "Return bibparser."
     return BibTexParser(ignore_nonstandard_types=False, homogenize_fields=True, common_strings=True)
 
 
 def normalize_title(title: str) -> str:
+    "Normalize title."
     return title.lower().translate(str.maketrans("", "", string.whitespace + "}{"))
 
 
 def load_anthologies(anthologies: list[str]) -> None:
+    "Load anthologies."
     for anthology in anthologies:
         with open(anthology, "r", encoding="utf-8") as f_anth:
             sys.stderr.write("Loading {} ... ".format(anthology))
@@ -81,6 +86,7 @@ def norm_booktitle(title: str) -> str:
 
 
 def check_year(entry: dict, _: bool) -> bool:
+    "Check year."
     try:
         year = int(entry["year"])
         current_year = dt.datetime.now().year
@@ -118,6 +124,7 @@ RANGE_REGEX = re.compile(r"^([A-Z][a-z]*)--([A-Z][a-z]*)$")
 
 
 def check_month(entry: dict, _: bool) -> bool:
+    "Check month."
     month = entry["month"]
     range_match = RANGE_REGEX.match(month)
     if range_match:
@@ -136,6 +143,7 @@ PAGE_REGEX = re.compile(r"^([1-9][0-9]*)[\W_]+([1-9][0-9]*)$")
 
 
 def check_pages(entry: dict, _: bool) -> bool:
+    "Check pages."
     pages = entry["pages"]
     if pages in {"Online", "In Press"}:
         return True
@@ -156,6 +164,7 @@ def check_pages(entry: dict, _: bool) -> bool:
 
 
 def check_isbn(entry: dict, try_fix: bool) -> bool:
+    "Check isbn."
     isbn_string = entry["isbn"]
     if isbnlib.is_isbn10(isbn_string):
         try:
@@ -219,6 +228,7 @@ ISSN_REGEX = re.compile(r"^\d{4}-?\d{3}[\dxX]$")
 
 
 def check_issn(entry: dict, try_fix: bool) -> bool:
+    "Check issn."
     issn_str = entry["issn"]
     if ISSN_REGEX.match(issn_str):
         return True
@@ -258,6 +268,7 @@ def check_issn(entry: dict, try_fix: bool) -> bool:
 
 
 def check_booktitle(entry: dict, try_fix: bool) -> bool:
+    "Check booktitle."
     if entry["booktitle"].endswith("Conference on"):
         err_message(entry, "Book title should not end with 'Conference on', rephrase")
         return False
@@ -320,6 +331,7 @@ US_STATES = [
 
 
 def check_address(entry: dict, _: bool) -> bool:
+    "Check address."
     address = entry["address"]
     tokens = address.split(", ")
     if address in {"Online", "Singapore"}:
@@ -356,6 +368,7 @@ def check_address(entry: dict, _: bool) -> bool:
 
 
 def check_author(entry: dict, _: bool) -> bool:
+    "Check author."
     authors = entry["author"].split(" and ")
     problem = False
     for author in authors:
@@ -373,6 +386,7 @@ NON_APLHNUM = re.compile(r"[^A-Za-z0-9]+")
 
 
 def search_crossref_for_doi(title: str) -> list[str]:
+    "Search for crossref for doi."
     keywords = title.lower().replace(" ", "+")
     title_signature = NON_APLHNUM.sub("", title.lower())
     searchurl = "http://search.crossref.org/?q="
@@ -399,6 +413,7 @@ DOI_PREFIX = re.compile(r"^[0-9]{2}\.[0-9]{4,5}$")
 
 
 def check_doi(entry: dict, try_fix: bool) -> bool:
+    "Check doi."
     if "doi" not in entry:
         return False
     doi_ok = True
@@ -456,6 +471,7 @@ FIELD_CHECKS = {
 
 
 def check_field(entry: dict, field: str, try_fix: bool, disable_todo: bool, try_find: bool = False) -> bool:
+    "Check field."
     ignore_list = entry.get("ignore", "").split(",")
     if field not in entry or entry[field] == "TODO":
         if not disable_todo:
@@ -483,6 +499,7 @@ def check_field(entry: dict, field: str, try_fix: bool, disable_todo: bool, try_
 
 
 def check_article(entry: dict, try_fix: bool, disable_todo: bool) -> None:
+    "Check article."
     if "journal" not in entry:
         err_message(entry, "Journal title is missing.")
     else:
@@ -516,6 +533,7 @@ def check_article(entry: dict, try_fix: bool, disable_todo: bool) -> None:
 
 
 def check_book(entry: dict, try_fix: bool, disable_todo: bool) -> None:
+    "Check book."
     check_field(entry, "isbn", try_fix, disable_todo)
     check_field(entry, "publisher", try_fix, disable_todo)
     check_field(entry, "year", try_fix, disable_todo)
@@ -523,6 +541,7 @@ def check_book(entry: dict, try_fix: bool, disable_todo: bool) -> None:
 
 
 def check_inproceedings(entry: dict, try_fix: bool, disable_todo: bool) -> None:
+    "Check inproceedings."
     everything_ok = True
     everything_ok &= check_field(entry, "doi", try_fix, disable_todo, try_find=True)
     everything_ok &= check_field(entry, "booktitle", try_fix, disable_todo, try_find=True)
@@ -537,6 +556,7 @@ def check_inproceedings(entry: dict, try_fix: bool, disable_todo: bool) -> None:
 
 
 def check_techreport(entry: dict, try_fix: bool, disable_todo: bool) -> None:
+    "Check techreport."
     check_field(entry, "month", try_fix, disable_todo, try_find=True)
     check_field(entry, "year", try_fix, disable_todo, try_find=True)
     check_field(entry, "address", try_fix, disable_todo, try_find=True)
@@ -545,6 +565,7 @@ def check_techreport(entry: dict, try_fix: bool, disable_todo: bool) -> None:
 
 
 def check_phdthesis(entry: dict, try_fix: bool, disable_todo: bool) -> None:
+    "Check phdthesis."
     check_field(entry, "year", try_fix, disable_todo, try_find=True)
     check_field(entry, "address", try_fix, disable_todo, try_find=True)
     check_field(entry, "school", try_fix, disable_todo, try_find=True)
@@ -597,6 +618,7 @@ def try_fix_with_doi(entry: dict, bib_type: str) -> None:
 
 
 def cache_journal_issn(database: Any) -> None:
+    "Cache journal issn."
     for entry in database.entries:
         if entry["ENTRYTYPE"] == "article" and "journal" in entry:
             name = entry["journal"]
@@ -611,6 +633,7 @@ def cache_journal_issn(database: Any) -> None:
 
 
 def cache_field(entry: dict, field: str, cache_dict: dict) -> None:
+    "Cache field."
     if field in entry:
         values = entry[field].split(" and ") if field == "author" else [entry[field]]
         if field == "booktitle":
@@ -622,6 +645,7 @@ def cache_field(entry: dict, field: str, cache_dict: dict) -> None:
 
 
 def normalize_authors(author_field: str) -> str:
+    "Normalize authors."
     orig_authors = author_field.split(" and ")
     new_authors = []
     for author in orig_authors:
@@ -637,6 +661,7 @@ def normalize_authors(author_field: str) -> str:
 
 
 def check_database(database: Any, try_fix: bool, disable_todo: bool) -> tuple[dict, dict, dict]:
+    "Check database."
     authors: dict = {}
     journals: dict = {}
     booktitles: dict = {}
@@ -702,6 +727,7 @@ def look_for_misspellings(values: dict, name: str, threshold: float = 0.8) -> No
 
 
 def run_check(args: argparse.Namespace) -> None:
+    "Run check."
     if args.anthologies is not None:
         load_anthologies(args.anthologies)
     bib_database = bibtexparser.load(args.input, get_bibparser())
@@ -720,6 +746,7 @@ def run_check(args: argparse.Namespace) -> None:
 
 
 def run_validate(args: argparse.Namespace) -> None:
+    "Run validate."
     print("Reading from stdin ...", end="", file=sys.stderr)
     input_records = sys.stdin.read().split("\n\n")
     print("done.", file=sys.stderr)
@@ -758,6 +785,7 @@ def run_validate(args: argparse.Namespace) -> None:
 
 
 def main() -> None:
+    "Run the command-line interface."
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(dest="subcommand", required=True)
     check_parser = subparsers.add_parser("check")
@@ -794,4 +822,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

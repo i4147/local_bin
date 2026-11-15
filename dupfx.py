@@ -71,7 +71,7 @@ def quick_hash(path, n=QUICK_READ):
     return h.hexdigest()
 
 
-def full_hash(path):
+def full_hash(path) -> tuple:
     try:
         if not path.stat().st_size:
             return ("", path)
@@ -94,8 +94,9 @@ def iter_files(
     root,
     recursive,
     follow_symlinks,
-    include_git=False,
+    include_git: bool = False,
 ):
+    "Yield files from the supplied input."
     if recursive:
         iterator = root.rglob("*")
     else:
@@ -110,7 +111,8 @@ def iter_files(
         yield p
 
 
-def choose_keep(files, policy="oldest"):
+def choose_keep(files, policy: str = "oldest"):
+    "Choose keep."
     if not files:
         msg = "Empty file list"
         raise ValueError(msg)
@@ -124,7 +126,8 @@ def choose_keep(files, policy="oldest"):
         return min(files, key=str)
 
 
-def main():
+def main() -> None:
+    "Run the command-line interface."
     cwd = Path.cwd()
     p = argparse.ArgumentParser(description="Find and delete duplicate files by content.")
     p.add_argument(

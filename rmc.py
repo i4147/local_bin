@@ -1,5 +1,11 @@
 #!/data/data/com.termux/files/usr/bin/env python
 
+"""Strip comments, docstrings, and annotations from Python files.
+
+Accepts multiple files or directories, recursively scans the current directory
+when no inputs are supplied, and reports per-file bytes reduced with Rich.
+"""
+
 from __future__ import annotations
 
 import ast
@@ -47,6 +53,8 @@ _TRIVIAL: Final = (ast.Name, ast.Constant, ast.Attribute)
 
 
 class Status(enum.StrEnum):
+    "Enumerate the supported Status values."
+
     MODIFIED = "modified"
     UNCHANGED = "unchanged"
     SKIPPED = "skipped"
@@ -151,6 +159,7 @@ def _looks_like_code(values: Sequence[str]) -> bool:
 
 class Stripper(cst.CSTTransformer):
     def __init__(self, mode: Mode) -> None:
+        "Initialize the instance state from the supplied arguments."
         super().__init__()
         self._mode = mode
         self._doc_suites: set[int] = set()
@@ -158,9 +167,7 @@ class Stripper(cst.CSTTransformer):
 
     # ---- comment filtering (own-line comments) -------------------------
 
-    def on_leave(
-        self, original_node: N, updated_node: N
-    ) -> N | cst.RemovalSentinel | cst.FlattenSentinel[N]:
+    def on_leave(self, original_node: N, updated_node: N) -> N | cst.RemovalSentinel | cst.FlattenSentinel[N]:
         result = super().on_leave(original_node, updated_node)
         if not self._mode.comments or not isinstance(result, cst.CSTNode):
             return result
@@ -486,6 +493,7 @@ def _process(job: Job) -> FileResult:
 
 
 def process_file(job: Job) -> FileResult:
+    "Process file."
     try:
         return _process(job)
     except Exception as exc:
@@ -508,6 +516,7 @@ def _init_worker() -> None:
 
 
 def run_jobs(jobs: Sequence[Job], workers: int) -> list[FileResult]:
+    "Run jobs."
     if workers <= 1 or len(jobs) <= 1:
         return [process_file(job) for job in jobs]
     processes = min(workers, len(jobs))
@@ -671,6 +680,7 @@ def render_text(results: Sequence[FileResult], summary: Summary, options: Option
 
 
 def render_json(results: Sequence[FileResult], summary: Summary, options: Options) -> None:
+    "Render json."
     entries: list[dict[str, object]] = []
     for result in results:
         entry: dict[str, object] = {
@@ -733,8 +743,12 @@ def _version_callback(value: bool) -> None:
 
 @app.command()
 def main(
-    paths: list[Path] = typer.Argument(None, help="Files or directories; defaults to the current directory recursively."),
-    comments: bool = typer.Option(False, "-c", "--comments", help="Remove comments (default if no mode flag is given)."),
+    paths: list[Path] = typer.Argument(
+        None, help="Files or directories; defaults to the current directory recursively."
+    ),
+    comments: bool = typer.Option(
+        False, "-c", "--comments", help="Remove comments (default if no mode flag is given)."
+    ),
     docstrings: bool = typer.Option(False, "-d", "--docstrings", help="Remove function and class docstrings."),
     annotations: bool = typer.Option(False, "-t", "--annotations", help="Remove type annotations."),
     all_content: bool = typer.Option(False, "-a", "--all", help="Remove comments, docstrings, and annotations."),
@@ -743,14 +757,20 @@ def main(
     diff: bool = typer.Option(False, "--diff", help="Print unified diffs; implies --dry-run."),
     check: bool = typer.Option(False, "--check", help="Never write; exit 1 if any file would change."),
     backup: bool = typer.Option(False, "--backup", help="Write FILE.bak before modifying."),
-    backup_dir: Path | None = typer.Option(None, "--backup-dir", help="Copy originals into this directory before modifying."),
+    backup_dir: Path | None = typer.Option(
+        None, "--backup-dir", help="Copy originals into this directory before modifying."
+    ),
     includes: list[str] = typer.Option(None, "--include", help="Repeatable include glob."),
     excludes: list[str] = typer.Option(None, "--exclude", help="Repeatable exclude glob."),
-    recursive: bool = typer.Option(True, "--recursive/--no-recursive", help="Descend into directories (enabled by default)."),
+    recursive: bool = typer.Option(
+        True, "--recursive/--no-recursive", help="Descend into directories (enabled by default)."
+    ),
     json_output: bool = typer.Option(False, "--json", help="Write machine-readable JSON instead of the Rich table."),
     quiet: bool = typer.Option(False, "-q", "--quiet", help="Suppress the per-file Rich table."),
     verbose: bool = typer.Option(False, "-v", "--verbose", help="Enable debug logging."),
-    version: bool = typer.Option(False, "--version", callback=_version_callback, is_eager=True, help="Show the version and exit."),
+    version: bool = typer.Option(
+        False, "--version", callback=_version_callback, is_eager=True, help="Show the version and exit."
+    ),
 ) -> None:
     """Process Python files and report per-file and total bytes removed."""
     del version  # The eager callback handles this option before command execution.

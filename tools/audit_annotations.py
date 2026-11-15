@@ -25,7 +25,9 @@ def missing_annotations(path: Path) -> tuple[list[str], Counter[str]]:
         names = [arg.arg for arg in args if arg.arg not in {"self", "cls"} and arg.annotation is None]
         if names:
             counts["parameters"] += len(names)
-            missing.append(f"- Line {node.lineno}, `{node.name}` parameters: {', '.join(f'`{name}`' for name in names)}")
+            missing.append(
+                f"- Line {node.lineno}, `{node.name}` parameters: {', '.join(f'`{name}`' for name in names)}"
+            )
         if node.returns is None:
             counts["returns"] += 1
             missing.append(f"- Line {node.lineno}, `{node.name}` return type: not inferred safely")
@@ -34,18 +36,37 @@ def missing_annotations(path: Path) -> tuple[list[str], Counter[str]]:
 
 def main() -> None:
     """Write the annotation gap report for all generated Python copies."""
-    sections = ["# Type annotation gaps", "", "This report lists annotations left out because the type could not be determined confidently from the signature and local syntax. These are flagged for review rather than filled with `Any` or guessed types. Line numbers refer to files in `documented/`.", ""]
+    sections = [
+        "# Type annotation gaps",
+        "",
+        "This report lists annotations left out because the type could not be determined confidently from the signature and local syntax. These are flagged for review rather than filled with `Any` or guessed types. Line numbers refer to files in `documented/`.",
+        "",
+    ]
     totals: Counter[str] = Counter()
     for path in sorted(DOCUMENTED.glob("*.py")):
         rows, counts = missing_annotations(path)
         totals.update(counts)
         if rows:
-            sections += [f"## `{path.name}` — {counts['parameters']} untyped parameters; {counts['returns']} untyped returns", "", *rows, ""]
-    sections += ["## Totals", "", f"- Untyped parameters: {totals['parameters']}", f"- Untyped returns: {totals['returns']}", "- Reason: inferred type would require assumptions about caller contracts, external objects, or control-flow behavior.", ""]
+            sections += [
+                f"## `{path.name}` — {counts['parameters']} untyped parameters; {counts['returns']} untyped returns",
+                "",
+                *rows,
+                "",
+            ]
+    sections += [
+        "## Totals",
+        "",
+        f"- Untyped parameters: {totals['parameters']}",
+        f"- Untyped returns: {totals['returns']}",
+        "- Reason: inferred type would require assumptions about caller contracts, external objects, or control-flow behavior.",
+        "",
+    ]
     out = DOCUMENTED / "ANNOTATIONS_REVIEW.md"
     out.write_text("\n".join(sections), encoding="utf-8")
-    print(f"Wrote {out.relative_to(ROOT)}: {totals['parameters']} untyped parameters, {totals['returns']} untyped returns")
+    print(
+        f"Wrote {out.relative_to(ROOT)}: {totals['parameters']} untyped parameters, {totals['returns']} untyped returns"
+    )
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

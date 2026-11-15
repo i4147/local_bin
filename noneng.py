@@ -24,24 +24,22 @@ from rich.text import Text
 
 Backend = Literal["langdetect", "lingua", "pycld2", "gcld3", "py3langid", "langid"]
 
-SKIP_DIRS = frozenset(
-    {
-        ".git",
-        ".hg",
-        ".svn",
-        ".venv",
-        "venv",
-        "env",
-        "__pycache__",
-        "node_modules",
-        ".mypy_cache",
-        ".pytest_cache",
-        ".ruff_cache",
-        ".tox",
-        "build",
-        "dist",
-    }
-)
+SKIP_DIRS = frozenset({
+    ".git",
+    ".hg",
+    ".svn",
+    ".venv",
+    "venv",
+    "env",
+    "__pycache__",
+    "node_modules",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".tox",
+    "build",
+    "dist",
+})
 LIVE_FINDING_LIMIT = 15
 
 
@@ -210,11 +208,7 @@ def read_text_lines(path: Path) -> list[str] | None:
 def _display_path(path: Path, working_directory: Path, roots: list[Path]) -> str:
     """Return a concise path relative to the most-specific supplied scan root."""
     resolved = path.resolve()
-    containing_roots = [
-        root.resolve()
-        for root in roots
-        if root.is_dir() and resolved.is_relative_to(root.resolve())
-    ]
+    containing_roots = [root.resolve() for root in roots if root.is_dir() and resolved.is_relative_to(root.resolve())]
     if containing_roots:
         root = max(containing_roots, key=lambda candidate: len(candidate.parts))
         relative = resolved.relative_to(root)
@@ -321,7 +315,9 @@ app = typer.Typer(add_completion=False, no_args_is_help=False)
 
 @app.command()
 def main(
-    paths: list[Path] = typer.Argument(None, help="Files/directories to scan; defaults to the current directory recursively."),
+    paths: list[Path] = typer.Argument(
+        None, help="Files/directories to scan; defaults to the current directory recursively."
+    ),
     backend: Backend = typer.Option(
         "langdetect",
         "-b",
@@ -330,7 +326,9 @@ def main(
         help="Language detector: langdetect, lingua, pycld2, gcld3, py3langid, or langid.",
     ),
     report: Path = typer.Option(Path("noneng-report.json"), "-o", "--report", help="JSON report destination."),
-    min_confidence: float = typer.Option(0.80, "--min-confidence", min=0.0, max=1.0, help="Minimum backend confidence when available."),
+    min_confidence: float = typer.Option(
+        0.80, "--min-confidence", min=0.0, max=1.0, help="Minimum backend confidence when available."
+    ),
     min_letters: int = typer.Option(4, "--min-letters", min=1, help="Ignore lines with fewer alphabetic characters."),
 ) -> None:
     """Detect non-English lines under the given paths and save a JSON report."""

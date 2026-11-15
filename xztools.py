@@ -1,5 +1,7 @@
 #!/data/data/com.termux/files/usr/bin/env python
 
+"Unified compression / decompression CLI."
+
 import argparse
 import contextlib
 import io
@@ -152,6 +154,7 @@ else:
 
 
 def format_size(n: float) -> str:
+    "Format size."
     n = float(n)
     for unit in ("B", "KB", "MB", "GB", "TB"):
         if abs(n) < 1024.0 or unit == "TB":
@@ -193,6 +196,7 @@ def discover_files(
     recursive: bool = True,
     skip_symlinks: bool = True,
 ) -> list[Path]:
+    "Discover files."
     skip_dirs = skip_dirs or SKIP_DIRS
     exclude_patterns = list(exclude_patterns or [])
     ext_filter: set[str] = set()
@@ -250,6 +254,8 @@ def decompress_bytes(data: bytes, *, backend: str = "auto") -> bytes:
 
 @dataclass
 class FileResult:
+    "Store path, success, message, original_size, processed_size and related state."
+
     path: Path
     success: bool
     message: str = ""
@@ -867,11 +873,13 @@ def _collect_7z_targets(
     targets: list[Path] = []
 
     def add_compress_tree(base: Path) -> None:
+        "Add compress tree."
         for p in base.rglob("*"):
             if p.is_file() and not p.name.endswith(SEVENZ_SUFFIX):
                 targets.append(p.resolve())
 
     def add_decompress_tree(base: Path) -> None:
+        "Add decompress tree."
         for p in base.rglob(f"*{SEVENZ_SUFFIX}"):
             if p.is_file():
                 targets.append(p.resolve())
@@ -1010,6 +1018,7 @@ def _add_common_xz_opts(p: argparse.ArgumentParser) -> None:
 
 
 def build_parser() -> argparse.ArgumentParser:
+    "Build parser."
     parser = argparse.ArgumentParser(
         prog="xz_tool.py",
         description="Unified compression / decompression CLI.",
@@ -1143,6 +1152,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
+    "Run the command-line interface."
     parser = build_parser()
     args = parser.parse_args(argv)
     try:

@@ -370,6 +370,7 @@ def encode_string(text: str) -> bytes:
 
 
 def get_charset(content_type: Optional[str]) -> Optional[str]:
+    "Return charset."
     if not content_type:
         return None
     m = CHARSET_REGEXP.search(content_type)
@@ -392,6 +393,7 @@ def replace_charset(content_type: str, charset: str) -> str:
 
 
 def get_bom_charset(data: bytes) -> Optional[str]:
+    "Return bom charset."
     if len(data) >= 2 and data[0] == 0xFF and data[1] == 0xFE:
         return "utf-16le"
     if len(data) >= 2 and data[0] == 0xFE and data[1] == 0xFF:
@@ -779,26 +781,32 @@ def _test_content_type(content_type: Optional[str], prefix: str) -> bool:
 
 
 def is_document(content_type: Optional[str]) -> bool:
+    "Return whether document."
     return _test_content_type(content_type, "text/html") or _test_content_type(content_type, "application/xhtml+xml")
 
 
 def is_stylesheet(content_type: Optional[str]) -> bool:
+    "Return whether stylesheet."
     return _test_content_type(content_type, "text/css")
 
 
 def is_text(content_type: Optional[str]) -> bool:
+    "Return whether text."
     return _test_content_type(content_type, "text/")
 
 
 def is_image(content_type: Optional[str]) -> bool:
+    "Return whether image."
     return _test_content_type(content_type, "image/")
 
 
 def is_plain_text(content_type: Optional[str]) -> bool:
+    "Return whether plain text."
     return _test_content_type(content_type, "text/plain")
 
 
 def is_media(content_type: Optional[str]) -> bool:
+    "Return whether media."
     return (
         _test_content_type(content_type, "image/")
         or _test_content_type(content_type, "audio/")
@@ -808,14 +816,17 @@ def is_media(content_type: Optional[str]) -> bool:
 
 
 def is_multipart(content_type: Optional[str]) -> bool:
+    "Return whether multipart."
     return _test_content_type(content_type, "multipart/")
 
 
 def is_multipart_alternative(content_type: Optional[str]) -> bool:
+    "Return whether multipart alternative."
     return _test_content_type(content_type, "multipart/alternative")
 
 
 def get_boundary(content_type: str) -> Optional[str]:
+    "Return boundary."
     params = content_type.split(";")[1:]
     for param in params:
         param = param.strip()
@@ -839,6 +850,7 @@ def get_media_type(content_type: Optional[str]) -> Optional[str]:
 
 
 def get_resource_uri(content_type: Optional[str], transfer_encoding: Optional[str], data: str) -> str:
+    "Return resource uri."
     media = get_media_type(content_type)
     media = "undefined" if media is None else media  # JS String(undefined) parity
     if transfer_encoding == "base64":
@@ -877,9 +889,11 @@ def parse_srcset(input_text: str) -> list[dict[str, Any]]:
     regex_floating_point = re.compile(r"^-?(?:[0-9]+|[0-9]*\.[0-9]+)(?:[eE][+-]?[0-9]+)?$")
 
     def is_space(c: str) -> bool:
+        "Return whether space."
         return bool(c) and c in _SRCSET_SPACES
 
     def parse_descriptors(url: str, descriptors: list[str]) -> None:
+        "Parse descriptors."
         p_error = False
         w = d = h = None
         for desc in descriptors:
@@ -1198,11 +1212,13 @@ class CssToken:
     __slots__ = ("kind", "text")
 
     def __init__(self, kind: int, text: str) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.kind = kind
         self.text = text
 
 
 def tokenize_css(src: str) -> list[CssToken]:
+    "Tokenize css."
     tokens: list[CssToken] = []
     i = 0
     n = len(src)
@@ -1535,6 +1551,7 @@ class CssTok(CssNode):
     __slots__ = ("kind", "text")
 
     def __init__(self, kind: int, text: str) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.kind = kind
         self.text = text
 
@@ -1543,6 +1560,7 @@ class CssStr(CssNode):
     __slots__ = ("value",)
 
     def __init__(self, value: str) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.value = value
 
 
@@ -1550,6 +1568,7 @@ class CssUrl(CssNode):
     __slots__ = ("value",)
 
     def __init__(self, value: str) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.value = value
 
 
@@ -1557,6 +1576,7 @@ class CssFunc(CssNode):
     __slots__ = ("name", "children")
 
     def __init__(self, name: str, children: list) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.name = name  # raw text, includes the "("
         self.children = children
 
@@ -1565,6 +1585,7 @@ class CssParen(CssNode):
     __slots__ = ("children",)
 
     def __init__(self, children: list) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.children = children
 
 
@@ -1572,6 +1593,7 @@ class CssBracket(CssNode):
     __slots__ = ("children",)
 
     def __init__(self, children: list) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.children = children
 
 
@@ -1582,6 +1604,7 @@ class CssOpPM(CssNode):
     __slots__ = ("text", "lead", "trail")
 
     def __init__(self, text: str, lead: bool, trail: bool) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.text = text
         self.lead = lead
         self.trail = trail
@@ -1597,6 +1620,7 @@ class CssRaw(CssNode):
     __slots__ = ("text",)
 
     def __init__(self, text: str) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.text = text
 
 
@@ -1604,6 +1628,7 @@ class CssDecl(CssNode):
     __slots__ = ("property", "value", "important")
 
     def __init__(self, property_name: str, value, important: bool) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.property = property_name
         self.value = value  # list of components or CssRaw
         self.important = important
@@ -1613,6 +1638,7 @@ class CssAtrule(CssNode):
     __slots__ = ("name", "prelude", "block")
 
     def __init__(self, name: str, prelude: list, block) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.name = name
         self.prelude = prelude  # list of components
         self.block = block  # list of block items or None
@@ -1622,6 +1648,7 @@ class CssRule(CssNode):
     __slots__ = ("prelude", "block")
 
     def __init__(self, prelude: list, block) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.prelude = prelude  # list of CssTok/CssComb/CssStr/CssUrl
         self.block = block  # list of block items or None
 
@@ -1645,6 +1672,7 @@ class _Toks:
     """Token list helper with whitespace skipping."""
 
     def __init__(self, tokens: list[CssToken]) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.tokens = tokens
 
     def skip_ws(self, i: int) -> int:
@@ -2187,6 +2215,7 @@ def _parse_nested(tk: _Toks, i: int, end: int, closer: int, lenient: bool) -> tu
 
 class _CssEmitter:
     def __init__(self) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.parts: list[str] = []
         self.prev = 0
 
@@ -2298,6 +2327,7 @@ def _emit_item(em: _CssEmitter, item: CssNode) -> None:
 
 
 def generate_stylesheet(items: Sequence) -> str:
+    "Generate stylesheet."
     em = _CssEmitter()
     for item in items:
         _emit_item(em, item)
@@ -2305,6 +2335,7 @@ def generate_stylesheet(items: Sequence) -> str:
 
 
 def generate_declaration_list(items: Sequence) -> str:
+    "Generate declaration list."
     em = _CssEmitter()
     _emit_block_items(em, items, braces=False)
     return em.result()
@@ -2316,7 +2347,10 @@ def generate_declaration_list(items: Sequence) -> str:
 
 
 def walk_css_nodes(items: Iterable, visit: Callable[[CssNode], None]) -> None:
+    "Walk css nodes."
+
     def walk_list(nodes: Iterable) -> None:
+        "Walk list."
         for node in nodes:
             visit(node)
             if isinstance(node, CssFunc):
@@ -2354,6 +2388,7 @@ def first_stylesheet_item_is_charset(items: Sequence) -> Optional[tuple[str, str
 
 
 def remove_first_stylesheet_item(items: list) -> None:
+    "Remove first stylesheet item."
     if items:
         items.pop(0)
 
@@ -2412,6 +2447,7 @@ class DomDocument:
     """Thin wrapper over a minidom document produced by html5lib."""
 
     def __init__(self, document) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.document = document
 
     # -- lookups ------------------------------------------------------------
@@ -2441,12 +2477,15 @@ class DomDocument:
         return None
 
     def get_elements_by_tag_name(self, tag_name: str) -> list:
+        "Return elements by tag name."
         return list(self.document.getElementsByTagName(tag_name))
 
     def create_element(self, tag_name: str):
+        "Create element."
         return self.document.createElement(tag_name)
 
     def create_text_node(self, data: str):
+        "Create text node."
         return self.document.createTextNode(data)
 
     # -- serialization (port of dom-parser-node.js) -------------------------
@@ -2468,6 +2507,7 @@ def _tag_name(node) -> Optional[str]:
 
 
 def parse_dom(asset: str, content_type: str = "text/html") -> DomDocument:
+    "Parse dom."
     if html5lib is None:
         raise ConversionError("html5lib is required for HTML parsing: pip install html5lib")
     document = html5lib.parse(asset, treebuilder="dom")
@@ -2659,6 +2699,7 @@ def element_after(node, *new_nodes) -> None:
 
 
 def get_meta_charset_elements(document_element) -> list:
+    "Return meta charset elements."
     out = []
     if document_element is None:
         return out
@@ -2669,6 +2710,7 @@ def get_meta_charset_elements(document_element) -> list:
 
 
 def get_meta_content_type_elements(document_element) -> list:
+    "Return meta content type elements."
     out = []
     if document_element is None:
         return out
@@ -2705,6 +2747,8 @@ BASE64_ENCODING = "base64"
 
 @dataclass
 class Anomaly:
+    "Store type, id."
+
     type: str
     id: Optional[str] = None
 
@@ -2721,6 +2765,8 @@ class Anomaly:
 
 @dataclass
 class Resource:
+    "Store id, content_type, transfer_encoding, data, raw_data and related state."
+
     id: str
     content_type: Optional[str] = None
     transfer_encoding: Optional[str] = None
@@ -2734,6 +2780,8 @@ class Resource:
 
 @dataclass
 class Mhtml:
+    "Store headers, frames, resources, index, anomalies."
+
     headers: dict[str, str] = field(default_factory=dict)
     frames: dict[str, Resource] = field(default_factory=dict)
     resources: dict[str, Resource] = field(default_factory=dict)
@@ -2854,6 +2902,7 @@ def parse_mhtml(
     n = len(mhtml)
 
     def get_line(encoding: Optional[str] = None) -> bytes:
+        "Return line."
         nonlocal index_mhtml
         index_start = index_mhtml
         index_line_feed = mhtml.find(b"\n", index_start)
@@ -2864,10 +2913,12 @@ def parse_mhtml(
         return line
 
     def split_headers(line: bytes, obj: dict) -> None:
+        "Split headers."
         nonlocal header_key
         header_key = _parse_header_line(decode_string(line), obj, header_key)
 
     def decode_raw_headers(charset: Optional[str]) -> None:
+        "Decode raw headers."
         if charset is None or charset == UTF8_CHARSET:
             return
         if not any("\ufffd" in value for value in headers.values()):
@@ -2881,6 +2932,7 @@ def parse_mhtml(
                 headers[name] = decoded_headers[name]
 
     def read_body_headers() -> dict[str, str]:
+        "Read body headers."
         nonlocal index_mhtml, header_key
         index_start_body = index_mhtml
         if _starts_with_markup(mhtml[index_mhtml:]):
@@ -2907,6 +2959,7 @@ def parse_mhtml(
         )
 
     def init_resource(resource_data: dict[str, str]) -> None:
+        "Initialize resource."
         nonlocal transfer_encoding, content_id, resource, content, header_key
         nonlocal data_chunks, data_length, index_generated_id
         transfer_encoding = resource_data.get("content-transfer-encoding")
@@ -2949,12 +3002,14 @@ def parse_mhtml(
         header_key = None
 
     def append_data(chunk: bytes) -> None:
+        "Append data."
         nonlocal data_length
         if chunk:
             data_chunks.append(chunk)
             data_length += len(chunk)
 
     def get_data_byte(offset_from_end: int) -> Optional[int]:
+        "Return data byte."
         offset = offset_from_end
         for chunk in reversed(data_chunks):
             if len(chunk) >= offset:
@@ -2989,6 +3044,7 @@ def parse_mhtml(
         return b"".join(data_chunks)
 
     def parse_resource_data() -> Optional[int]:
+        "Parse resource data."
         nonlocal data_chunks, data_length
         next_line = get_line(transfer_encoding)
         index_end_data: Optional[int] = None
@@ -3022,6 +3078,7 @@ def parse_mhtml(
         return index_end_data
 
     def convert_embedded_mhtml(index_end: int) -> Optional[str]:
+        "Convert embedded mhtml."
         nonlocal index_mhtml
         inner_context = {"resources": resources, "frames": frames, "anomalies": anomalies}
         embedded = mhtml[index_start_embedded_mhtml:index_end]
@@ -3033,6 +3090,7 @@ def parse_mhtml(
         return inner_context.get("index")
 
     def process_resource() -> None:
+        "Process resource."
         nonlocal resource
         assert resource is not None
         raw = resource.data if isinstance(resource.data, bytes) else encode_string(str(resource.data))
@@ -3075,6 +3133,7 @@ def parse_mhtml(
         resource.raw_data = None
 
     def process_stylesheet_charset(charset: Optional[str], bom_charset: Optional[str]) -> None:
+        "Process stylesheet charset."
         assert resource is not None
         try:
             items = parse_stylesheet(resource.data)
@@ -3090,6 +3149,7 @@ def parse_mhtml(
             pass  # a broken sheet is left as it is
 
     def process_document_charset(charset: Optional[str], bom_charset: Optional[str]) -> Optional[str]:
+        "Process document charset."
         nonlocal resource
         assert resource is not None
         document_charset = charset
@@ -3216,11 +3276,13 @@ def parse_mhtml(
 
 
 def cache_resource_dom(resource: Resource, dom: DomDocument) -> None:
+    "Cache resource dom."
     resource.dom = dom
     resource.dom_data = resource.data
 
 
 def get_resource_dom(resource: Resource, content_type: Optional[str]) -> DomDocument:
+    "Return resource dom."
     if resource.dom is None or resource.dom_data != resource.data:
         cache_resource_dom(resource, parse_dom(resource.data, content_type or "text/html"))
     return resource.dom
@@ -4271,6 +4333,8 @@ def _favicon_from_dict(f: dict) -> "Favicon":
 
 @dataclass
 class Favicon:
+    "Store href, media, type, sizes, original_href."
+
     href: str
     media: Optional[str] = None
     type: Optional[str] = None
@@ -4280,6 +4344,8 @@ class Favicon:
 
 @dataclass
 class PageData:
+    "Store data, title, unfound_resources, anomalies, favicons."
+
     data: str
     title: Optional[str] = None
     unfound_resources: list[str] = field(default_factory=list)
@@ -4371,6 +4437,7 @@ def _default_output_path(input_path: Path) -> Path:
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
+    "Build arg parser."
     parser = argparse.ArgumentParser(
         prog="mhtml-to-html",
         description="Convert MHTML/MHT archives into single self-contained HTML files "
@@ -4458,6 +4525,7 @@ def _convert_file(input_path: Path, output_path: Path, config: ConvertConfig) ->
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
+    "Run the command-line interface."
     parser = build_arg_parser()
     args = parser.parse_args(argv)
 
@@ -4533,4 +4601,4 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    raise SystemExit(main())

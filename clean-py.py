@@ -1,4 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/env python
+"Utilities for clean-py."
+
 from __future__ import absolute_import
 
 import contextlib
@@ -124,6 +126,8 @@ log = logging.getLogger("clean-py")
 
 @dataclass
 class Config:
+    "Store py, ipynb, autoflake, isort, black and related state."
+
     py: bool = True
     ipynb: bool = True
     autoflake: bool = True
@@ -168,6 +172,8 @@ class Config:
 
 @dataclass
 class Stats:
+    "Store scanned, changed, unchanged, errors, files."
+
     scanned: int = 0
     changed: int = 0
     unchanged: int = 0
@@ -176,6 +182,7 @@ class Stats:
 
 
 def setup_logging(verbose: bool, quiet: bool, no_color: bool) -> None:
+    "Set up logging."
     global console
     if no_color:
         console = Console(no_color=True)
@@ -209,6 +216,7 @@ def _build_file_mode(config: Config) -> FileMode:
 
 
 def remove_duplicate_cells(cells: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    "Remove duplicate cells."
     seen: Set[str] = set()
     result: List[Dict[str, Any]] = []
     for cell in cells:
@@ -222,6 +230,7 @@ def remove_duplicate_cells(cells: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
 
 def remove_empty_cells(cells: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    "Remove empty cells."
     result: List[Dict[str, Any]] = []
     for cell in cells:
         src = cell.get("source", "")
@@ -232,6 +241,7 @@ def remove_empty_cells(cells: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
 
 def remove_magics(source: str) -> str:
+    "Remove magics."
     invalid = ("%", "?")
     lines: List[str] = []
     for line in source.split("\n"):
@@ -244,6 +254,7 @@ def remove_magics(source: str) -> str:
 
 
 def clean_python_code(source: str, config: Config, is_notebook_cell: bool = False) -> str:
+    "Clean python code."
     if config.respect_fmt_off and _has_fmt_off(source):
         return source
 
@@ -315,6 +326,7 @@ def _finalize_newlines(source: str, config: Config) -> str:
 
 
 def create_file(file_path: Path, contents: str, config: Config) -> bool:
+    "Create file."
     try:
         existing: Optional[str] = file_path.read_text(encoding="utf-8")
     except FileNotFoundError:
@@ -338,6 +350,7 @@ def create_file(file_path: Path, contents: str, config: Config) -> bool:
 
 
 def clean_py(py_file_path: Path, config: Config) -> bool:
+    "Clean py."
     source = py_file_path.read_text(encoding="utf-8")
     header, body = _split_header(source, config)
     cleaned_body = clean_python_code(body, config)
@@ -346,6 +359,7 @@ def clean_py(py_file_path: Path, config: Config) -> bool:
 
 
 def clear_ipynb_output(ipynb_file_path: Path) -> None:
+    "Clear ipynb output."
     run(
         (
             "jupyter",
@@ -359,6 +373,7 @@ def clear_ipynb_output(ipynb_file_path: Path) -> None:
 
 
 def clean_ipynb_cell(cell_dict: Dict[str, Any], config: Config) -> Dict[str, Any]:
+    "Clean ipynb cell."
     if cell_dict.get("cell_type") != "code":
         return cell_dict
     try:
@@ -391,6 +406,7 @@ def clean_ipynb_cell(cell_dict: Dict[str, Any], config: Config) -> Dict[str, Any
 
 
 def clean_ipynb(ipynb_file_path: Path, config: Config) -> bool:
+    "Clean ipynb."
     if config.clear_output:
         try:
             clear_ipynb_output(ipynb_file_path)
@@ -446,6 +462,7 @@ def _load_gitignore(root: Path) -> Optional[Any]:
 
 
 def discover_files(paths: Sequence[Path], config: Config) -> List[Path]:
+    "Discover files."
     result: List[Path] = []
     for root in paths:
         if root.is_file():
@@ -495,6 +512,7 @@ def _save_cache(cache_file: Path, keys: Set[str]) -> None:
 
 
 def load_config_file(path: Path) -> Dict[str, Any]:
+    "Load config file."
     if tomllib is None or not path.exists():
         return {}
     try:
@@ -514,6 +532,7 @@ def load_config_file(path: Path) -> Dict[str, Any]:
 
 
 def find_config_file(start: Path) -> Optional[Path]:
+    "Find config file."
     for name in ("pyproject.toml", ".clean-py.toml", "clean-py.toml"):
         for parent in [start] + list(start.parents):
             candidate = parent / name
@@ -542,6 +561,7 @@ def _emit_error_github(path: Path, message: str) -> None:
 
 
 def run_doctor() -> None:
+    "Run doctor."
     import autoflake as _autoflake
     import black as _black
     import isort as _isort
@@ -561,6 +581,7 @@ def run_doctor() -> None:
 
 
 def run_linters(paths: Sequence[Path], linters: Sequence[str]) -> int:
+    "Run linters."
     rc = 0
     for path in paths:
         for linter in linters:
@@ -575,12 +596,14 @@ def run_linters(paths: Sequence[Path], linters: Sequence[str]) -> int:
 
 
 def clean_stdin(config: Config) -> None:
+    "Clean stdin."
     source = sys.stdin.read()
     result = clean_python_code(source, config)
     sys.stdout.write(result)
 
 
 def run_watch(paths: Sequence[Path], runner: Callable[[], None], config: Config) -> None:
+    "Run watch."
     if not _HAS_WATCHDOG:
         console.print("[red]watchdog is required for --watch[/red]")
         raise typer.Exit(1)
@@ -678,6 +701,7 @@ def main(
     linters: List[str] = typer.Option([], "--linters"),
     doctor: bool = typer.Option(False, "--doctor"),
 ) -> None:
+    "Run the command-line interface."
     setup_logging(verbose, quiet, no_color)
 
     if doctor:
@@ -784,6 +808,7 @@ def main(
     stats = Stats()
 
     def process_file(f: Path) -> None:
+        "Process file."
         stats.scanned += 1
         key = _cache_key(f)
         if cfg.cache and key in cached_keys:
@@ -829,6 +854,7 @@ def main(
                 raise
 
     def run_all() -> None:
+        "Run all."
         stats.scanned = 0
         stats.changed = 0
         stats.unchanged = 0

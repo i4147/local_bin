@@ -1,4 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/env python
+"Find and download Python distributions from PEP 503/691 indexes."
+
 import argparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
@@ -72,6 +74,8 @@ HTML_TYPES: frozenset[str] = frozenset({"text/html", "application/vnd.pypi.simpl
 
 @dataclass(frozen=True, slots=True)
 class Link:
+    "Store url, comes_from, requires_python, yanked, hashes."
+
     url: str
     comes_from: str | None = None
     requires_python: str | None = None
@@ -91,6 +95,7 @@ class Link:
 
     @property
     def clean_url(self) -> str:
+        "Clean url."
         return self.url.split("#", 1)[0]
 
     @property
@@ -103,14 +108,17 @@ class Link:
 
     @property
     def is_wheel(self) -> bool:
+        "Return whether wheel."
         return self.filename.endswith(".whl")
 
     @property
     def is_source(self) -> bool:
+        "Return whether source."
         return self.filename.lower().endswith(SOURCE_SUFFIXES)
 
     @property
     def is_file(self) -> bool:
+        "Return whether file."
         return self.parsed.scheme == "file"
 
     @property
@@ -120,11 +128,14 @@ class Link:
         return Path(unquote(self.parsed.path))
 
     def __repr__(self) -> str:
+        "Return the object's developer-facing representation."
         return f"<Link {self.url}>"
 
 
 @dataclass(frozen=True, slots=True)
 class Package:
+    "Store name, version, link."
+
     name: str
     version: str
     link: Link
@@ -147,6 +158,8 @@ class Package:
 
 @dataclass(slots=True)
 class TargetPython:
+    "Store py_version, abis, implementation, platforms, _tags."
+
     py_version: tuple[int, ...] | None = None
     abis: list[str] | None = None
     implementation: str | None = None
@@ -178,11 +191,13 @@ class TargetPython:
 
 class HTMLIndexParser(HTMLParser):
     def __init__(self) -> None:
+        "Initialize the instance state from the supplied arguments."
         super().__init__(convert_charrefs=True)
         self.base_url: str | None = None
         self.anchors: list[dict[str, str | None]] = []
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        "Handle starttag."
         if tag == "base" and self.base_url is None:
             self.base_url = dict(attrs).get("href")
         elif tag == "a":
@@ -190,6 +205,7 @@ class HTMLIndexParser(HTMLParser):
 
 
 def parse_html(response: httpx.Response):
+    "Parse html."
     parser = HTMLIndexParser()
     parser.feed(response.text)
     base = parser.base_url or str(response.url)
@@ -207,6 +223,7 @@ def parse_html(response: httpx.Response):
 
 
 def parse_json(response: httpx.Response):
+    "Parse json."
     data = response.json()
     base = str(response.url)
     for item in data.get("files", ()):
@@ -224,6 +241,7 @@ def parse_json(response: httpx.Response):
 
 
 def fetch_page(client: httpx.Client, url: str) -> list[Link]:
+    "Fetch page."
     response = client.get(url, headers={"Accept": ACCEPT_HEADER})
     response.raise_for_status()
     ctype = response.headers.get("content-type", "").split(";", 1)[0].strip().lower()
@@ -235,6 +253,7 @@ def fetch_page(client: httpx.Client, url: str) -> list[Link]:
 
 
 def strip_source_ext(filename: str) -> str:
+    "Strip source ext."
     lower = filename.lower()
     for suffix in sorted(SOURCE_SUFFIXES, key=len, reverse=True):
         if lower.endswith(suffix):
@@ -271,6 +290,7 @@ def make_candidate(
     no_binary: bool,
     only_binary: bool,
 ) -> Package | None:
+    "Create candidate."
     version: Version
     if link.is_wheel:
         if no_binary:
@@ -326,6 +346,7 @@ class Finder:
         target: TargetPython | None = None,
         client: httpx.Client | None = None,
     ) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.sources: list[tuple[str, str]] = []
         idx = list(indexes)
         if not idx:
@@ -351,9 +372,11 @@ class Finder:
             self._client = None
 
     def __enter__(self) -> "Finder":
+        "Enter the managed context and return its resource."
         return self
 
     def __exit__(self, *args: Any) -> None:
+        "Release resources acquired by the managed context."
         self.close()
 
     def find(
@@ -439,6 +462,7 @@ def file_hash(path: Path, algo: str) -> str:
 
 
 def verify_hash(path: Path, hashes: dict[str, str]) -> bool:
+    "Verify hash."
     chosen = pick_hash(hashes)
     if chosen is None:
         logger.warning("no published hash for {}; checking archive only", path.name)
@@ -453,6 +477,7 @@ def verify_hash(path: Path, hashes: dict[str, str]) -> bool:
 
 
 def verify_archive(path: Path) -> bool:
+    "Verify archive."
     name = path.name.lower()
     try:
         if name.endswith((".whl", ".zip")):
@@ -497,6 +522,7 @@ def supports_ranges(client: httpx.Client, url: str) -> bool:
 
 
 def download_single(client: httpx.Client, url: str, dest: Path) -> None:
+    "Download single."
     with client.stream("GET", url) as r:
         r.raise_for_status()
         with dest.open("wb") as f:
@@ -505,6 +531,7 @@ def download_single(client: httpx.Client, url: str, dest: Path) -> None:
 
 
 def download_parallel(url: str, dest: Path, size: int, workers: int = WORKERS) -> None:
+    "Download parallel."
     workers = min(workers, max(2, (size + CHUNK - 1) // CHUNK))
     part_dir = dest.with_name(dest.name + ".parts")
     if part_dir.exists():
@@ -520,6 +547,7 @@ def download_parallel(url: str, dest: Path, size: int, workers: int = WORKERS) -
         ranges.append((start, end, part_dir / f"{i:03d}.part"))
 
     def fetch_range(start: int, end: int, part: Path) -> None:
+        "Fetch range."
         headers = {"Range": f"bytes={start}-{end}"}
         with httpx.Client(
             follow_redirects=True,
@@ -554,6 +582,7 @@ def download_parallel(url: str, dest: Path, size: int, workers: int = WORKERS) -
 
 
 def download_requests(url: str, dest: Path) -> None:
+    "Download requests."
     try:
         import requests
     except ImportError as exc:
@@ -567,6 +596,7 @@ def download_requests(url: str, dest: Path) -> None:
 
 
 def download_pycurl(url: str, dest: Path) -> None:
+    "Download pycurl."
     try:
         import pycurl
     except ImportError as exc:
@@ -587,6 +617,7 @@ def download_pycurl(url: str, dest: Path) -> None:
 
 
 def download_aria2c(url: str, dest: Path) -> None:
+    "Download aria2c."
     aria = shutil.which("aria2c")
     if aria is None:
         raise RuntimeError("aria2c not found in PATH")
@@ -678,6 +709,7 @@ def download(
 
 
 def parse_version_arg(value: str) -> tuple[int, ...]:
+    "Parse version arg."
     parts = value.split(".")
     if not parts or any(not p.isdigit() for p in parts):
         raise argparse.ArgumentTypeError(f"invalid Python version: {value!r}")
@@ -685,6 +717,7 @@ def parse_version_arg(value: str) -> tuple[int, ...]:
 
 
 def parse_requirements_file(path: Path) -> list[str]:
+    "Parse requirements file."
     try:
         content = path.expanduser().read_text(encoding="utf-8")
     except OSError as exc:
@@ -698,6 +731,7 @@ def parse_requirements_file(path: Path) -> list[str]:
 
 
 def build_parser() -> argparse.ArgumentParser:
+    "Build parser."
     p = argparse.ArgumentParser(
         prog="pkgfetch",
         description="Find and download Python distributions from PEP 503/691 indexes.",
@@ -760,6 +794,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def setup_logging(verbose: bool) -> None:
+    "Set up logging."
     logger.remove()
     logger.add(
         sys.stderr,
@@ -769,6 +804,7 @@ def setup_logging(verbose: bool) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    "Run the command-line interface."
     args = build_parser().parse_args(argv)
     setup_logging(args.verbose)
 

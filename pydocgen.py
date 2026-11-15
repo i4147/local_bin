@@ -1,4 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/env python
+"Generate readable markdown documentation from Python sources (libcst, tree-sitter or ast backend)."
+
 from __future__ import annotations
 
 import argparse
@@ -38,6 +40,8 @@ ModuleTask = tuple[str, str, str]
 
 @dataclass
 class FunctionInfo:
+    "Store name, signature, decorators, doc."
+
     name: str
     signature: str
     decorators: tuple[str, ...] = ()
@@ -46,6 +50,8 @@ class FunctionInfo:
 
 @dataclass
 class ClassInfo:
+    "Store name, signature, decorators, doc, methods."
+
     name: str
     signature: str
     decorators: tuple[str, ...] = ()
@@ -55,12 +61,15 @@ class ClassInfo:
 
 @dataclass
 class ModuleInfo:
+    "Store name, doc, functions, classes."
+
     name: str = ""
     doc: str = ""
     functions: list[FunctionInfo] = field(default_factory=list)
     classes: list[ClassInfo] = field(default_factory=list)
 
     def is_empty(self) -> bool:
+        "Return whether empty."
         return not (self.doc or self.functions or self.classes)
 
 
@@ -129,6 +138,7 @@ def _ast_collect(
 
 
 def extract_ast(source: str) -> ModuleInfo:
+    "Extract ast."
     tree = ast.parse(source)
     info = ModuleInfo(doc=ast.get_docstring(tree) or "")
     _ast_collect(tree.body, "", info.functions, info.classes)
@@ -216,6 +226,7 @@ def _libcst_collect(
 
 
 def extract_libcst(source: str) -> ModuleInfo:
+    "Extract libcst."
     import libcst as cst
 
     module = cst.parse_module(source)
@@ -348,6 +359,7 @@ def _ts_collect(
 
 
 def extract_tree_sitter(source: str) -> ModuleInfo:
+    "Extract tree sitter."
     encoded = source.encode("utf-8")
     root = _ts_parser().parse(encoded).root_node
     info = ModuleInfo(doc=_ts_docstring(root, encoded))
@@ -373,6 +385,7 @@ def _signature_lines(decorators: tuple[str, ...], signature: str) -> list[str]:
 
 
 def render_markdown(info: ModuleInfo) -> str:
+    "Render markdown."
     lines: list[str] = [f"# `{info.name}`", ""]
     if info.doc:
         lines.extend(info.doc.splitlines())
@@ -423,6 +436,7 @@ def unique_path(path: Path) -> Path:
 
 
 def save_markdown(out_dir: Path, parts: Sequence[str], content: str) -> Path:
+    "Save markdown."
     target = out_dir.joinpath(*parts)
     target.parent.mkdir(parents=True, exist_ok=True)
     target = unique_path(target)
@@ -452,6 +466,7 @@ def markdown_parts(path: Path, root: Path) -> list[str]:
 
 
 def walk_python_files(directory: Path, out_dir: Path) -> Iterator[Path]:
+    "Walk python files."
     stack: list[Path] = [directory]
     while stack:
         current = stack.pop()
@@ -503,6 +518,7 @@ def classify_targets(targets: Sequence[str]) -> tuple[list[tuple[Path, Path]], l
 
 
 def process_file_task(task: FileTask) -> bool:
+    "Process file task."
     file_str, root_str, backend_name, out_dir_str = task
     path = Path(file_str)
     root = Path(root_str)
@@ -526,6 +542,7 @@ def process_file_task(task: FileTask) -> bool:
 
 
 def process_module_task(task: ModuleTask) -> bool:
+    "Process module task."
     module_name, backend_name, out_dir_str = task
     print(f"processing module {module_name}")
     try:
@@ -550,6 +567,7 @@ def process_module_task(task: ModuleTask) -> bool:
 
 
 def resolve_backend(name: str) -> str:
+    "Resolve backend."
     if name == "libcst":
         try:
             import libcst
@@ -567,6 +585,7 @@ def resolve_backend(name: str) -> str:
 
 
 def build_parser() -> argparse.ArgumentParser:
+    "Build parser."
     parser = argparse.ArgumentParser(
         description="Generate readable markdown documentation from Python sources (libcst, tree-sitter or ast backend)."
     )
@@ -582,6 +601,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    "Run the command-line interface."
     args = build_parser().parse_args(argv)
     backend_name = resolve_backend(args.backend)
     cwd = Path.cwd()

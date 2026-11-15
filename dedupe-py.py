@@ -1,4 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/env python
+"Find duplicated Python definitions and optionally strip them."
+
 import argparse
 import ast
 import collections
@@ -65,10 +67,12 @@ IGNORED_CONSTANT_NAMES: Final[frozenset[str]] = frozenset(
 
 
 def get_source(node: ast.AST, content: str) -> str | None:
+    "Return source."
     return ast.get_source_segment(content, node)
 
 
 def normalize_source(source: str | None) -> str:
+    "Normalize source."
     if not source:
         return ""
     return "\n".join(line.rstrip() for line in source.strip().splitlines())
@@ -159,10 +163,12 @@ def analyze_files(root: Path, min_files: int, exclude: list[str]) -> list[dict[s
 
 
 def write_repeated_json(repeated: list[dict[str, Any]], output: Path) -> None:
+    "Write repeated json."
     output.write_text(json.dumps(repeated, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
 def build_refactor_map(repeated: list[dict[str, Any]]) -> FileMap:
+    "Build refactor map."
     file_to_objects: collections.defaultdict[Path, list[str]] = collections.defaultdict(list)
     for item in repeated:
         obj_name: str = item["name"]
@@ -173,6 +179,7 @@ def build_refactor_map(repeated: list[dict[str, Any]]) -> FileMap:
 
 class ASTStripper(ast.NodeTransformer):
     def __init__(self, target_names: list[str]) -> None:
+        "Initialize the instance state from the supplied arguments."
         super().__init__()
         self.target_names: set[str] = set(target_names)
         self.removed_something: bool = False
@@ -242,6 +249,7 @@ def refactor_single_file(file_path: Path, objects_to_remove: list[str]) -> bool:
 
 
 def print_report(repeated: list[dict[str, Any]]) -> None:
+    "Print report."
     table = Table(title="Duplicated Definitions")
     table.add_column("Type", style="cyan")
     table.add_column("Name", style="magenta")
@@ -255,6 +263,7 @@ def print_report(repeated: list[dict[str, Any]]) -> None:
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
+    "Parse args."
     parser = argparse.ArgumentParser(
         prog="dupe-refactor",
         description="Find duplicated Python definitions and optionally strip them.",
@@ -329,6 +338,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 
 
 def main(argv: list[str] | None = None) -> int:
+    "Run the command-line interface."
     args: argparse.Namespace = parse_args(argv if argv is not None else sys.argv[1:])
     root: Path = args.root
     exclude: list[str] = args.exclude

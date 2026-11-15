@@ -41,6 +41,8 @@ _Edit = tuple[int, int, bytes]
 
 @dataclass
 class StripFileResult:
+    "Store path, saved, modified, error, elapsed and related state."
+
     path: Path
     saved: int = 0
     modified: bool = False
@@ -67,6 +69,7 @@ class ASTStripper:
     def __init__(
         self, strip_comments: bool, strip_docstrings: bool, remove_blank_lines: bool = False, strip_all: bool = False
     ) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.strip_comments = strip_comments or strip_all
         self.strip_docstrings = strip_docstrings or strip_all
         self.strip_all = strip_all
@@ -215,6 +218,7 @@ class ASTStripper:
     def strip_file(
         self, path: Path, *, dryrun: bool = False, backup: bool = False, show_diff: bool = False
     ) -> StripFileResult:
+        "Strip file."
         started = perf_counter()
         result = StripFileResult(path)
         try:
@@ -307,6 +311,7 @@ class TSStripper(ASTStripper):
     def __init__(
         self, strip_comments: bool, strip_docstrings: bool, remove_blank_lines: bool = False, strip_all: bool = False
     ) -> None:
+        "Initialize the instance state from the supplied arguments."
         super().__init__(strip_comments, strip_docstrings, remove_blank_lines, strip_all)
         import tree_sitter
         import tree_sitter_python
@@ -471,6 +476,8 @@ class CSTStripper(ASTStripper):
 
 @dataclass(frozen=True)
 class FileOptions:
+    "Store comments, docstrings, backend, blank_lines, strip_all and related state."
+
     comments: bool = False
     docstrings: bool = False
     backend: str = "tree-sitter"
@@ -483,11 +490,14 @@ class FileOptions:
 
 @dataclass(frozen=True)
 class Task:
+    "Store path, options."
+
     path: Path
     options: FileOptions
 
 
 def process_file(task: Task) -> StripFileResult:
+    "Process file."
     started = perf_counter()
     path, options = task.path, task.options
     try:
@@ -532,7 +542,9 @@ SKIP_DIRS: frozenset[str] = frozenset({
 
 
 class WalkFiles(Protocol):
-    def __call__(self, root: str | Path, /) -> list[Path]: ...
+    def __call__(self, root: str | Path, /) -> list[Path]:
+        "Invoke the behavior represented by this object."
+        ...
 
 
 def should_skip(path: Path, root_dir: Path) -> bool:
@@ -587,10 +599,12 @@ def is_python_file(path: Path) -> bool:
 
 
 def is_skip_dir(path: Path) -> bool:
+    "Return whether skip dir."
     return path.name in SKIP_DIRS or path.name.endswith(".egg-info")
 
 
 def has_symlink_component(path: Path) -> bool:
+    "Return whether symlink component."
     return path.is_symlink() or any(parent.is_symlink() for parent in path.parents)
 
 
@@ -681,6 +695,7 @@ METHODS = (
 
 
 def run_tasks(tasks: list[Task], method: str, workers: int) -> Iterator[StripFileResult]:
+    "Run tasks."
     if method.startswith(("mp.", "threadpool.")):
         pool_type = mp.Pool if method.startswith("mp.") else ThreadPool
         operation = method.split(".", 1)[1]
@@ -744,6 +759,7 @@ def colorize_diff(diff: str, color: bool) -> str:
 
 
 def main() -> int:
+    "Run the command-line interface."
     from contextlib import nullcontext
     import importlib.util
 

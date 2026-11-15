@@ -1,4 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/env python
+"Minify HTML files in the current directory in place."
+
 from __future__ import annotations
 
 import argparse
@@ -80,6 +82,7 @@ def minify_file(job: tuple[str, str]) -> FileResult:
 
 
 def format_bytes(size: int) -> str:
+    "Format bytes."
     units = ("B", "KB", "MB", "GB", "TB")
     value = float(size)
 
@@ -94,10 +97,12 @@ def format_bytes(size: int) -> str:
 
 
 def find_html_files(directory: Path) -> list[Path]:
+    "Find html files."
     return get_files(directory, ext=[".html"])
 
 
 def parse_args() -> argparse.Namespace:
+    "Parse args."
     parser = argparse.ArgumentParser(description="Minify HTML files in the current directory in place.")
     parser.add_argument(
         "--binary",
@@ -115,6 +120,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> int:
+    "Run the command-line interface."
     args = parse_args()
 
     if args.workers < 1:

@@ -1,4 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/env python
+"Utilities for termux cleaner."
+
 import os
 import shutil
 import glob

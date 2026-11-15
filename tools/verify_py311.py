@@ -7,7 +7,7 @@ Checks:
   2. Runs vermin (if installed) targeting 3.11- and reports violations.
 
 Usage:
-    python3 tools/verify_py311.py
+    python3 arena/verify_py311.py
 """
 
 import ast
@@ -32,8 +32,7 @@ def check_parse() -> list[str]:
             ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         except SyntaxError as exc:
             failures.append(f"{path.name}:{exc.lineno}: {exc.msg}")
-    print(f"[parse] Python {sys.version.split()[0]}: "
-          f"{len(files) - len(failures)}/{len(files)} files OK")
+    print(f"[parse] Python {sys.version.split()[0]}: {len(files) - len(failures)}/{len(files)} files OK")
     for failure in failures:
         print(f"  FAIL {failure}")
     return failures
@@ -43,9 +42,10 @@ def check_vermin() -> list[str]:
     """Run vermin for the Python 3.11 target and return unexpected violations."""
     try:
         result = subprocess.run(
-            ["vermin", "-t=3.11-", "--violations", "--all",
-             *[str(p) for p in sorted(ROOT.glob("*.py"))]],
-            capture_output=True, text=True, timeout=300,
+            ["vermin", "-t=3.11-", "--violations", "--all", *[str(p) for p in sorted(ROOT.glob("*.py"))]],
+            capture_output=True,
+            text=True,
+            timeout=300,
         )
     except FileNotFoundError:
         print("[vermin] not installed; skipping")
@@ -66,8 +66,10 @@ def check_vermin() -> list[str]:
 def main() -> int:
     """Run syntax and minimum-version checks and return a process status."""
     if sys.version_info[:2] != (3, 11):
-        print(f"warning: running on Python {sys.version.split()[0]}, "
-              "expected 3.11 for a meaningful check", file=sys.stderr)
+        print(
+            f"warning: running on Python {sys.version.split()[0]}, expected 3.11 for a meaningful check",
+            file=sys.stderr,
+        )
     failures = check_parse()
     unexpected = check_vermin()
     if not failures and not unexpected:

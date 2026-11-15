@@ -1,5 +1,7 @@
 #!/data/data/com.termux/files/usr/bin/env python
 
+"Utilities for tcg."
+
 import shutil
 import subprocess
 import sys
@@ -29,6 +31,7 @@ ARCHIVE_DIR = Path.home() / "isaac" / "may" / "scripts"
 
 
 def get_clipboard_content() -> str:
+    "Return clipboard content."
     try:
         result = subprocess.run(["termux-clipboard-get"], capture_output=True, text=True, check=True)
         return result.stdout
@@ -41,6 +44,7 @@ def get_clipboard_content() -> str:
 
 
 def get_language_from_extension(filename: str) -> str:
+    "Return language from extension."
     return EXTENSION_MAP.get(Path(filename).suffix.lower(), "bash")
 
 
@@ -72,6 +76,7 @@ def archive_existing_file(path: Path) -> None:
 
 
 def create_symlink(script_path: Path) -> None:
+    "Create symlink."
     if script_path.suffix.lower() == ".rs":
         return
     symlink_path = script_path.parent / script_path.stem
@@ -86,6 +91,7 @@ def create_symlink(script_path: Path) -> None:
 
 
 def main() -> None:
+    "Run the command-line interface."
     archive = "-a" in sys.argv
     args = [arg for arg in sys.argv[1:] if arg != "-a"]
     if len(args) != 1:

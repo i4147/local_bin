@@ -1,4 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/env python
+"Command-line utility to query domains in the WhoisXML API WHOIS service similarly to the whois command."
+
 from __future__ import annotations
 
 import argparse
@@ -69,6 +71,8 @@ RC_FILE_LOCS: tuple[Path, ...] = (
 
 @dataclass
 class QueryResult:
+    "Store domain, records, record_count, is_history, error."
+
     domain: str
     records: list[dict[str, Any]]
     record_count: int
@@ -78,6 +82,7 @@ class QueryResult:
 
 class RateLimiter:
     def __init__(self, rate: float) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.interval = 1.0 / rate if rate > 0 else 0.0
         self._lock = threading.Lock()
         self._last = 0.0
@@ -106,6 +111,7 @@ def valid_date(s: str) -> str:
 
 
 def is_empty_field(field: Any, *, keep_null: bool = False) -> bool:
+    "Return whether empty field."
     if field is None:
         return not keep_null
     return isinstance(field, (str, dict, list)) and not field
@@ -134,12 +140,14 @@ def _format_text(structure: dict[str, Any], depth: int, lines: list[str]) -> Non
 
 
 def format_text(structure: dict[str, Any]) -> str:
+    "Format text."
     lines: list[str] = []
     _format_text(structure, 0, lines)
     return "\n".join(lines)
 
 
 def get_dotted(d: Any, path: str) -> Any:
+    "Return dotted."
     cur = d
     for part in path.split("."):
         if isinstance(cur, dict) and part in cur:
@@ -152,6 +160,7 @@ def get_dotted(d: Any, path: str) -> Any:
 
 
 def set_dotted(d: dict[str, Any], path: str, value: Any) -> None:
+    "Set dotted."
     parts = path.split(".")
     cur = d
     for p in parts[:-1]:
@@ -173,6 +182,7 @@ def del_dotted(d: dict[str, Any], path: str) -> None:
 
 
 def select_fields(record: dict[str, Any], include: list[str] | None, exclude: list[str] | None) -> dict[str, Any]:
+    "Select fields."
     if include:
         result: dict[str, Any] = {}
         for field in include:
@@ -204,6 +214,7 @@ def flatten(d: Any, parent: str = "", out: dict[str, Any] | None = None) -> dict
 
 
 def encode_domain(domain: str) -> str:
+    "Encode domain."
     if idna is not None:
         return idna.encode(domain).decode("utf-8")
     if not all(ord(c) < 128 for c in domain):
@@ -215,11 +226,13 @@ def encode_domain(domain: str) -> str:
 
 
 def cache_path(cache_dir: Path, url: str) -> Path:
+    "Cache path."
     key = hashlib.sha256(url.encode()).hexdigest()[:16]
     return cache_dir / f"{key}.json"
 
 
 def cache_get(cache_dir: Path, url: str, ttl: int) -> dict[str, Any] | None:
+    "Cache get."
     if ttl <= 0:
         return None
     path = cache_path(cache_dir, url)
@@ -236,6 +249,7 @@ def cache_get(cache_dir: Path, url: str, ttl: int) -> dict[str, Any] | None:
 
 
 def cache_put(cache_dir: Path, url: str, data: dict[str, Any]) -> None:
+    "Cache put."
     try:
         cache_dir.mkdir(parents=True, exist_ok=True)
         cache_path(cache_dir, url).write_text(json.dumps({"ts": time.time(), "data": data}))
@@ -249,6 +263,7 @@ def default_cache_dir() -> Path:
 
 
 def load_config(path: Path | None) -> dict[str, Any]:
+    "Load config."
     if path is not None:
         candidates = [path]
     else:
@@ -268,6 +283,7 @@ def load_config(path: Path | None) -> dict[str, Any]:
 
 
 def load_dotenv(path: Path) -> None:
+    "Load dotenv."
     if not path.exists():
         return
     try:
@@ -283,6 +299,7 @@ def load_dotenv(path: Path) -> None:
 
 
 def find_api_key(args: argparse.Namespace, profile: dict[str, Any]) -> tuple[str | None, str | None]:
+    "Find api key."
     if args.apikey:
         return args.apikey, "--apikey"
     env_key = os.environ.get("WHOISXML_API_KEY")
@@ -311,6 +328,7 @@ def find_api_key(args: argparse.Namespace, profile: dict[str, Any]) -> tuple[str
 
 
 def build_url_for_target(target: str, mode: str, api_key: str, args: argparse.Namespace) -> tuple[str, bool]:
+    "Build url for target."
     if mode == "reverse":
         if ":" not in target:
             raise ValueError(f"--reverse expects TYPE:VALUE, got {target!r}")
@@ -432,6 +450,7 @@ def parse_response(
     is_history: bool,
     args: argparse.Namespace,
 ) -> QueryResult:
+    "Parse response."
     if mode in ("ip", "reverse", "dns"):
         record = data if isinstance(data, dict) else {"value": data}
         return QueryResult(
@@ -535,6 +554,7 @@ def diff_records(old: Any, new: Any, prefix: str = "") -> list[str]:
 
 
 def resolve_color(mode: str) -> bool:
+    "Resolve color."
     if mode == "never":
         return False
     if mode == "always":
@@ -549,12 +569,14 @@ def resolve_color(mode: str) -> bool:
 
 
 def wrap_output(text: str, width: int) -> str:
+    "Wrap output."
     if width <= 0:
         return text
     return "\n".join(textwrap.fill(line, width) if line else line for line in text.splitlines())
 
 
 def render_json(record: dict[str, Any], args: argparse.Namespace, color_on: bool, theme: str) -> str:
+    "Render json."
     indent: int | None = 1
     separators: tuple[str, str] | None = None
     if args.compact:
@@ -569,6 +591,7 @@ def render_json(record: dict[str, Any], args: argparse.Namespace, color_on: bool
 
 
 def render_record(record: dict[str, Any], args: argparse.Namespace, color_on: bool, theme: str) -> str:
+    "Render record."
     if args.raw_whois:
         return str(record.get("rawText", ""))
     if args.text:
@@ -591,6 +614,7 @@ def render_record(record: dict[str, Any], args: argparse.Namespace, color_on: bo
 
 
 def format_single_result(result: QueryResult, args: argparse.Namespace, color_on: bool, theme: str) -> str:
+    "Format single result."
     if result.error and not result.records:
         if not args.quiet:
             return f"# {result.domain}: {result.error}"
@@ -604,6 +628,7 @@ def format_single_result(result: QueryResult, args: argparse.Namespace, color_on
 
 
 def write_csv_results(results: list[QueryResult], stream: Any) -> None:
+    "Write csv results."
     rows: list[dict[str, Any]] = []
     for result in results:
         for record in result.records:
@@ -626,6 +651,7 @@ def write_csv_results(results: list[QueryResult], stream: Any) -> None:
 
 
 def write_output(results: list[QueryResult], args: argparse.Namespace, color_on: bool, theme: str) -> None:
+    "Write output."
     if args.output and args.output != "-":
         with open(args.output, "w", encoding="utf-8") as f:
             _write_to_stream(results, args, color_on, theme, f)
@@ -682,6 +708,7 @@ def _write_to_stream(
 
 
 def collect_domains(args: argparse.Namespace) -> list[str]:
+    "Collect domains."
     domains: list[str] = []
     if args.domainName:
         name = args.domainName
@@ -699,6 +726,7 @@ def collect_domains(args: argparse.Namespace) -> list[str]:
 
 
 def read_domains_file(path: Path) -> list[str]:
+    "Read domains file."
     try:
         content = path.read_text()
     except OSError as exc:
@@ -708,6 +736,7 @@ def read_domains_file(path: Path) -> list[str]:
 
 
 def read_domains_stdin() -> list[str]:
+    "Read domains stdin."
     return [line.strip() for line in sys.stdin.read().splitlines() if line.strip() and not line.startswith("#")]
 
 
@@ -778,6 +807,7 @@ def execute_targets(
 
 
 def run_check_key(api_key: str, args: argparse.Namespace) -> int:
+    "Run check key."
     url = f"{ACCOUNT_BASE}/service/account-balance?apiKey={api_key}"
     verify: bool | str = False if args.no_verify else (args.ca_bundle if args.ca_bundle else True)
     try:
@@ -794,6 +824,7 @@ def run_check_key(api_key: str, args: argparse.Namespace) -> int:
 def print_config(
     args: argparse.Namespace, profile: dict[str, Any], api_key: str | None, key_source: str | None
 ) -> None:
+    "Print config."
     redacted = "***" if not api_key else ("***" + api_key[-4:] if len(api_key) > 4 else "***")
     payload = {
         "version": VERSION,
@@ -829,6 +860,7 @@ def version_full() -> str:
 
 
 def generate_manpage(parser: argparse.ArgumentParser) -> str:
+    "Generate manpage."
     lines = [
         f".TH {parser.prog.upper()} 1",
         ".SH NAME",
@@ -848,6 +880,7 @@ def generate_manpage(parser: argparse.ArgumentParser) -> str:
 
 
 def generate_completion(parser: argparse.ArgumentParser, shell: str) -> str:
+    "Generate completion."
     options = [opt for action in parser._actions for opt in action.option_strings]  # noqa: SLF001
     joined = " ".join(options)
     if shell == "bash":
@@ -879,6 +912,7 @@ def generate_completion(parser: argparse.ArgumentParser, shell: str) -> str:
 
 
 def build_parser() -> argparse.ArgumentParser:
+    "Build parser."
     p = argparse.ArgumentParser(
         prog=MYNAME,
         description="Command-line utility to query domains in the WhoisXML API WHOIS service similarly to the whois command.",
@@ -1017,6 +1051,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> int:
+    "Run the command-line interface."
     parser = build_parser()
     args = parser.parse_args()
 

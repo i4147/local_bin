@@ -1,5 +1,7 @@
 #!/data/data/com.termux/files/usr/bin/env python
 
+"Optimized Zip Brute-Forcer for Python 3.11+"
+
 from __future__ import annotations
 
 import argparse
@@ -20,6 +22,8 @@ DEFAULT_UPDATE_INTERVAL: Final[float] = 5.0
 
 @dataclass
 class CrackResult:
+    "Store success, password, tested_count, start_time, end_time."
+
     success: bool = False
     password: str | None = None
     tested_count: int = 0
@@ -37,6 +41,7 @@ class CrackResult:
 
 
 def format_duration(seconds: float) -> str:
+    "Format duration."
     hours, remainder = divmod(int(seconds), 3600)
     minutes, secs = divmod(remainder, 60)
     if hours > 0:
@@ -47,6 +52,7 @@ def format_duration(seconds: float) -> str:
 
 
 def check_password_batch(zip_path: Path, passwords: list[str]) -> tuple[str | None, int]:
+    "Check password batch."
     tested = 0
     try:
         with zipfile.ZipFile(zip_path) as zf:
@@ -65,6 +71,7 @@ def check_password_batch(zip_path: Path, passwords: list[str]) -> tuple[str | No
 
 
 def get_wordlist_batches(path: Path, batch_size: int) -> Generator[list[str], None, None]:
+    "Return wordlist batches."
     with path.open("r", encoding="utf-8", errors="ignore") as f:
         while True:
             batch = [line.strip() for line in islice(f, batch_size) if line.strip()]
@@ -74,6 +81,7 @@ def get_wordlist_batches(path: Path, batch_size: int) -> Generator[list[str], No
 
 
 def count_lines(path: Path) -> int:
+    "Count lines."
     count = 0
     with path.open("rb") as f:
         for _line in f:
@@ -153,6 +161,7 @@ def brute_force_zip(
 
 
 def main() -> None:
+    "Run the command-line interface."
     parser = argparse.ArgumentParser(
         description="Optimized Zip Brute-Forcer for Python 3.11+",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,

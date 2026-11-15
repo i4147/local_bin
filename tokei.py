@@ -46,10 +46,7 @@ __version__ = "1.0.0"
 
 if sys.version_info >= (3, 12):
     # PEP 695 ``type`` aliases; exec'd so this file still parses on Python < 3.12.
-    exec(
-        "type LanguageName = str\n"
-        "type SortColumn = Literal['files', 'lines', 'blanks', 'code', 'comments']"
-    )
+    exec("type LanguageName = str\ntype SortColumn = Literal['files', 'lines', 'blanks', 'code', 'comments']")
 else:
     LanguageName = str
     SortColumn = Literal["files", "lines", "blanks", "code", "comments"]
@@ -158,6 +155,7 @@ class Parser:
     __slots__ = ("syn", "_tok_re", "_tok_map", "_ends")
 
     def __init__(self, syn: Syntax) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.syn = syn
         toks: dict[str, tuple[str, object]] = {}
         for blk in syn.block_comment:
@@ -777,6 +775,7 @@ def _shebang_language(path: Path) -> LanguageName | None:
 
 
 def detect_language(path: Path) -> LanguageName | None:
+    "Detect language."
     lower = path.name.lower()
     lang = FILENAMES.get(lower)
     if lang is not None:
@@ -880,6 +879,7 @@ class IgnoreFile:
     __slots__ = ("base", "rules")
 
     def __init__(self, base: Path, text: str) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.base = base
         self.rules = _parse_rules(text.splitlines())
 
@@ -910,6 +910,7 @@ class ExcludePatterns:
     __slots__ = ("rules",)
 
     def __init__(self, patterns: Sequence[str]) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.rules = _parse_rules(list(patterns))
 
     def excluded(self, p: Path, is_dir: bool, roots: Sequence[Path]) -> bool:
@@ -959,6 +960,8 @@ def _ancestor_ignores(root: Path, no_ignore: bool) -> list[IgnoreFile]:
 
 @dataclass(slots=True)
 class Options:
+    "Store paths, files, types, exclude, hidden and related state."
+
     paths: list[Path]
     files: bool
     types: set[str]
@@ -1014,6 +1017,7 @@ def _walk_dir(root: Path, opts: Options, exclude: ExcludePatterns | None) -> Ite
 
 
 def iter_input_files(opts: Options, exclude: ExcludePatterns | None) -> Iterator[Path]:
+    "Yield input files from the supplied input."
     for p in opts.paths:
         if p.is_dir():
             yield from _walk_dir(p, opts, exclude)
@@ -1092,6 +1096,7 @@ def _total(results: dict[str, Stats]) -> Stats:
 
 
 def render_terminal(results: dict[str, Stats], reports: dict[str, list[tuple[str, Stats]]], opts: Options) -> str:
+    "Render terminal."
     columns = _terminal_columns(opts)
     hdr_lang = columns - 67
     row_lang = columns - 61
@@ -1124,6 +1129,7 @@ def render_terminal(results: dict[str, Stats], reports: dict[str, list[tuple[str
 
 
 def render_json(results: dict[str, Stats], reports: dict[str, list[tuple[str, Stats]]], opts: Options) -> str:
+    "Render json."
     obj: dict[str, object] = {}
     for name in sorted(results):
         entry: dict[str, object] = results[name].as_dict()
@@ -1142,6 +1148,7 @@ def _key(s: str) -> str:
 
 
 def render_yaml(results: dict[str, Stats], reports: dict[str, list[tuple[str, Stats]]], opts: Options) -> str:
+    "Render yaml."
     lines: list[str] = []
     for name in sorted(results):
         lines.append(f"{_key(name)}:")
@@ -1157,6 +1164,7 @@ def render_yaml(results: dict[str, Stats], reports: dict[str, list[tuple[str, St
 
 
 def render_toml(results: dict[str, Stats], reports: dict[str, list[tuple[str, Stats]]], opts: Options) -> str:
+    "Render toml."
     blocks = []
     for name in sorted(results):
         block = [f"[{_key(name)}]"]
@@ -1167,6 +1175,7 @@ def render_toml(results: dict[str, Stats], reports: dict[str, list[tuple[str, St
 
 
 def render_csv(results: dict[str, Stats], reports: dict[str, list[tuple[str, Stats]]], opts: Options) -> str:
+    "Render csv."
     buf = io.StringIO()
     w = csv.writer(buf, lineterminator="\n")
     w.writerow(["language", "files", "lines", "code", "comments", "blanks"])
@@ -1193,6 +1202,7 @@ examples:
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
+    "Build arg parser."
     ap = argparse.ArgumentParser(
         prog="tokei",
         description="tokei.py -- a single-file Python reimplementation of tokei "
@@ -1286,6 +1296,7 @@ def _print_languages() -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    "Run the command-line interface."
     ap = build_arg_parser()
     args = ap.parse_args(argv)
 
@@ -1349,7 +1360,7 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     try:
-        sys.exit(main())
+        raise SystemExit(main())
     except BrokenPipeError:  # e.g. piped into head(1)
         devnull = os.open(os.devnull, os.O_WRONLY)
         os.dup2(devnull, sys.stdout.fileno())

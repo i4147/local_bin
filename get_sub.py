@@ -1,5 +1,7 @@
 #!/data/data/com.termux/files/usr/bin/env python
 
+"download subtitles easily"
+
 import argparse
 import copy
 import json
@@ -72,6 +74,7 @@ VIDEO_FORMATS: list[str] = [
 
 class ProgressBar:
     def __init__(self, prefix_info: str, title: str = "", total: int = 0, count_time: int = 0) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.title: str = title
         self.total: int = total
         self.prefix_info: str = prefix_info
@@ -106,6 +109,7 @@ def num_to_cn(number: str) -> str:
 
 
 def extract_name(name: str, en: bool = False) -> str:
+    "Extract name."
     name, suffix = (str(Path(name).with_suffix("")), Path(name).suffix)
     c_pattern: str = "[一-鿿]"
     e_pattern: str = "[a-zA-Z]"
@@ -167,6 +171,7 @@ def _print_and_choose(items: list[str]) -> int:
 
 
 def choose_archive(sub_dict: dict[str, Any], sub_num: int = 5, query: bool = True) -> tuple[bool, Any]:
+    "Choose archive."
     should_exit: bool = False
     if not query:
         chosen_sub: str = list(sub_dict.keys())[0]
@@ -190,6 +195,7 @@ def choose_archive(sub_dict: dict[str, Any], sub_num: int = 5, query: bool = Tru
 
 
 def choose_subtitle(subtitles: list[str]) -> str:
+    "Choose subtitle."
     items: list[str] = []
     for subtitle in subtitles:
         with suppress(Exception):
@@ -200,6 +206,7 @@ def choose_subtitle(subtitles: list[str]) -> str:
 
 
 def compute_subtitle_score(video_detail: dict[str, Any], subname: str, match_episode: bool = True) -> int:
+    "Compute subtitle score."
     video_name: str = video_detail["title"].lower()
     season: str = str(video_detail.get("season"))
     episode: str = str(video_detail.get("episode"))
@@ -268,6 +275,7 @@ def guess_subtitle(sublist: list[str], video_detail: dict[str, Any]) -> tuple[bo
 
 
 def get_file_list(data: bytes, datatype: str) -> dict[str, Any]:
+    "Return file list."
     sub_buff: BytesIO = BytesIO(data)
     file_handler: Any
     if datatype == ".7z":
@@ -298,6 +306,7 @@ def get_file_list(data: bytes, datatype: str) -> dict[str, Any]:
 
 
 def run_command(cmd: str) -> tuple[str, str, int]:
+    "Run command."
     process: subprocess.Popen = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
     output, error = process.communicate()
     return output.decode(), error.decode(), process.returncode
@@ -305,6 +314,7 @@ def run_command(cmd: str) -> tuple[str, str, int]:
 
 class P7ZIP:
     def __init__(self, file: BytesIO) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.data: bytes = file.read()
         self.namelist()
 
@@ -357,6 +367,7 @@ class Video:
         return any(Path(Path(store_path).joinpath(video_name + sub_type)).exists() for sub_type in sub_types)
 
     def __init__(self, video_path: str, sub_store_path: str = "", identifier: str = "") -> None:
+        "Initialize the instance state from the supplied arguments."
         self.name: str
         self.type: str
         self.name, self.type = (str(Path(Path(video_path).name).with_suffix("")), Path(Path(video_path).name).suffix)
@@ -368,6 +379,7 @@ class Video:
         self.info: dict[str, Any] = guessit(self.extracted_name + self.type)
 
     def delete_existed_subtitles(self) -> None:
+        "Delete existed subtitles."
         if not self.has_subtitle:
             return
         for one_sub_type in SUB_FORMATS:
@@ -387,6 +399,7 @@ class Downloader:
 
     @classmethod
     def get_keywords(cls, video: Video) -> list[str]:
+        "Return keywords."
         keywords: list[str] = []
         info_dict: dict[str, Any] = video.info
         title: str = info_dict["title"]
@@ -412,6 +425,7 @@ class Downloader:
         return keywords
 
     def get_subtitles(self, video: Video, sub_num: int = 5) -> dict[str, Any]:
+        "Return subtitles."
         raise NotImplementedError
 
     def download_file(
@@ -420,6 +434,7 @@ class Downloader:
         sub_url: str,
         session: Optional[requests.Session] = None,
     ) -> tuple[Optional[str], Optional[bytes], str]:
+        "Download file."
         raise NotImplementedError
 
 
@@ -430,6 +445,7 @@ class ZimukuDownloader(Downloader):
     search_url: str = "http://www.zimuku.la/search?q="
 
     def get_keywords(self, video: Video) -> list[str]:
+        "Return keywords."
         if video.info["type"] == "episode":
             keywords: list[str] = [
                 video.info["title"],
@@ -515,6 +531,7 @@ class ZimukuDownloader(Downloader):
         return sub
 
     def get_subtitles(self, video: Video, sub_num: int = 10) -> dict[str, Any]:
+        "Return subtitles."
         print("Searching ZIMUKU...", end="\r")
         keywords: list[str] = self.get_keywords(video)
         info_dict: dict[str, Any] = video.info
@@ -581,6 +598,7 @@ class ZimukuDownloader(Downloader):
         download_link: str,
         session: Optional[requests.Session] = None,
     ) -> tuple[Optional[str], Optional[bytes], str]:
+        "Download file."
         try:
             if not session:
                 session = requests.session()
@@ -618,6 +636,7 @@ class ZimuzuDownloader(Downloader):
     search_url: str = "http://www.rrys2020.com/search?keyword={0}&type=subtitle"
 
     def get_subtitles(self, video: Video, sub_num: int = 5) -> dict[str, Any]:
+        "Return subtitles."
         print("Searching ZIMUZU...", end="\r")
         keywords: list[str] = Downloader.get_keywords(video)
         keyword: str = " ".join(keywords)
@@ -669,6 +688,7 @@ class ZimuzuDownloader(Downloader):
         sub_url: str,
         session: Optional[requests.Session] = None,
     ) -> tuple[Optional[str], Optional[bytes], str]:
+        "Download file."
         s: requests.Session = requests.session()
         header: dict[str, str] = Downloader.header.copy()
         r = s.get(sub_url, headers=Downloader.header)
@@ -724,6 +744,7 @@ class DownloaderManager:
 
     @classmethod
     def get_downloader_by_name(cls, name: str) -> Optional[Downloader]:
+        "Return downloader by name."
         for downloader in DownloaderManager.downloaders:
             if downloader.__class__.name == name:
                 return downloader
@@ -731,6 +752,7 @@ class DownloaderManager:
 
     @classmethod
     def get_downloader_by_choice_prefix(cls, choice_prefix: str) -> Optional[Downloader]:
+        "Return downloader by choice prefix."
         for downloader in DownloaderManager.downloaders:
             if downloader.__class__.choice_prefix == choice_prefix:
                 return downloader
@@ -752,6 +774,7 @@ class GetSubtitles:
         downloader: Optional[str],
         sub_path: str,
     ) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.arg_name: str = name
         self.both: bool = both
         self.query: bool = query
@@ -791,6 +814,7 @@ class GetSubtitles:
             print("subtitles will be saved to: " + self.sub_store_path)
 
     def get_videos(self, raw_path: str) -> list[Video]:
+        "Return videos."
         raw_path = raw_path.replace('"', "")
         videos: list[Video] = []
         if Path(raw_path).is_dir():
@@ -821,6 +845,7 @@ class GetSubtitles:
         return videos
 
     def get_search_results(self, video: Video) -> dict[str, Any]:
+        "Return search results."
         results: dict[str, Any] = OrderedDict()
         for i, downloader in enumerate(self.downloader):
             try:
@@ -845,6 +870,7 @@ class GetSubtitles:
         archive_data: bytes,
         datatype: str,
     ) -> tuple[str, list[list[str]]]:
+        "Process archive."
         error: str = ""
         if datatype not in ARCHIVE_TYPES:
             error = "unsupported file type " + datatype
@@ -886,6 +912,7 @@ class GetSubtitles:
         return error, extract_subs
 
     def process_subtitle(self, video: Video, sub_data: bytes, datatype: str) -> tuple[str, list[list[str]]]:
+        "Process subtitle."
         video.delete_existed_subtitles()
         sub_name: str = video.name + video.sub_identifier + datatype
         extract_path: str = Path(video.sub_store_path).joinpath(sub_name)
@@ -901,6 +928,7 @@ class GetSubtitles:
         link: str,
         session: Optional[requests.Session],
     ) -> tuple[str, list[list[str]]]:
+        "Process result."
         choice_prefix: str = chosen_sub[: chosen_sub.find("]") + 1]
         downloader: Optional[Downloader] = DownloaderManager.get_downloader_by_choice_prefix(choice_prefix)
         assert downloader is not None
@@ -938,6 +966,7 @@ class GetSubtitles:
         return "", extract_subs
 
     def process_video(self, video: Video) -> tuple[str, list[list[str]]]:
+        "Process video."
         extract_subs: list[list[str]] = []
         sub_dict: dict[str, Any] = self.get_search_results(video)
         if len(sub_dict) == 0:
@@ -1027,6 +1056,7 @@ class GetSubtitles:
 
 
 def main() -> None:
+    "Run the command-line interface."
     arg_parser: argparse.ArgumentParser = argparse.ArgumentParser(
         prog="GetSubtitles",
         epilog="getsub %s\n\n@guoyuhang" % (__version__),
@@ -1098,4 +1128,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

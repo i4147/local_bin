@@ -1,5 +1,7 @@
 #!/data/data/com.termux/files/usr/bin/env python
 
+"Utilities for compress text."
+
 import argparse
 import bz2
 import hashlib
@@ -94,11 +96,15 @@ _queue: MPQueue[Message] | None = None
 
 
 class CliError(Exception):
+    "Signal an error raised by this module."
+
     pass
 
 
 @dataclass(frozen=True, slots=True)
 class Codec:
+    "Store feed, finish, header, skip."
+
     feed: Callable[[bytes], bytes]
     finish: Callable[[], bytes]
     header: bytes = b""
@@ -107,6 +113,8 @@ class Codec:
 
 @dataclass(frozen=True, slots=True)
 class Job:
+    "Store name, src, dst, size, level and related state."
+
     name: str
     src: Path
     dst: Path
@@ -117,6 +125,8 @@ class Job:
 
 @dataclass(slots=True)
 class Result:
+    "Store name, path, size, seconds, verified and related state."
+
     name: str
     path: str
     size: int
@@ -132,6 +142,7 @@ def _init_worker(q: MPQueue[Message]) -> None:
 
 class Reporter:
     def __init__(self, name: str) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.name = name
         self._last = 0.0
 
@@ -142,6 +153,7 @@ class Reporter:
         status: str = "running",
         force: bool = False,
     ) -> None:
+        "Invoke the behavior represented by this object."
         now = time.perf_counter()
         if force or now - self._last >= REPORT_INTERVAL:
             self._last = now
@@ -276,6 +288,7 @@ def compress_7z(src: Path, dst: Path, level: int, report: Reporter) -> None:
 
 
 def verify_output(job: Job, path: Path, report: Reporter) -> bool:
+    "Verify output."
     expected = job.digest
     if expected is None:
         raise ValueError("no digest available for verification")
@@ -302,6 +315,7 @@ def verify_output(job: Job, path: Path, report: Reporter) -> bool:
 
 
 def run_job(job: Job) -> Result:
+    "Run job."
     report = Reporter(job.name)
     part = part_path(job.dst)
     verified: bool | None = None
@@ -359,6 +373,7 @@ def drain(
 
 
 def run_jobs(jobs: list[Job], workers: int, progress: Progress) -> list[Result]:
+    "Run jobs."
     ctx = mp.get_context("spawn")
     q: MPQueue[Message] = ctx.Queue()
     tasks: dict[str, TaskID] = {
@@ -418,12 +433,14 @@ def run_jobs(jobs: list[Job], workers: int, progress: Progress) -> list[Result]:
 
 
 def ensure_space(directory: Path, needed: int) -> None:
+    "Ensure space."
     free = shutil.disk_usage(directory).free
     if free < needed + (needed >> 5) + (1 << 20):
         raise CliError(f"not enough free space in {directory}: need ~{needed / 1e6:,.0f} MB, have {free / 1e6:,.0f} MB")
 
 
 def build_tar(folder: Path, dest: Path, root_name: str, console: Console) -> list[str]:
+    "Build tar."
     entries = sorted(folder.rglob("*"))
     total = 0
     for p in entries:
@@ -460,6 +477,7 @@ def build_tar(folder: Path, dest: Path, root_name: str, console: Console) -> lis
 
 
 def resolve_algos(requested: Sequence[str], console: Console) -> list[str]:
+    "Resolve algos."
     wanted = [a for a in ORDER if a in set(requested)]
     available: list[str] = []
     for name in wanted:
@@ -473,6 +491,7 @@ def resolve_algos(requested: Sequence[str], console: Console) -> list[str]:
 
 
 def print_report(console: Console, results: list[Result], orig: int, wall: float) -> None:
+    "Print report."
     ok = sorted((r for r in results if not r.error), key=lambda r: r.size)
     bad = [r for r in results if r.error]
     fastest = min(ok, key=lambda r: r.seconds).name if ok else None
@@ -517,6 +536,7 @@ def print_report(console: Console, results: list[Result], orig: int, wall: float
 
 
 def parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
+    "Parse args."
     p = argparse.ArgumentParser(prog="compress_txt.py")
     p.add_argument("path", type=Path)
     p.add_argument("-o", "--out-dir", default="output", type=Path)
@@ -601,6 +621,7 @@ def run(args: argparse.Namespace, console: Console) -> int:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    "Run the command-line interface."
     args = parse_args(argv)
     console = Console()
     try:
@@ -614,4 +635,4 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    raise SystemExit(main())

@@ -1,4 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/env python
+"Strip comments (and optionally docstrings/blank lines) from Python sources."
+
 from __future__ import annotations
 
 import argparse
@@ -47,6 +49,8 @@ PARALLEL_MIN_FILES = 4
 
 @dataclass(frozen=True)
 class TransformOptions:
+    "Store remove_docstrings, collapse_blanks."
+
     remove_docstrings: bool = False
     collapse_blanks: bool = False
 
@@ -107,6 +111,7 @@ def _strip_docstring_body(body: cst.CSTNode) -> cst.CSTNode:
 
 class _Transformer(cst.CSTTransformer):
     def __init__(self, opts: TransformOptions) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.opts = opts
 
     def leave_TrailingWhitespace(
@@ -428,6 +433,7 @@ def _format_result(r: _Result, color: bool, verbose: int) -> str | None:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    "Run the command-line interface."
     parser = _build_parser()
     args = parser.parse_args(argv)
 

@@ -70,7 +70,7 @@ XLINK_HREF = "{http://www.w3.org/1999/xlink}href"
 NUM_RE = re.compile(r"[+-]?(?:\d*\.\d+|\d+\.?)(?:[eE][+-]?\d+)?")
 
 
-def _f(value, default=0.0):
+def _f(value, default: float = 0.0):
     """float() with fallback."""
     try:
         return float(value)
@@ -118,7 +118,7 @@ _tok = _NAMED_RAW.split()
 NAMED_COLORS = {_tok[i]: _tok[i + 1] for i in range(0, len(_tok), 2)}
 
 
-def _hsl_to_rgb(h, s, l):
+def _hsl_to_rgb(h, s, l) -> tuple:
     """h in degrees, s/l in 0..1 -> (r, g, b) 0..255."""
     if s <= 0:
         v = int(round(l * 255))
@@ -140,7 +140,7 @@ def _hsl_to_rgb(h, s, l):
     return tuple(int(round(c * 255)) for c in (cu(h + 1 / 3), cu(h), cu(h - 1 / 3)))
 
 
-def parse_color(value, current=(0, 0, 0)):
+def parse_color(value, current: tuple = (0, 0, 0)):
     """Parse a CSS/SVG color -> (r, g, b, a) with a in 0..1.
 
     Returns None for 'none'.  Raises ValueError on garbage.
@@ -251,7 +251,8 @@ class M:
 
     __slots__ = ("a", "b", "c", "d", "e", "f")
 
-    def __init__(self, a=1.0, b=0.0, c=0.0, d=1.0, e=0.0, f=0.0):
+    def __init__(self, a: float = 1.0, b: float = 0.0, c: float = 0.0, d: float = 1.0, e: float = 0.0, f: float = 0.0):
+        "Initialize the instance state from the supplied arguments."
         self.a, self.b, self.c, self.d, self.e, self.f = a, b, c, d, e, f
 
     def __matmul__(self, o):
@@ -265,7 +266,7 @@ class M:
             self.b * o.e + self.d * o.f + self.f,
         )
 
-    def apply(self, x, y):
+    def apply(self, x, y) -> tuple:
         return (x * self.a + y * self.c + self.e, x * self.b + y * self.d + self.f)
 
     def scale(self):
@@ -329,6 +330,7 @@ class _PP:
     __slots__ = ("d", "i", "n")
 
     def __init__(self, d):
+        "Initialize the instance state from the supplied arguments."
         self.d = d
         self.i = 0
         self.n = len(d)
@@ -350,7 +352,7 @@ class _PP:
             return c
         raise PathError(f"unexpected character {c!r} at offset {self.i}")
 
-    def more(self):
+    def more(self) -> bool:
         """True if another parameter group follows for the current command."""
         self._ws()
         if self.i >= self.n:
@@ -362,7 +364,7 @@ class _PP:
             return True
         raise PathError(f"unexpected character {c!r} at offset {self.i}")
 
-    def num(self):
+    def num(self) -> float:
         self._ws()
         m = NUM_RE.match(self.d, self.i)
         if not m:
@@ -370,7 +372,7 @@ class _PP:
         self.i = m.end()
         return float(m.group())
 
-    def flag(self):
+    def flag(self) -> int:
         self._ws()
         if self.i < self.n and self.d[self.i] in "01":
             self.i += 1
@@ -378,7 +380,7 @@ class _PP:
         raise PathError(f"expected arc flag at offset {self.i}")
 
 
-def _cubic(p0, p1, p2, p3, tol, out, depth=0):
+def _cubic(p0, p1, p2, p3, tol, out, depth: int = 0) -> None:
     """Adaptively flatten a cubic bezier, appending points (excluding p0)."""
     x0, y0 = p0
     x1, y1 = p1
@@ -412,7 +414,7 @@ def _cubic(p0, p1, p2, p3, tol, out, depth=0):
     _cubic((xm, ym), (xb, yb), (x23, y23), p3, tol, out, depth + 1)
 
 
-def _quad(p0, p1, p2, tol, out, depth=0):
+def _quad(p0, p1, p2, tol, out, depth: int = 0) -> None:
     """Adaptively flatten a quadratic bezier."""
     x0, y0 = p0
     x1, y1 = p1
@@ -784,7 +786,7 @@ def shape_subpaths(tag, el, tol):
 # ---------------------------------------------------------------------------
 
 
-def _disc(cx, cy, r, n=12):
+def _disc(cx, cy, r, n: int = 12) -> list:
     return [(cx + r * math.cos(2 * math.pi * i / n), cy + r * math.sin(2 * math.pi * i / n)) for i in range(n + 1)]
 
 
@@ -1046,6 +1048,7 @@ def _style(el, inherited):
 
 class Warnings:
     def __init__(self):
+        "Initialize the instance state from the supplied arguments."
         self.counts = Counter()
         self.errors = 0
 
@@ -1113,7 +1116,7 @@ def root_matrix(root, pw, ph):
     return M(s, 0, 0, s, tx, ty)
 
 
-def intrinsic_size(root):
+def intrinsic_size(root) -> tuple:
     """(w, h) in user units, for aspect + PNG export sizing."""
     vb = _parse_view_box(root.get("viewBox"))
     if vb:
@@ -1129,6 +1132,7 @@ class Doc:
     """Parsed SVG ready to rasterize at any size."""
 
     def __init__(self, data):
+        "Initialize the instance state from the supplied arguments."
         if isinstance(data, bytes):
             text = data.decode("utf-8", "replace")
         else:
@@ -1143,7 +1147,7 @@ class Doc:
                 if eid:
                     self.ids[eid] = el
 
-    def build(self, pw, ph):
+    def build(self, pw, ph) -> tuple:
         """Walk the tree -> (items, warnings).  Items are device-space."""
         warn = Warnings()
         items = []
@@ -1152,7 +1156,7 @@ class Doc:
         self._walk(self.root, root_matrix(self.root, pw, ph), st, items, warn, frozenset())
         return items, warn
 
-    def _walk(self, el, mat, st, items, warn, use_stack):
+    def _walk(self, el, mat, st, items, warn, use_stack) -> None:
         tag = _local(el.tag)
         if tag is None:
             return
@@ -1283,7 +1287,7 @@ class Doc:
 # ---------------------------------------------------------------------------
 
 
-def _bbox(polys):
+def _bbox(polys) -> tuple:
     minx = miny = 1e30
     maxx = maxy = -1e30
     for pts, _closed in polys:
@@ -1321,7 +1325,7 @@ def _edges_of(polys, closed_ring):
     return edges
 
 
-def _sweep(W, H, edges, y_lo, y_hi, on_span):
+def _sweep(W, H, edges, y_lo, y_hi, on_span) -> None:
     """Active-edge scanline sweep; calls on_span(x0, x1, y)."""
     if not edges:
         return
@@ -1360,7 +1364,7 @@ def _sweep(W, H, edges, y_lo, y_hi, on_span):
             e[0] += e[2]
 
 
-def _fill_evenodd(buf, W, H, polys, cr, cg, cb, ca):
+def _fill_evenodd(buf, W, H, polys, cr, cg, cb, ca) -> None:
     """Fill polys even-odd with (cr,cg,cb,ca) into premultiplied buffer."""
     minx, miny, maxx, maxy = _bbox(polys)
     if minx > W or maxx < 0 or miny > H or maxy < 0:
@@ -1369,7 +1373,7 @@ def _fill_evenodd(buf, W, H, polys, cr, cg, cb, ca):
     opaque = ca >= 0.999
     inv = 1.0 - ca
 
-    def span(x0, x1, y):
+    def span(x0, x1, y) -> None:
         if x1 <= x0:
             return
         xi0 = int(math.ceil(x0 - 0.5))
@@ -1401,7 +1405,7 @@ def _fill_evenodd(buf, W, H, polys, cr, cg, cb, ca):
     _sweep(W, H, edges, miny, maxy, span)
 
 
-def _fill_nonzero(buf, W, H, polys, cr, cg, cb, ca):
+def _fill_nonzero(buf, W, H, polys, cr, cg, cb, ca) -> None:
     """Fill polys with the nonzero winding rule."""
     minx, miny, maxx, maxy = _bbox(polys)
     if minx > W or maxx < 0 or miny > H or maxy < 0:
@@ -1474,13 +1478,13 @@ def _fill_nonzero(buf, W, H, polys, cr, cg, cb, ca):
             e[0] += e[2]
 
 
-def _mask_polys(mask, W, H, polys):
+def _mask_polys(mask, W, H, polys) -> None:
     """OR-fill polygons into a byte mask (1 = covered)."""
     minx, miny, maxx, maxy = _bbox(polys)
     if minx > W or maxx < 0 or miny > H or maxy < 0:
         return
 
-    def span(x0, x1, y):
+    def span(x0, x1, y) -> None:
         if x1 <= x0:
             return
         xi0 = int(math.ceil(x0 - 0.5))
@@ -1519,7 +1523,7 @@ def _blend_mask(buf, W, H, mask, cr, cg, cb, ca):
         pos = e
 
 
-def _downsample(buf, W, H, ss, pw, ph):
+def _downsample(buf, W, H, ss, pw, ph) -> bytes:
     """Average ss x ss blocks of the premultiplied buffer -> RGBA bytes."""
     out = bytearray(pw * ph * 4)
     n = ss * ss
@@ -1549,7 +1553,7 @@ def _downsample(buf, W, H, ss, pw, ph):
     return bytes(out)
 
 
-def rasterize(items, pw, ph, ss=3):
+def rasterize(items, pw, ph, ss: int = 3) -> tuple:
     """Render device-space items -> (pw, ph, rgba bytes)."""
     W, H = pw * ss, ph * ss
     buf = array("f", [0.0]) * (W * H * 4)  # premultiplied RGBA
@@ -1614,7 +1618,7 @@ def _paeth(a, b, c):
     return c
 
 
-def decode_png(data):
+def decode_png(data) -> tuple:
     """PNG bytes (8-bit, non-interlaced, ct 0/2/3/4/6) -> (w, h, rgba)."""
     if data[:8] != _PNG_SIG:
         raise ValueError("not a PNG")
@@ -1708,6 +1712,7 @@ def decode_png(data):
 
 class TermInfo:
     def __init__(self):
+        "Initialize the instance state from the supplied arguments."
         self.cols, self.rows, self.xpix, self.ypix = _term_size()
         self.is_tty = sys.stdout.isatty()
         self.kitty = False
@@ -1729,7 +1734,7 @@ class TermInfo:
             self.cell_w = max(1, self.xpix // self.cols)
             self.cell_h = max(1, self.ypix // self.rows) if self.ypix else 18
 
-    def _probe(self):
+    def _probe(self) -> None:
         """Ask the terminal for DA1 (sixel), OSC 11 (bg) and CSI 16t (cell)."""
         if not (sys.stdin.isatty() and sys.stdout.isatty()):
             return
@@ -1789,7 +1794,7 @@ class TermInfo:
             self.cell_w = max(1, int(m.group(2)))
 
 
-def _term_size():
+def _term_size() -> tuple:
     for stream in (sys.stdout, sys.stderr, sys.stdin):
         try:
             ws = fcntl.ioctl(stream.fileno(), termios.TIOCGWINSZ, b"\0" * 8)
@@ -1902,7 +1907,7 @@ def render_blocks(w, h, rgb, bg, truecolor):
     return "\n".join(lines) + "\n\x1b[0m"
 
 
-def render_sixel(w, h, rgb):
+def render_sixel(w, h, rgb) -> bytes:
     """RGB pixel grid -> DEC sixel byte stream."""
     cnt = Counter()
     mv = rgb
@@ -1997,7 +2002,7 @@ def render_kitty(w, h, rgba, cols, rows):
 # ---------------------------------------------------------------------------
 
 
-def paste_center(img, pw, ph):
+def paste_center(img, pw, ph) -> tuple:
     """Place (w, h, rgba) centered on a transparent pw*ph canvas."""
     w, h, rgba = img
     if w > pw or h > ph:
@@ -2019,6 +2024,7 @@ def paste_center(img, pw, ph):
 
 
 def load_cairosvg():
+    "Load cairosvg."
     try:
         import cairosvg  # type: ignore
 
@@ -2072,7 +2078,7 @@ def _auto_ss(pw, ph, ss):
     return max(1, min(ss, int(math.sqrt(cap)) or 1))
 
 
-def render_file(args, term, renderer, data, name, status):
+def render_file(args, term, renderer, data, name, status) -> tuple:
     """Render one file's bytes -> (out_bytes, engine_name, warn_or_None)."""
     cols = args.width or term.cols
     if renderer == "blocks":
@@ -2160,6 +2166,7 @@ def export_png(args, status, data, name):
 
 
 def main(argv=None):
+    "Run the command-line interface."
     ap = argparse.ArgumentParser(
         prog="svgview.py",
         description="One-shot terminal SVG viewer with PNG auto-save.",
@@ -2322,4 +2329,4 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    raise SystemExit(main())

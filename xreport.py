@@ -1,4 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/env python
+"Unified archive scanner and uncompressed-size reporter (merges xreport.py, xreport2.py, zreport.py)."
+
 import argparse
 import bz2
 import gzip
@@ -80,6 +82,7 @@ _SORTED_EXTS: tuple[str, ...] = tuple(sorted(ARCHIVE_TYPES, key=len, reverse=Tru
 
 
 def detect_archive(path: Path) -> tuple[Optional[str], Optional[str]]:
+    "Detect archive."
     name: str = path.name.lower()
     for ext in _SORTED_EXTS:
         if name.endswith(ext):
@@ -221,6 +224,7 @@ def analyze_archive(path: Path) -> dict[str, Any]:
 
 
 def extract_archive(path: Path, dest_root: Path) -> tuple[bool, str]:
+    "Extract archive."
     ext: Optional[str]
     ext, _ = detect_archive(path)
     dest: Path = dest_root / f"{path.name}_extracted"
@@ -511,6 +515,7 @@ def cmd_sizes(directory: str) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
+    "Build parser."
     parser: argparse.ArgumentParser = argparse.ArgumentParser(
         prog="archive_report.py",
         description=(
@@ -575,6 +580,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Optional[Iterable[str]] = None) -> int:
+    "Run the command-line interface."
     argv_list: list[str] = list(sys.argv[1:] if argv is None else argv)
     known: set[str] = {"scan", "sizes", "-h", "--help"}
     if not argv_list or argv_list[0] not in known:

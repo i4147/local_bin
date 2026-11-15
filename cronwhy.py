@@ -1,4 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/env python
+"Explain cron expressions in plain English and estimate next runs."
+
 import argparse
 import json
 import re
@@ -34,6 +36,7 @@ FIELD_RANGES = {
 
 
 def normalize_dow(value: int) -> int:
+    "Normalize dow."
     if value == 7:
         return 0
     return value
@@ -93,6 +96,7 @@ def field_summary(
 
 
 def parse_token(field_name: str, token: str) -> int:
+    "Parse token."
     token = token.strip().lower()
     if field_name == "month" and token in MONTH_NAMES:
         return MONTH_NAMES[token]
@@ -109,6 +113,7 @@ def parse_token(field_name: str, token: str) -> int:
 
 
 def parse_field(field_name: str, text: str) -> Set[int]:
+    "Parse field."
     lo, hi = FIELD_RANGES[field_name]
     values: Set[int] = set()
 
@@ -164,6 +169,8 @@ def parse_field(field_name: str, text: str) -> Set[int]:
 
 @dataclass
 class CronSpec:
+    "Store minute, hour, day_of_month, month, day_of_week and related state."
+
     minute: Set[int]
     hour: Set[int]
     day_of_month: Set[int]
@@ -185,6 +192,7 @@ class CronSpec:
 
 
 def parse_cron(expr: str) -> CronSpec:
+    "Parse cron."
     expr = expr.strip()
     if not expr or expr.startswith("#"):
         raise ValueError("Empty expression")
@@ -228,6 +236,7 @@ def matches(spec: CronSpec, dt: datetime) -> bool:
 
 
 def explain_spec(spec: CronSpec) -> str:
+    "Explain spec."
     minute_desc = field_summary("minute", spec.minute, use_wildcard=(spec.minute == set(range(0, 60))))
     hour_desc = field_summary("hour", spec.hour, use_wildcard=(spec.hour == set(range(0, 24))))
     dom_desc = field_summary("day_of_month", spec.day_of_month, use_wildcard=spec.dom_wildcard)
@@ -258,6 +267,7 @@ def explain_spec(spec: CronSpec) -> str:
 def iter_next_runs(
     spec: CronSpec, tz: ZoneInfo, after: Optional[datetime] = None, count: int = 5, max_steps: int = 1_000_000
 ) -> List[datetime]:
+    "Yield next runs from the supplied input."
     if after is None:
         after = datetime.now(tz)
     after = after.astimezone(tz)
@@ -278,6 +288,7 @@ def iter_next_runs(
 
 
 def is_dst_quirky(dt: datetime, tz: ZoneInfo) -> bool:
+    "Return whether dst quirky."
     # Check if the wall time is representable after a round trip through UTC.
     # If not, it usually indicates a DST gap/overlap edge case.
     try:
@@ -306,6 +317,7 @@ def dump_cron_file(path: str) -> List[str]:
 
 
 def detect_overlaps(specs: Sequence[CronSpec], tz: ZoneInfo, horizon_days: int = 30) -> List[dict]:
+    "Detect overlaps."
     now = datetime.now(tz)
     horizon_minutes = horizon_days * 24 * 60
     results: List[dict] = []
@@ -330,6 +342,7 @@ def detect_overlaps(specs: Sequence[CronSpec], tz: ZoneInfo, horizon_days: int =
 
 
 def build_parser() -> argparse.ArgumentParser:
+    "Build parser."
     parser = argparse.ArgumentParser(description="Explain cron expressions in plain English and estimate next runs.")
     parser.add_argument("expression", nargs="?", help="A single cron expression like '*/5 * * * *'")
     parser.add_argument("--file", help="Crontab file to parse instead of one expression")
@@ -345,6 +358,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> int:
+    "Run the command-line interface."
     parser = build_parser()
     args = parser.parse_args()
 

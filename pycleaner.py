@@ -1,5 +1,7 @@
 #!/data/data/com.termux/files/usr/bin/env python
 
+"Utilities for pycleaner."
+
 import argparse
 import ast
 import difflib
@@ -80,6 +82,8 @@ def _iter_py_files(root: Path, skip_dirs: set[str]) -> list[Path]:
 
 @dataclass
 class UnusedImport:
+    "Store lineno, col_offset, original_stmt, unused_names."
+
     lineno: int
     col_offset: int
     original_stmt: str
@@ -556,6 +560,8 @@ def _cmd_imports_autoflake(args: argparse.Namespace) -> int:
 
 @dataclass
 class DefItem:
+    "Store name, kind, file, lineno, end_lineno."
+
     name: str
     kind: str
     file: Path
@@ -581,6 +587,7 @@ def _is_const_name(name: str) -> bool:
 
 class _DefCollector(ast.NodeVisitor):
     def __init__(self, file: Path) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.file = file
         self.defs: list[DefItem] = []
 
@@ -617,6 +624,7 @@ class _DefCollector(ast.NodeVisitor):
 
 class _UsedNameCollector(ast.NodeVisitor):
     def __init__(self) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.used: set[str] = set()
 
     def visit_Name(self, node: ast.Name) -> None:
@@ -1252,6 +1260,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    "Run the command-line interface."
     global _USE_COLOR
     parser = _build_parser()
     args = parser.parse_args(argv)

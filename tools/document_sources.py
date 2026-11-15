@@ -6,8 +6,8 @@ are never modified. Ambiguous declarations are listed for human review rather
 than assigned invented parameter or return types.
 
 Usage:
-    python3 tools/document_sources.py [file.py ...]
-    python3 tools/document_sources.py --all
+    python3 arena/document_sources.py [file.py ...]
+    python3 arena/document_sources.py --all
 """
 
 import argparse
@@ -168,13 +168,22 @@ def class_summary(node: ast.ClassDef) -> str | None:
     bases = {ast.unparse(base).split(".")[-1] for base in node.bases}
     enum_base = bases & {"Enum", "IntEnum", "StrEnum", "Flag", "IntFlag"}
     if enum_base:
-        qualifier = "compression codecs" if "Codec" in node.name else "container formats" if "Container" in node.name else f"{name} values"
+        qualifier = (
+            "compression codecs"
+            if "Codec" in node.name
+            else "container formats"
+            if "Container" in node.name
+            else f"{name} values"
+        )
         return f"Enumerate the supported {qualifier}."
     if "Exception" in bases:
         return "Signal an error raised by this module."
     dataclass_decorator = any(
-        isinstance(dec, ast.Name) and dec.id == "dataclass"
-        or isinstance(dec, ast.Call) and isinstance(dec.func, ast.Name) and dec.func.id == "dataclass"
+        isinstance(dec, ast.Name)
+        and dec.id == "dataclass"
+        or isinstance(dec, ast.Call)
+        and isinstance(dec.func, ast.Name)
+        and dec.func.id == "dataclass"
         for dec in node.decorator_list
     )
     if dataclass_decorator:
@@ -226,12 +235,17 @@ def expr_type(node: ast.expr) -> str | None:
     if isinstance(node, (ast.Set, ast.SetComp)):
         return "set"
     if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
-        return node.func.id if node.func.id in {"str", "int", "float", "bool", "bytes", "list", "tuple", "dict", "set"} else None
+        return (
+            node.func.id
+            if node.func.id in {"str", "int", "float", "bool", "bytes", "list", "tuple", "dict", "set"}
+            else None
+        )
     return None
 
 
 def inferred_return(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str | None:
     """Return a type only when all non-empty return expressions agree."""
+
     class ReturnVisitor(ast.NodeVisitor):
         """Collect returns without entering nested functions or lambdas."""
 
@@ -296,7 +310,11 @@ class Enricher(cst.CSTTransformer):
         self.source = source
         self.filename = filename
         self.tree = ast.parse(source, filename=filename)
-        self.functions = {node.lineno: node for node in ast.walk(self.tree) if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))}
+        self.functions = {
+            node.lineno: node
+            for node in ast.walk(self.tree)
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        }
         self.classes = {node.lineno: node for node in ast.walk(self.tree) if isinstance(node, ast.ClassDef)}
         self.added_docs = 0
         self.added_annotations = 0
@@ -308,7 +326,9 @@ class Enricher(cst.CSTTransformer):
         """Create a string-expression statement suitable for a docstring."""
         return cst.SimpleStatementLine(body=[cst.Expr(value=cst.SimpleString(value=repr(text)))])
 
-    def _modify_body(self, body: cst.IndentedBlock | cst.SimpleStatementSuite, doc: str | None) -> cst.IndentedBlock | cst.SimpleStatementSuite:
+    def _modify_body(
+        self, body: cst.IndentedBlock | cst.SimpleStatementSuite, doc: str | None
+    ) -> cst.IndentedBlock | cst.SimpleStatementSuite:
         """Prepend a missing docstring without altering existing body statements."""
         if isinstance(body, cst.IndentedBlock):
             statements = list(body.body)
@@ -324,8 +344,12 @@ class Enricher(cst.CSTTransformer):
     @staticmethod
     def _has_docstring(statement: cst.BaseStatement) -> bool:
         """Check whether a CST statement is a standalone string expression."""
-        return (isinstance(statement, cst.SimpleStatementLine) and len(statement.body) == 1
-                and isinstance(statement.body[0], cst.Expr) and isinstance(statement.body[0].value, cst.SimpleString))
+        return (
+            isinstance(statement, cst.SimpleStatementLine)
+            and len(statement.body) == 1
+            and isinstance(statement.body[0], cst.Expr)
+            and isinstance(statement.body[0].value, cst.SimpleString)
+        )
 
     def leave_Module(self, original_node: cst.Module, updated_node: cst.Module) -> cst.Module:
         """Add a brief module docstring only when the source lacks one."""
@@ -342,7 +366,11 @@ class Enricher(cst.CSTTransformer):
                 fn = ast.unparse(call.func)
                 if fn.endswith("ArgumentParser"):
                     for kw in call.keywords:
-                        if kw.arg == "description" and isinstance(kw.value, ast.Constant) and isinstance(kw.value.value, str):
+                        if (
+                            kw.arg == "description"
+                            and isinstance(kw.value, ast.Constant)
+                            and isinstance(kw.value.value, str)
+                        ):
                             description = kw.value.value
                             break
             if description:
@@ -362,7 +390,18 @@ class Enricher(cst.CSTTransformer):
         info = self.functions.get(pos.start.line if pos else -1)
         if info is None or ast.get_docstring(info):
             return None
-        if info.name.startswith("_") and info.name not in {"__init__", "__enter__", "__exit__", "__iter__", "__next__", "__getitem__", "__len__", "__str__", "__repr__", "__call__"}:
+        if info.name.startswith("_") and info.name not in {
+            "__init__",
+            "__enter__",
+            "__exit__",
+            "__iter__",
+            "__next__",
+            "__getitem__",
+            "__len__",
+            "__str__",
+            "__repr__",
+            "__call__",
+        }:
             return None
         text = summary(info.name)
         if text is None:
@@ -381,9 +420,14 @@ class Enricher(cst.CSTTransformer):
         defaults: dict[str, ast.expr] = {}
         if ast_info:
             positional = [*ast_info.args.posonlyargs, *ast_info.args.args]
-            aligned = positional[len(positional) - len(ast_info.args.defaults):]
+            aligned = positional[len(positional) - len(ast_info.args.defaults) :]
             defaults.update((arg.arg, value) for arg, value in zip(aligned, ast_info.args.defaults))
-            defaults.update((arg.arg, value) for arg, value in zip(ast_info.args.kwonlyargs, ast_info.args.kw_defaults) if value is not None)
+            defaults.update(
+                (arg.arg, value)
+                for arg, value in zip(ast_info.args.kwonlyargs, ast_info.args.kw_defaults)
+                if value is not None
+            )
+
         def annotate(param: cst.Param) -> cst.Param:
             """Add a literal-default annotation when its type is unambiguous."""
             if param.annotation is not None or param.name.value in {"self", "cls"}:
@@ -416,7 +460,9 @@ class Enricher(cst.CSTTransformer):
         info = self.classes.get(pos)
         doc = class_summary(info) if info and not info.name.startswith("_") and not ast.get_docstring(info) else None
         if info and not info.name.startswith("_") and not ast.get_docstring(info) and doc is None:
-            self.unclear.append(f"{self.filename}:{info.lineno} class {info.name}: role is not clear from its declaration")
+            self.unclear.append(
+                f"{self.filename}:{info.lineno} class {info.name}: role is not clear from its declaration"
+            )
         return updated_node.with_changes(body=self._modify_body(updated_node.body, doc))
 
 
@@ -464,4 +510,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

@@ -1031,6 +1031,7 @@ def make_parser() -> argparse.ArgumentParser:
         p.add_argument("--state-dir", default=str(DEFAULT_STATE), help="state/journal directory (default: ~/.sortplan)")
 
     def scan_args(p: argparse.ArgumentParser) -> None:
+        "Scan args."
         p.add_argument("--config", help="TOML config")
         p.add_argument(
             "--recursive", action="store_true", help="scan subdirectories, never traverse directory symlinks"

@@ -1,4 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/env python
+"Utilities for shortener."
+
 from codeutils import shorten_names
 import sys
 from pathlib import Path
@@ -6,6 +8,7 @@ from dh import get_pyfiles, mpf, rrs, gsz, fsz
 
 
 def process_file(path):
+    "Process file."
     before = gsz(path)
     try:
         shorten_names(path, backup=False)

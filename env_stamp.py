@@ -1400,6 +1400,7 @@ class _BudgetExhausted(RuntimeError):
     """Raised when ``--max-runs`` test executions have been spent."""
 
     def __init__(self, message: str, partial: list[_Atomic] | None = None) -> None:
+        "Initialize the instance state from the supplied arguments."
         super().__init__(message)
         self.partial = partial
 

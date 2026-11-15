@@ -192,6 +192,8 @@ REF_FORMAT = (
 
 
 class Method(StrEnum):
+    "Enumerate the supported Method values."
+
     ANCESTOR = "ancestor"  # tip reachable from base (plain merge / fast-forward)
     PATCH_ID = "patch-id"  # every branch commit's patch-id is on the mainline
     SQUASH = "squash"  # the branch's combined diff matches a mainline commit
@@ -199,6 +201,8 @@ class Method(StrEnum):
 
 @dataclass(slots=True)
 class BranchRef:
+    "Store name, sha, upstream, track, committed_ts and related state."
+
     name: str
     sha: str
     upstream: str = ""  # short upstream name, "" when none
@@ -274,6 +278,7 @@ def git_dir(repo: Path) -> Path:
 
 
 def is_shallow(repo: Path) -> bool:
+    "Return whether shallow."
     return run_git(repo, "rev-parse", "--is-shallow-repository").strip().lower() == "true"
 
 
@@ -295,6 +300,7 @@ def merge_base(repo: Path, a: str, b: str) -> str | None:
 
 
 def resolve_repo(path_str: str) -> Path:
+    "Resolve repo."
     repo = Path(path_str or ".").expanduser().resolve()
     if not repo.is_dir():
         raise GitError(f"not a directory: {repo}")
@@ -342,6 +348,7 @@ class PatchIdIndex:
     """Per-invocation cache of patch-id sets (keyed by merge-base / branch tip)."""
 
     def __init__(self, repo: Path, base: str) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.repo = repo
         self.base = base
         self._mainline: dict[str, set[str]] = {}
@@ -405,6 +412,8 @@ def classify_branch(repo: Path, base: str, br: BranchRef, index: PatchIdIndex, s
 
 @dataclass(slots=True)
 class Policy:
+    "Store base, protect, keep, stale_days."
+
     base: str  # committish compared against (may be origin/...)
     protect: str  # local base branch name, always protected
     keep: tuple[str, ...]  # --keep globs
@@ -467,6 +476,8 @@ def evaluate(br: BranchRef, policy: Policy, current: str | None, worktrees: dict
 
 @dataclass(slots=True)
 class Analysis:
+    "Store repo, base, shallow, current, worktrees and related state."
+
     repo: Path
     base: str
     shallow: bool
@@ -522,6 +533,7 @@ def append_trim_log(repo: Path, branches: list[BranchRef], source: str) -> Path:
 
 
 def read_trim_log(path: Path) -> list[dict]:
+    "Read trim log."
     entries: list[dict] = []
     if not path.exists():
         return entries
@@ -601,6 +613,7 @@ def render_table(
     colors: list[list[str | None]] | None = None,
     use_color: bool = False,
 ) -> str:
+    "Render table."
     colors = colors or [[None] * len(headers) for _ in rows]
     grid = [[_trunc(row[i], caps[i]) for i in range(len(headers))] for row in rows]
     widths = [len(h) for h in headers]
@@ -620,6 +633,7 @@ def render_table(
 
 
 def render_scan_table(analysis: Analysis, use_color: bool = False) -> str:
+    "Render scan table."
     headers = ["BRANCH", "AGE", "MERGED", "METHOD", "SAFE", "WHY"]
     caps = [34, 4, 7, 8, 4, 58]
     rows: list[list[str]] = []
@@ -671,6 +685,7 @@ def branch_json(br: BranchRef) -> dict:
 
 
 def scan_json(analysis: Analysis) -> dict:
+    "Scan json."
     candidates = [b.name for b in analysis.candidates]
     return {
         "tool": "git-trim",
@@ -708,6 +723,7 @@ exit codes: 0 nothing to do / success | 10 candidates found (CI hooks) | 1 error
 
 
 def build_parser() -> argparse.ArgumentParser:
+    "Build parser."
     parser = argparse.ArgumentParser(
         prog="git-trim",
         description="Bulk-safe branch cleanup that understands squash and rebase merges.",
@@ -1027,6 +1043,7 @@ def _restore_upstream(repo: Path, name: str, upstream: str | None) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    "Run the command-line interface."
     args = build_parser().parse_args(argv)
     try:
         return args.func(args)
@@ -1255,6 +1272,7 @@ def _exists(repo: Path, branch: str) -> bool:
 
 
 def test_humanize_age() -> None:
+    "Test humanize age."
     assert humanize_age(0) == "0m"
     assert humanize_age(30 / 1440) == "30m"
     assert humanize_age(5 / 24) == "5h"
@@ -1265,6 +1283,7 @@ def test_humanize_age() -> None:
 
 
 def test_parse_refs() -> None:
+    "Test parse refs."
     raw = (
         "bugfix/x\x00abc123def456\x00origin/bugfix/x\x00gone\x001700000000 +0000\n"
         "main\x00def987abc000\x00\x00\x001700000001\n"
@@ -1279,12 +1298,14 @@ def test_parse_refs() -> None:
 
 
 def test_parse_patch_ids() -> None:
+    "Test parse patch ids."
     assert _parse_patch_ids("id1 sha1\n\nid2 sha2\n") == {"id1", "id2"}
     assert _parse_patch_ids("") == set()
     assert _parse_patch_ids("ca29 0000...0\n") == {"ca29"}
 
 
 def test_is_protected_case_insensitive() -> None:
+    "Test is protected case insensitive."
     assert is_protected("Main", "main", ()) == "protected: base branch"
     assert is_protected("MAIN", "main", ()) == "protected: base branch"
     assert is_protected("feat/x", "main", ("release/*",)) is None
@@ -1293,6 +1314,7 @@ def test_is_protected_case_insensitive() -> None:
 
 
 def test_split_patterns_and_match_any() -> None:
+    "Test split patterns and match any."
     assert _split_patterns(None) == ()
     assert _split_patterns([""]) == ()
     assert _split_patterns(["a, b", "c"]) == ("a", "b", "c")
@@ -1302,6 +1324,7 @@ def test_split_patterns_and_match_any() -> None:
 
 
 def test_render_table_truncates() -> None:
+    "Test render table truncates."
     headers = ["BRANCH", "WHY"]
     rows = [["feat/" + "x" * 80, "r" * 200]]
     out = render_table(headers, rows, caps=[34, 58])
@@ -1314,6 +1337,7 @@ def test_render_table_truncates() -> None:
 
 
 def test_plain_merge_classified_merged(tmp_path, capsys) -> None:
+    "Test plain merge classified merged."
     _need_git()
     repo = _mkrepo(tmp_path)
     _commit_on(repo, "bugfix/crash", [("crash.txt", "fix\n")])
@@ -1326,6 +1350,7 @@ def test_plain_merge_classified_merged(tmp_path, capsys) -> None:
 
 
 def test_single_commit_squash_detected(tmp_path, capsys) -> None:
+    "Test single commit squash detected."
     _need_git()
     repo = _mkrepo(tmp_path)
     _commit_on(repo, "feat/theme", [("theme.txt", "dark\n")])
@@ -1338,6 +1363,7 @@ def test_single_commit_squash_detected(tmp_path, capsys) -> None:
 
 
 def test_multicommit_squash_detected(tmp_path, capsys) -> None:
+    "Test multicommit squash detected."
     _need_git()
     repo = _mkrepo(tmp_path)
     _commit_on(repo, "feat/login", [("login-1.txt", "1\n"), ("login-2.txt", "2\n")])
@@ -1363,6 +1389,7 @@ def test_rebase_merge_detected(tmp_path, capsys) -> None:
 
 
 def test_unmerged_branch_is_unsafe_and_survives_delete(tmp_path, capsys) -> None:
+    "Test unmerged branch is unsafe and survives delete."
     _need_git()
     repo = _mkrepo(tmp_path)
     _commit_on(repo, "feat/wip", [("wip.txt", "wip\n")])
@@ -1377,6 +1404,7 @@ def test_unmerged_branch_is_unsafe_and_survives_delete(tmp_path, capsys) -> None
 
 
 def test_branch_in_worktree_is_skipped(tmp_path, capsys) -> None:
+    "Test branch in worktree is skipped."
     _need_git()
     repo = _mkrepo(tmp_path)
     _commit_on(repo, "feat/wt", [("wt.txt", "wt\n")])
@@ -1392,6 +1420,7 @@ def test_branch_in_worktree_is_skipped(tmp_path, capsys) -> None:
 
 
 def test_current_branch_is_never_a_candidate(tmp_path, capsys) -> None:
+    "Test current branch is never a candidate."
     _need_git()
     repo = _mkrepo(tmp_path)
     _commit_on(repo, "bugfix/x", [("x.txt", "x\n")])
@@ -1405,6 +1434,7 @@ def test_current_branch_is_never_a_candidate(tmp_path, capsys) -> None:
 
 
 def test_keep_patterns_and_defaults(tmp_path, capsys) -> None:
+    "Test keep patterns and defaults."
     _need_git()
     repo = _mkrepo(tmp_path)
     for name in ("develop", "release/9.9", "feat/x"):
@@ -1424,6 +1454,7 @@ def test_keep_patterns_and_defaults(tmp_path, capsys) -> None:
 
 
 def test_dryrun_yes_undo_roundtrip(tmp_path, capsys) -> None:
+    "Test dryrun yes undo roundtrip."
     _need_git()
     repo = _mkrepo(tmp_path)
     tip = _commit_on(repo, "feat/one", [("one.txt", "1\n")])[-1]
@@ -1483,6 +1514,7 @@ def test_undo_restores_upstream_tracking(tmp_path, capsys) -> None:
 
 
 def test_delete_pattern_filters(tmp_path, capsys) -> None:
+    "Test delete pattern filters."
     _need_git()
     repo = _mkrepo(tmp_path)
     for name in ("feat/a", "chore/b"):
@@ -1496,6 +1528,7 @@ def test_delete_pattern_filters(tmp_path, capsys) -> None:
 
 
 def test_scan_exit_codes(tmp_path, capsys) -> None:
+    "Test scan exit codes."
     _need_git()
     repo = _mkrepo(tmp_path)
     rc, _data = _scan(repo, capsys)  # only main -> nothing to do
@@ -1511,6 +1544,7 @@ def test_scan_exit_codes(tmp_path, capsys) -> None:
 
 
 def test_scan_json_shape(tmp_path, capsys) -> None:
+    "Test scan json shape."
     _need_git()
     repo = _mkrepo(tmp_path)
     _commit_on(repo, "feat/one", [("one.txt", "1\n")])
@@ -1561,6 +1595,7 @@ def test_gone_upstream_counts_as_no_upstream(tmp_path, capsys) -> None:
 
 
 def test_prune_remote_deletes_merged_gone_and_undo_restores(tmp_path, capsys) -> None:
+    "Test prune remote deletes merged gone and undo restores."
     _need_git()
     repo = _mkrepo(tmp_path)
     origin = _mkorigin(tmp_path)
@@ -1636,6 +1671,7 @@ def test_shallow_clone_downgrades_to_unknown(tmp_path, capsys) -> None:
 
 
 def test_orphan_upstream_warning(tmp_path, capsys) -> None:
+    "Test orphan upstream warning."
     _need_git()
     repo = _mkrepo(tmp_path)
     _commit_on(repo, "lib", [("lib.txt", "l\n")])
@@ -1649,6 +1685,7 @@ def test_orphan_upstream_warning(tmp_path, capsys) -> None:
 
 
 def test_detached_head_scan_works(tmp_path, capsys) -> None:
+    "Test detached head scan works."
     _need_git()
     repo = _mkrepo(tmp_path)
     _commit_on(repo, "bugfix/x", [("x.txt", "x\n")])
@@ -1661,6 +1698,7 @@ def test_detached_head_scan_works(tmp_path, capsys) -> None:
 
 
 def test_base_autodetect_master_and_origin_head(tmp_path, capsys) -> None:
+    "Test base autodetect master and origin head."
     _need_git()
     repo = _mkrepo(tmp_path, branch="master")
     _rc, data = _scan(repo, capsys)
@@ -1705,6 +1743,7 @@ def test_base_prefers_remote_when_strictly_ahead(tmp_path, capsys) -> None:
 
 
 def test_undo_without_log(tmp_path, capsys) -> None:
+    "Test undo without log."
     _need_git()
     repo = _mkrepo(tmp_path)
     rc = main(["-C", str(repo), "undo"])
@@ -1728,6 +1767,7 @@ def test_extra_unmerged_commit_keeps_branch_unmerged(tmp_path, capsys) -> None:
 
 
 def test_demo_runs(tmp_path, capsys) -> None:
+    "Test demo runs."
     _need_git()
     rc = main(["demo", "--dir", str(tmp_path / "demo")])
     out = capsys.readouterr().out

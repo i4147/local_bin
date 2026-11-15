@@ -1,5 +1,7 @@
 #!/data/data/com.termux/files/usr/bin/env python
 
+"Show images in your terminal (single-file chafa clone)."
+
 import argparse
 import base64
 import io
@@ -27,6 +29,8 @@ BG_PEN = 258
 
 
 class Mode(Enum):
+    "Enumerate the supported Mode values."
+
     FGBG = "none"
     FGBG_BGFG = "2"
     INDEXED_8 = "8"
@@ -74,6 +78,8 @@ SEQ_INVERT = ESC + "[7m"
 
 @dataclass
 class Config:
+    "Store width, height, mode, color_space, format and related state."
+
     width: int = 80
     height: int = 24
     mode: Mode = Mode.TRUECOLOR
@@ -98,6 +104,7 @@ class Config:
 
     @property
     def extract_colors(self) -> bool:
+        "Extract colors."
         return self.mode not in FGBG_MODES
 
     @property
@@ -201,6 +208,7 @@ class Palette:
         alpha_threshold: int,
         colors: np.ndarray | None = None,
     ):
+        "Initialize the instance state from the supplied arguments."
         self.kind = kind
         self.cs = color_space
         self.mode = mode
@@ -404,6 +412,7 @@ class Symbol:
     __slots__ = ("c", "tags", "bitmap", "cov", "popcount", "fg_weight", "bg_weight")
 
     def __init__(self, c: int, tags: int, cov: np.ndarray):
+        "Initialize the instance state from the supplied arguments."
         self.c = c
         self.tags = tags
         self.cov = cov
@@ -707,11 +716,13 @@ def char_is_selected(c: int, tags: int, selectors: list[_Selector]) -> bool:
 
 
 def apply_selectors(existing: list[_Selector], spec: str) -> list[_Selector]:
+    "Apply selectors."
     new, do_clear = _parse_selectors_new(spec)
     return new if do_clear else existing + new
 
 
 def build_symbol_map(selectors: list[_Selector]) -> list[Symbol]:
+    "Build symbol map."
     out = [s for cp, s in sorted(all_symbols().items()) if char_is_selected(cp, s.tags, selectors)]
     out.sort(key=lambda s: (s.popcount, s.c))
     return out
@@ -904,6 +915,8 @@ def _load_blue_noise() -> np.ndarray:
 
 @dataclass
 class Dither:
+    "Store mode, intensity, grain_w, grain_h."
+
     mode: str = "none"
     intensity: float = 1.0
     grain_w: int = 1
@@ -923,6 +936,7 @@ class Dither:
 
 
 def apply_texture_dither(pix: np.ndarray, dither: Dither) -> None:
+    "Apply texture dither."
     h, w = pix.shape[:2]
     n = dither.texture.shape[0]
     mask = n - 1
@@ -1073,6 +1087,7 @@ def _normalize_rgb(rgb: np.ndarray, lo: int, hi: int) -> None:
 
 
 def prepare_work_pixels(img: Image.Image, cfg: Config, palette: Palette | None) -> np.ndarray:
+    "Prepare work pixels."
     src = np.asarray(img)
     if src.shape[2] == 3:
         src = np.concatenate([src, np.full(src.shape[:2] + (1,), 255, dtype=np.uint8)], axis=2)
@@ -1195,6 +1210,7 @@ def _find_solid_char(symbols: list[Symbol], fill_symbols: list[Symbol]) -> int:
 
 class CellGrid:
     def __init__(self, chars: np.ndarray, fg: np.ndarray, bg: np.ndarray):
+        "Initialize the instance state from the supplied arguments."
         self.chars = chars
         self.fg = fg
         self.bg = bg
@@ -1208,6 +1224,7 @@ def render_symbol_cells(
     fg_palette: Palette | None,
     bg_palette: Palette | None,
 ) -> CellGrid:
+    "Render symbol cells."
     R, C = cfg.height, cfg.width
     N = R * C
     mode = cfg.mode
@@ -1527,6 +1544,7 @@ class _PrintCtx:
     __slots__ = ("cur_char", "n_reps", "cur_inverted", "cur_bold", "cur_fg", "cur_bg", "parts")
 
     def __init__(self) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.cur_char = 0
         self.n_reps = 0
         self.cur_inverted = False
@@ -1594,7 +1612,7 @@ def _emit_attrs(ctx: _PrintCtx, fg, bg, inverted, bold, mode: Mode, fg_only: boo
     ctx.cur_bold = bold
 
 
-def _unpack(pen):
+def _unpack(pen) -> tuple:
     pen = int(pen)
     return (pen >> 16) & 0xFF, (pen >> 8) & 0xFF, pen & 0xFF, (pen >> 24) & 0xFF
 
@@ -1674,6 +1692,7 @@ def _emit_attrs(ctx: _PrintCtx, fg, bg, inverted, bold, mode: Mode, fg_only: boo
 
 
 def print_symbol_rows(grid: CellGrid, cfg: Config, symbols: list[Symbol], fill_symbols: list[Symbol]) -> str:
+    "Print symbol rows."
     R, C = cfg.height, cfg.width
     mode = cfg.mode
     chars = grid.chars.reshape(R, C)
@@ -1809,6 +1828,7 @@ def _sixel_level(v: int) -> int:
 
 
 def render_sixel(img: Image.Image, cfg: Config) -> str:
+    "Render sixel."
     W = cfg.width * CELL_W
     H = cfg.height * CELL_H
     canvas = _scaled_placement(img, cfg, W, H)
@@ -1874,6 +1894,7 @@ def render_sixel(img: Image.Image, cfg: Config) -> str:
 
 
 def render_kitty(img: Image.Image, cfg: Config) -> str:
+    "Render kitty."
     W = cfg.width * CELL_W
     H = cfg.height * CELL_H
     canvas = _scaled_placement(img, cfg, W, H)
@@ -1888,6 +1909,7 @@ def render_kitty(img: Image.Image, cfg: Config) -> str:
 
 
 def render_iterm(img: Image.Image, cfg: Config) -> str:
+    "Render iterm."
     W = cfg.width * CELL_W
     H = cfg.height * CELL_H
     canvas = _scaled_placement(img, cfg, W, H)
@@ -1899,6 +1921,7 @@ def render_iterm(img: Image.Image, cfg: Config) -> str:
 
 
 def load_image(path: str) -> Image.Image:
+    "Load image."
     from pathlib import Path
 
     if path == "-":
@@ -1913,6 +1936,7 @@ def load_image(path: str) -> Image.Image:
 
 
 def iter_frames(img: Image.Image, animate: bool):
+    "Yield frames from the supplied input."
     n = getattr(img, "n_frames", 1)
     if n <= 1 or not animate:
         frame = img.copy()
@@ -1958,6 +1982,7 @@ def _parse_color(val: str, what: str) -> tuple[int, int, int]:
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
+    "Build arg parser."
     p = argparse.ArgumentParser(
         prog="chafa.py",
         description="Show images in your terminal (single-file chafa clone).",
@@ -2220,6 +2245,7 @@ def run(argv: list[str] | None = None) -> int:
 
 
 def main() -> None:
+    "Run the command-line interface."
     try:
         sys.exit(run())
     except BrokenPipeError:
@@ -2229,4 +2255,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

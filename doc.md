@@ -2,9 +2,9 @@ Add useful comments and docstrings to the Python files in this repository.
 ## Setup
 1. Inspect the repository structure.
 2. Read the contribution guidelines (CONTRIBUTING.md, etc.),
-   style/lint configuration (pyproject.toml, setup.cfg, .flake8, ruff.toml, .pylintrc, tox.ini),
+   style/lint configuration (pyproject.toml, setup.cfg, .flake 8, ruff.toml, .pylintrc, tox.ini),
    and existing documentation conventions in a few representative files.
-3. Note the established docstring style (Google / NumPy / reST / plain).
+3. Note the established docstring style (Google / Numpy / re-ST / plain).
    If none is established, use Google style.
 ## Scope rules
 - Documentation-only changes.
@@ -34,7 +34,7 @@ Add inline comments ONLY when they clarify one of the following.
 For each comment, explain the "why", not the "what":
 - (a) Magic numbers, thresholds, or constants whose value is not self-evident.
 - (b) Workarounds, with a ticket/issue/PR reference if one exists.
-- (c) Non-obvious invariants, ordering constraints, or preconditions.
+- (c) Non-obvious invariant s, ordering constraints, or preconditions.
 - (d) Regex, parsing, or bit-manipulation logic.
 - (e) Concurrency, resource-lifetime, or transaction-boundary assumptions.
 If a function body contains none of (a)–(e),
@@ -59,19 +59,19 @@ Leave it undocumented and list it under "Needs my input" for that batch.
 ## Completion
 After all batches are complete:
 1. Run the relevant formatting, lint,
-   and test checks if they are available in the repo (e.g., ruff, black, flake8, mypy, pytest).
+   and test checks if they are available in the repo (e.g., ruff, black, flake 8, mypy, pytest).
    If a check is not configured, say so and skip it.
 2. Provide a final summary with:
    - Files changed
    - Checks run (name + result)
    - Checks skipped (name + reason)
    - Files or symbols intentionally left undocumented (with reason)
-   - Anything that needs my input save the documented verdions to documented folder,dont
+   - Anything that needs my input save the documented versions to documented folder,dont
      alter orig files
-save the helper scripts (bash, python, ...) thst you used during this session under arena folder in
+save the helper scripts (bash, python, ...) that you used during this session under arena folder in
 root of connected repo commit the changes.
 
-i thinked it again and decided:
+i think ed it again and decided:
 - no batch limit
 - no need for approve after each batch (continue til all batches done)
 - save documented versions in `documented` folder

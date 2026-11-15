@@ -1,4 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/env python
+"Utilities for tcleaner."
+
 import os
 import shutil
 import glob
@@ -47,7 +49,8 @@ def expand_and_resolve(pattern):
     return glob.glob(os.path.expandvars(pattern), recursive=True)
 
 
-def is_exempt(path):
+def is_exempt(path) -> bool:
+    "Return whether exempt."
     normalized_path = os.path.normpath(path)
     for exemption in KEEP_EXEMPTIONS:
         norm_exemption = os.path.normpath(exemption)
@@ -59,6 +62,7 @@ def is_exempt(path):
 
 
 def get_size(path):
+    "Return size."
     try:
         if os.path.islink(path):
             return 0

@@ -1,2 +1,1 @@
-# bin_nov
-November month scripts
+# scripts in ~/.local/bin

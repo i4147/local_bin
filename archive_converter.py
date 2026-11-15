@@ -1,4 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/env python
+"Convert archives and compressed files between formats with auto-detected input."
+
 from __future__ import annotations
 
 import argparse
@@ -32,10 +34,14 @@ log = logging.getLogger("archconv")
 
 
 class ToolError(Exception):
+    "Signal an error raised by this module."
+
     pass
 
 
 class Codec(Enum):
+    "Enumerate the supported compression codecs."
+
     GZ = "gz"
     BZ2 = "bz2"
     XZ = "xz"
@@ -49,6 +55,8 @@ class Codec(Enum):
 
 
 class Container(Enum):
+    "Enumerate the supported container formats."
+
     RAW = "raw"
     TAR = "tar"
     ZIP = "zip"
@@ -57,6 +65,8 @@ class Container(Enum):
 
 @dataclass(frozen=True, slots=True)
 class Fmt:
+    "Store container, codec, wheel."
+
     container: Container
     codec: Codec | None = None
     wheel: bool = False
@@ -84,6 +94,8 @@ class Fmt:
 
 @dataclass(frozen=True, slots=True)
 class Options:
+    "Store to, remove, output_dir, force, level and related state."
+
     to: str
     remove: bool
     output_dir: Path | None
@@ -97,6 +109,8 @@ class Options:
 
 @dataclass(slots=True)
 class Result:
+    "Store src, status, out, message."
+
     src: Path
     status: Literal["ok", "skipped", "dry-run", "failed"]
     out: Path | None = None
@@ -169,7 +183,10 @@ def human(size: int) -> str:
 
 
 class BrotliReader(io.RawIOBase):
+    "Provide a raw I/O stream for decompression."
+
     def __init__(self, path: Path) -> None:
+        "Initialize the instance state from the supplied arguments."
         super().__init__()
         self._decoder = require("brotli", "brotli").Decompressor()
         self._raw: IO[bytes] = path.open("rb")
@@ -202,7 +219,10 @@ class BrotliReader(io.RawIOBase):
 
 
 class BrotliWriter(io.RawIOBase):
+    "Provide a raw I/O stream for compression."
+
     def __init__(self, path: Path, quality: int) -> None:
+        "Initialize the instance state from the supplied arguments."
         super().__init__()
         self._encoder = require("brotli", "brotli").Compressor(quality=quality, lgwin=24)
         self._raw: IO[bytes] = path.open("wb")
@@ -228,6 +248,7 @@ class BrotliWriter(io.RawIOBase):
 
 
 def open_reader(path: Path, codec: Codec | None) -> IO[bytes]:
+    "Open reader."
     stream: Any
     match codec:
         case None:
@@ -252,6 +273,7 @@ def open_reader(path: Path, codec: Codec | None) -> IO[bytes]:
 
 
 def open_writer(path: Path, codec: Codec | None, level: int) -> IO[bytes]:
+    "Open writer."
     stream: Any
     match codec:
         case None:
@@ -283,6 +305,7 @@ def open_writer(path: Path, codec: Codec | None, level: int) -> IO[bytes]:
 
 
 def read_full(stream: IO[bytes], size: int) -> bytes:
+    "Read full."
     parts: list[bytes] = []
     got = 0
     while got < size:
@@ -300,6 +323,7 @@ def peek(path: Path, codec: Codec, size: int = 512) -> bytes:
 
 
 def is_tar_block(block: bytes) -> bool:
+    "Return whether tar block."
     if len(block) < 512:
         return False
     try:
@@ -391,6 +415,7 @@ def detect(path: Path, strict: bool) -> tuple[Fmt, str]:
 
 
 def parse_target(token: str, src: Fmt) -> Fmt:
+    "Parse target."
     value = token.strip().lower().lstrip(".")
     fixed = {
         "zip": Fmt(Container.ZIP),
@@ -421,6 +446,7 @@ def level_spec(dst: Fmt) -> tuple[int, int, int] | None:
 
 
 def resolve_level(spec: tuple[int, int, int] | None, requested: int | None) -> int:
+    "Resolve level."
     if spec is None:
         return 0
     low, high, default = spec
@@ -432,6 +458,7 @@ def resolve_level(spec: tuple[int, int, int] | None, requested: int | None) -> i
 
 
 def check_name(name: str) -> PurePosixPath:
+    "Check name."
     pure = PurePosixPath(name.replace("\\", "/"))
     if pure.is_absolute() or PureWindowsPath(name).drive or ".." in pure.parts:
         raise ToolError(f"unsafe path in archive: {name!r}")
@@ -447,6 +474,7 @@ def safe_path(root: Path, pure: PurePosixPath) -> Path:
 
 
 def extract_zip(src: Path, root: Path) -> None:
+    "Extract zip."
     with zipfile.ZipFile(src) as archive:
         for info in archive.infolist():
             pure = check_name(info.filename)
@@ -473,6 +501,7 @@ def extract_zip(src: Path, root: Path) -> None:
 
 
 def extract_tar(src: Path, codec: Codec | None, root: Path) -> None:
+    "Extract tar."
     if not hasattr(tarfile, "data_filter"):
         raise ToolError("this Python lacks safe tar extraction filters; update Python")
     with open_reader(src, codec) as stream, tarfile.open(fileobj=stream, mode="r|") as archive:
@@ -480,6 +509,7 @@ def extract_tar(src: Path, codec: Codec | None, root: Path) -> None:
 
 
 def extract_7z(src: Path, root: Path) -> None:
+    "Extract 7z."
     py7zr = require("py7zr", "py7zr")
     with py7zr.SevenZipFile(src, "r") as archive:
         for name in archive.getnames():
@@ -488,6 +518,7 @@ def extract_7z(src: Path, root: Path) -> None:
 
 
 def extract_raw(src: Path, codec: Codec, root: Path, stem: str) -> None:
+    "Extract raw."
     with open_reader(src, codec) as source, (root / (stem or "data")).open("wb") as sink:
         shutil.copyfileobj(source, sink, CHUNK)
 
@@ -588,6 +619,7 @@ def staged(src: Path, fmt: Fmt, stem: str, dst: Fmt, part: Path, level: int, bas
 
 
 def verify_output(out: Path, dst: Fmt, digest: str | None) -> None:
+    "Verify output."
     if digest is not None:
         check = hashlib.sha256()
         with open_reader(out, dst.codec) as reader:
@@ -624,6 +656,7 @@ def streamable(src: Fmt, dst: Fmt) -> bool:
 
 
 def convert_one(src: Path, opts: Options) -> Result:
+    "Convert one."
     if not src.is_file():
         raise ToolError("not a regular file")
     fmt, stem = detect(src, opts.strict)
@@ -692,6 +725,7 @@ def module_available(name: str) -> bool:
 
 
 def print_formats() -> None:
+    "Print formats."
     rows: list[tuple[str, str | None]] = [
         ("zip", None),
         ("whl", None),
@@ -712,6 +746,7 @@ def print_formats() -> None:
 
 
 def build_parser() -> argparse.ArgumentParser:
+    "Build parser."
     parser = argparse.ArgumentParser(
         prog="archconv",
         description="Convert archives and compressed files between formats with auto-detected input.",
@@ -739,6 +774,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    "Run the command-line interface."
     parser = build_parser()
     args = parser.parse_args(argv)
     if args.list_formats:
@@ -795,4 +831,4 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    raise SystemExit(main())

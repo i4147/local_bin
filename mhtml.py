@@ -800,6 +800,7 @@ class _SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
     """Reject redirects to URLs outside the resource manager's policy."""
 
     def __init__(self, is_allowed: Callable[[str], bool]) -> None:
+        "Initialize the instance state from the supplied arguments."
         super().__init__()
         self._is_allowed = is_allowed
 
@@ -1463,6 +1464,7 @@ class _MHTMLCleaner(Cleaner):
         allow_external_stylesheets: bool,
         **options: Any,
     ) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.allow_inline_scripts = allow_inline_scripts
         self.allow_inline_styles = allow_inline_styles
         self.allow_external_stylesheets = allow_external_stylesheets

@@ -1,5 +1,7 @@
 #!/data/data/com.termux/files/usr/bin/env python
 
+"Utilities for svgo."
+
 import base64
 import functools
 import json
@@ -27,6 +29,7 @@ class SvgoError(Exception):
 
 class SvgoParserError(SvgoError):
     def __init__(self, message: str, line: int, column: int, source: str, from_file: str | None = None) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.reason: str = message
         self.line: int = line
         self.column: int = column
@@ -35,6 +38,7 @@ class SvgoParserError(SvgoError):
         super().__init__(self.message)
 
     def __str__(self) -> str:
+        "Return the object's display string."
         lines = self.source.split("\n")
         if len(lines) == 1 and "\r" in lines[0]:
             lines = self.source.split("\r\n")
@@ -128,6 +132,7 @@ def js_number_string(value: float | int) -> str:
 
 
 def remove_leading_zero(value: float | int) -> str:
+    "Remove leading zero."
     text = js_number_string(value)
     if 0 < value < 1 and text.startswith("0"):
         return text[1:]
@@ -1987,6 +1992,8 @@ def _read_number(string: str, cursor: int) -> tuple[int, float | None]:
 
 @dataclass
 class PathDataItem:
+    "Store command, args, base, coords."
+
     command: str
     args: list[float] = field(default_factory=list)
     base: list[float] = field(default_factory=lambda: [0.0, 0.0])
@@ -1994,6 +2001,7 @@ class PathDataItem:
 
 
 def parse_path_data(string: str) -> list[PathDataItem]:
+    "Parse path data."
     path_data: list[PathDataItem] = []
     command: str | None = None
     args: list[float] = []
@@ -2361,6 +2369,7 @@ def _gather_points(absolute_data: Sequence[PathDataItem]) -> _Points:
     global_max_x = global_max_y = -math.inf
 
     def add_point(sub: _SubPathPoints, point: list[float]) -> None:
+        "Add point."
         nonlocal global_min_x, global_min_y, global_max_x, global_max_y
         if not sub.points or point[1] > sub.points[sub.max_y][1]:
             sub.max_y = len(sub.points)
@@ -2643,6 +2652,8 @@ _REG_NUMERIC_VALUES = re.compile(r"[-+]?(?:\d*\.\d+|\d+\.?)(?:[eE][-+]?\d+)?")
 
 @dataclass
 class TransformItem:
+    "Store name, data."
+
     name: str
     data: list[float]
 
@@ -2709,6 +2720,7 @@ def _multiply_transform_matrices(a: Sequence[float], b: Sequence[float]) -> list
 
 
 def transform_to_matrix(transform: TransformItem) -> list[float]:
+    "Transform to matrix."
     if transform.name == "matrix":
         return list(transform.data)
     if transform.name == "translate":
@@ -2741,6 +2753,7 @@ def transforms_multiply(transforms: Sequence[TransformItem]) -> TransformItem:
 
 
 def transform_arc(cursor: Sequence[float], arc: list[float], transform_matrix: Sequence[float]) -> list[float]:
+    "Transform arc."
     x = arc[5] - cursor[0]
     y = arc[6] - cursor[1]
     a = arc[0]
@@ -3028,13 +3041,16 @@ def js2transform(transform_js: Sequence[TransformItem], params: _TransformParams
 
 
 def apply_matrix_to_path_data(path_data: Sequence[PathDataItem], matrix: Sequence[float]) -> None:
+    "Apply matrix to path data."
     start = [0.0, 0.0]
     cursor = [0.0, 0.0]
 
     def transform_absolute_point(x: float, y: float) -> tuple[float, float]:
+        "Transform absolute point."
         return (matrix[0] * x + matrix[2] * y + matrix[4], matrix[1] * x + matrix[3] * y + matrix[5])
 
     def transform_relative_point(x: float, y: float) -> tuple[float, float]:
+        "Transform relative point."
         return (matrix[0] * x + matrix[2] * y, matrix[1] * x + matrix[3] * y)
 
     for path_item in path_data:
@@ -3142,9 +3158,11 @@ class Document(Node):
     type = "root"
 
     def __init__(self) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.children: list[Node] = []
 
     def __repr__(self) -> str:
+        "Return the object's developer-facing representation."
         return "Document()"
 
 
@@ -3152,11 +3170,13 @@ class Element(Node):
     type = "element"
 
     def __init__(self, name: str, attributes: dict[str, str] | None = None) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.name: str = name
         self.attributes: dict[str, str] = attributes if attributes is not None else {}
         self.children: list[Node] = []
 
     def __repr__(self) -> str:
+        "Return the object's developer-facing representation."
         return f"Element({self.name!r}, attrs={list(self.attributes)!r})"
 
 
@@ -3164,9 +3184,11 @@ class TextNode(Node):
     type = "text"
 
     def __init__(self, value: str) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.value: str = value
 
     def __repr__(self) -> str:
+        "Return the object's developer-facing representation."
         return f"TextNode({self.value!r})"
 
 
@@ -3174,6 +3196,7 @@ class CdataNode(Node):
     type = "cdata"
 
     def __init__(self, value: str) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.value: str = value
 
 
@@ -3181,6 +3204,7 @@ class CommentNode(Node):
     type = "comment"
 
     def __init__(self, value: str) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.value: str = value
 
 
@@ -3188,6 +3212,7 @@ class DoctypeNode(Node):
     type = "doctype"
 
     def __init__(self, data: str) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.data: dict[str, str] = {"doctype": data}
 
 
@@ -3195,6 +3220,7 @@ class InstructionNode(Node):
     type = "instruction"
 
     def __init__(self, name: str, value: str) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.name: str = name
         self.value: str = value
 
@@ -3243,6 +3269,7 @@ _REG_XMLDECL = re.compile(r"^\s*<\?xml\s+(.*?)\?>", re.S)
 
 
 def parse_svg(data: str, from_file: str | None = None) -> Document:
+    "Parse svg."
     root = Document()
     stack: list[Document | Element] = [root]
     current = stack[-1]
@@ -3426,6 +3453,8 @@ _REG_VALUE_ENTITIES = re.compile('[&"<>]')
 
 @dataclass
 class StringifyOptions:
+    "Store pretty, indent, eol, final_newline, use_short_tags."
+
     pretty: bool = False
     indent: int | str = 4
     eol: str = "lf"
@@ -3596,6 +3625,7 @@ def detach_node_from_parent(node: Node, parent_node: Node) -> None:
 
 
 def map_nodes_to_parents(root: Document) -> dict[Node, Document | Element]:
+    "Map nodes to parents."
     parents: dict[Node, Document | Element] = {}
     visit(root, {"element": {"enter": lambda node, parent: parents.__setitem__(node, parent)}})
     return parents
@@ -3603,6 +3633,8 @@ def map_nodes_to_parents(root: Document) -> dict[Node, Document | Element]:
 
 @dataclass
 class CssDeclaration:
+    "Store name, value, important."
+
     name: str
     value: str
     important: bool = False
@@ -3610,6 +3642,8 @@ class CssDeclaration:
 
 @dataclass
 class CssRule:
+    "Store selector, specificity, dynamic, declarations, media."
+
     selector: str
     specificity: tuple[int, int, int, int]
     dynamic: bool
@@ -3686,6 +3720,7 @@ def _split_top_level(text: str, separator: str = ",") -> list[str]:
 
 
 def parse_declarations(css: str) -> list[CssDeclaration]:
+    "Parse declarations."
     declarations: list[CssDeclaration] = []
     css = _strip_css_comments(css)
     for chunk in _split_top_level(css, ";"):
@@ -3710,6 +3745,8 @@ _COMBINATOR_CHARS = ">+~"
 
 @dataclass
 class SelectorPart:
+    "Store kind, value, operator, attr_value."
+
     kind: str
     value: str
     operator: str = ""
@@ -3718,6 +3755,8 @@ class SelectorPart:
 
 @dataclass
 class CompoundSelector:
+    "Store combinator, parts."
+
     combinator: str
     parts: list[SelectorPart]
 
@@ -3794,6 +3833,7 @@ def _parse_compound(text: str) -> CompoundSelector:
 
 
 def parse_selector(selector: str) -> list[CompoundSelector] | None:
+    "Parse selector."
     compounds: list[CompoundSelector] = []
     remainder = selector.strip()
     if not remainder:
@@ -3882,6 +3922,7 @@ def _selector_specificity(selector: str) -> tuple[int, int, int, int]:
 
 
 def compare_specificity(a: tuple[int, int, int, int], b: tuple[int, int, int, int]) -> int:
+    "Compare specificity."
     for x, y in zip(a, b):
         if x < y:
             return -1
@@ -4051,6 +4092,7 @@ def includes_attr_selector(selector: str, name: str, value: str | None = None, t
 
 
 def parse_stylesheet(css: str, dynamic: bool = False) -> list[CssRule]:
+    "Parse stylesheet."
     rules: list[CssRule] = []
     css = _strip_css_comments(css)
     i = 0
@@ -4158,6 +4200,7 @@ def _decode_uri(value: str) -> str:
 
 
 def encode_svg_datauri(data: str, kind: str | None) -> str:
+    "Encode svg datauri."
     prefix = "data:image/svg+xml"
     if not kind or kind == "base64":
         return prefix + ";base64," + base64.b64encode(data.encode("utf-8")).decode("ascii")
@@ -4169,6 +4212,7 @@ def encode_svg_datauri(data: str, kind: str | None) -> str:
 
 
 def decode_svg_datauri(data: str) -> str:
+    "Decode svg datauri."
     match = re.match(r"data:image/svg\+xml(;charset=[^;,]*)?(;base64)?,(.*)", data, re.S)
     if match is None:
         return data
@@ -4191,6 +4235,7 @@ def decode_svg_datauri(data: str) -> str:
 
 
 def find_references(attribute: str, value: str) -> list[str]:
+    "Find references."
     results: list[str] = []
     if attribute in REFERENCES_PROPS:
         for match in _REG_REFERENCES_URL.finditer(value):
@@ -4227,6 +4272,7 @@ _EXECUTABLE_DATA_MEDIA_TYPES: frozenset[str] = frozenset({"application/xhtml+xml
 
 
 def is_executable_url(value: str) -> bool:
+    "Return whether executable url."
     import urllib.parse
 
     normalized = re.sub(r"[\t\n\r]", "", value).lstrip().lower()
@@ -4242,6 +4288,7 @@ def is_executable_url(value: str) -> bool:
 
 
 def has_scripts(node: Element) -> bool:
+    "Return whether scripts."
     if node.name == "script" and node.children:
         return True
     if node.name == "a":
@@ -4254,11 +4301,14 @@ def has_scripts(node: Element) -> bool:
 
 @dataclass
 class Stylesheet:
+    "Store rules, parents."
+
     rules: list[CssRule]
     parents: dict[Node, Document | Element]
 
 
 def collect_stylesheet(root: Document) -> Stylesheet:
+    "Collect stylesheet."
     rules: list[CssRule] = []
     parents: dict[Node, Document | Element] = {}
     visit(root, {"element": {"enter": lambda node, parent: _collect_style_element(node, parent, rules, parents)}})
@@ -4284,6 +4334,7 @@ def _collect_style_element(
 def compute_own_style(
     stylesheet: Stylesheet, node: Element, parents: Mapping[Node, Document | Element]
 ) -> dict[str, dict[str, Any]]:
+    "Compute own style."
     computed: dict[str, dict[str, Any]] = {}
     important_styles: dict[str, bool] = {}
     for name, value in node.attributes.items():
@@ -4323,6 +4374,7 @@ def compute_own_style(
 
 
 def compute_style(stylesheet: Stylesheet, node: Element) -> dict[str, dict[str, Any]]:
+    "Compute style."
     parents = stylesheet.parents
     computed = compute_own_style(stylesheet, node, parents)
     parent = parents.get(node)
@@ -4344,6 +4396,8 @@ PluginFn = Callable[[Document, dict[str, Any], dict[str, Any]], Any]
 
 @dataclass
 class PluginConfig:
+    "Store name, params, fn."
+
     name: str
     params: dict[str, Any]
     fn: PluginFn
@@ -4351,6 +4405,8 @@ class PluginConfig:
 
 @dataclass
 class BuiltinPlugin:
+    "Store name, description, fn, is_preset, plugins."
+
     name: str
     description: str
     fn: PluginFn
@@ -4419,6 +4475,7 @@ def _remove_deprecated_attrs(root: Document, params: dict[str, Any], info: dict[
     remove_unsafe = bool(params.get("removeUnsafe", False))
 
     def process_attributes(node: Element, deprecated: dict[str, frozenset[str]] | None) -> None:
+        "Process attributes."
         if not deprecated:
             return
         safe = deprecated.get("safe")
@@ -4952,6 +5009,7 @@ def _cleanup_ids(root: Document, params: dict[str, Any], info: dict[str, Any]) -
     deoptimized = False
 
     def is_id_preserved(id_value: str) -> bool:
+        "Return whether id preserved."
         return id_value in preserve_ids or _has_string_prefix(id_value, prefixes)
 
     def enter(node: Node, parent: Node) -> Any:
@@ -6099,6 +6157,7 @@ def _convert_path_data(root: Document, params: dict[str, Any], info: dict[str, A
             is_safe_to_use_z = True
 
         def is_safe_to_remove(is_first_draw: bool, safe_if_not_first_draw: bool) -> bool:
+            "Return whether safe to remove."
             if not maybe_has_stroke:
                 return True
             if is_first_draw:
@@ -6439,6 +6498,7 @@ def _remove_hidden_elems(root: Document, params: dict[str, Any], info: dict[str,
     deoptimized = False
 
     def can_remove_non_rendering_node(node: Element) -> bool:
+        "Return whether remove non rendering node."
         if node.attributes.get("id") in all_references:
             return False
         for child in node.children:
@@ -6447,6 +6507,7 @@ def _remove_hidden_elems(root: Document, params: dict[str, Any], info: dict[str,
         return True
 
     def remove_element(node: Element, parent: Node) -> None:
+        "Remove element."
         if node.attributes.get("id") is not None and isinstance(parent, Element) and parent.name == "defs":
             removed_def_ids.add(node.attributes["id"])
         detach_node_from_parent(node, parent)
@@ -7121,6 +7182,7 @@ def _merge_paths(root: Document, params: dict[str, Any], info: dict[str, Any]) -
         prev_path_data: list[PathDataItem] | None = None
 
         def update_previous_path(child: Element, path_data: list[PathDataItem]) -> None:
+            "Update previous path."
             nonlocal prev_path_data
             js2path(child, path_data, float_precision=float_precision, no_space_after_flags=no_space_after_flags)
             prev_path_data = None
@@ -7248,6 +7310,7 @@ def _sort_attrs(root: Document, params: dict[str, Any], info: dict[str, Any]) ->
     xmlns_order = params.get("xmlnsOrder", "front")
 
     def get_ns_priority(name: str) -> int:
+        "Return ns priority."
         if xmlns_order == "front":
             if name == "xmlns":
                 return 3
@@ -7371,6 +7434,7 @@ def _remove_scripts(root: Document, params: dict[str, Any], info: dict[str, Any]
     foreign_object_depth = 0
 
     def is_namespace_aware_elem(elem: str, target: str, target_namespaces: Sequence[str]) -> bool:
+        "Return whether namespace aware elem."
         if elem == target:
             return True
         if ":" in elem:
@@ -7773,13 +7837,16 @@ def _prefix_ids(root: Document, params: dict[str, Any], info: dict[str, Any]) ->
     prefix_map: dict[str, str] = {}
 
     def get_basename(path: str) -> str:
+        "Return basename."
         matched = re.search(r"[/\\]?([^/\\]+)$", path)
         return matched.group(1) if matched else ""
 
     def escape_identifier_name(value: str) -> str:
+        "Escape identifier name."
         return re.sub(r"[. ]", "_", value)
 
     def generate_prefix(body: str) -> str:
+        "Generate prefix."
         if isinstance(prefix, str):
             return prefix + delim
         if prefix is False:
@@ -8036,6 +8103,7 @@ def _remove_xlink(root: Document, params: dict[str, Any], info: dict[str, Any]) 
     used_in_legacy_element: list[str] = []
 
     def find_prefixed_attrs(element: Element, attr: str) -> list[str]:
+        "Find prefixed attrs."
         return [f"{prefix}:{attr}" for prefix in xlink_prefixes if f"{prefix}:{attr}" in element.attributes]
 
     def enter(node: Node, parent: Node) -> None:
@@ -8581,6 +8649,7 @@ def _import_config(config_file: str) -> dict[str, Any]:
 
 
 def load_config(config_file: str | None = None, cwd: str | None = None) -> dict[str, Any] | None:
+    "Load config."
     if config_file is not None:
         base = Path(cwd) if cwd else Path.cwd()
         target = Path(config_file) if Path(config_file).is_absolute() else base / config_file
@@ -8719,6 +8788,7 @@ class _VersionRequested(Exception):
 
 class _CliExit(Exception):
     def __init__(self, code: int) -> None:
+        "Initialize the instance state from the supplied arguments."
         super().__init__(code)
         self.code = code
 
@@ -8855,6 +8925,7 @@ def _plural(long_name: str) -> str:
 
 
 def parse_cli_args(argv: Sequence[str]) -> _CliOptions:
+    "Parse cli args."
     options = _CliOptions()
     index = 0
     count = len(argv)
@@ -9150,6 +9221,7 @@ def _process_file_descriptions(
     config_json = json.dumps(pool_config)
 
     def run_task(input_path: Path, output_path: Path) -> None:
+        "Run task."
         _handle_task_result(
             _optimize_file_task((str(input_path), str(output_path), config_json)),
             config,
@@ -9386,6 +9458,7 @@ def _flush_stdout_safe() -> None:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    "Run the command-line interface."
     if argv is None:
         argv = sys.argv[1:]
     try:

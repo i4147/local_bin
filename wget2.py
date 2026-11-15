@@ -1,4 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/env python
+"Utilities for wget2."
+
 from __future__ import annotations
 
 import csv
@@ -87,11 +89,14 @@ _WINDOWS_RESERVED = frozenset(
 
 
 class Wget2Error(Exception):
+    "Signal an error raised by this module."
+
     kind: str = "error"
     exit_code: int = EXIT_INTERNAL
     retryable: bool = False
 
     def __init__(self, message: str, *, url: str | None = None, retryable: bool | None = None) -> None:
+        "Initialize the instance state from the supplied arguments."
         super().__init__(message)
         self.url = url
         if retryable is not None:
@@ -139,6 +144,7 @@ class HTTPStatusError(Wget2Error):
         url: str | None = None,
         retryable: bool | None = None,
     ) -> None:
+        "Initialize the instance state from the supplied arguments."
         super().__init__(message, url=url, retryable=retryable)
         self.status_code = status_code
         if retryable is None:
@@ -170,6 +176,8 @@ class RangeNotSupportedError(NetworkError):
 
 
 class StopStream(Exception):
+    "Signal an error raised by this module."
+
     pass
 
 
@@ -183,6 +191,7 @@ def exit_code_for(exc: BaseException) -> int:
 
 class InterruptFlag:
     def __init__(self) -> None:
+        "Initialize the instance state from the supplied arguments."
         self._event = threading.Event()
         self._lock = threading.Lock()
         self._count = 0
@@ -200,6 +209,7 @@ class InterruptFlag:
         self._event.clear()
 
     def is_set(self) -> bool:
+        "Return whether set."
         return self._event.is_set()
 
     def check(self) -> None:
@@ -234,6 +244,7 @@ class Logger:
         quiet: bool = False,
         json_logs: bool = False,
     ) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.threshold = _LEVELS.get(level.lower(), 20)
         self.quiet = quiet
         self.json_logs = json_logs
@@ -307,6 +318,7 @@ def human_size(value: float | int | None) -> str:
 
 
 def parse_size(value: str | int | None) -> int | None:
+    "Parse size."
     if value is None:
         return None
     if isinstance(value, int):
@@ -319,6 +331,7 @@ def parse_size(value: str | int | None) -> int | None:
 
 
 def parse_rate(value: str | float | int | None) -> float | None:
+    "Parse rate."
     if value is None:
         return None
     if isinstance(value, (int, float)):
@@ -332,6 +345,7 @@ def parse_rate(value: str | float | int | None) -> float | None:
 
 
 def parse_int_list(value: str | Sequence[int] | None) -> frozenset[int]:
+    "Parse int list."
     if value is None:
         return frozenset()
     if isinstance(value, str):
@@ -341,6 +355,7 @@ def parse_int_list(value: str | Sequence[int] | None) -> frozenset[int]:
 
 
 def parse_http_date(value: str | None) -> float | None:
+    "Parse http date."
     if not value:
         return None
     try:
@@ -351,6 +366,7 @@ def parse_http_date(value: str | None) -> float | None:
 
 
 def parse_content_range(value: str | None) -> tuple[int, int, int | None] | None:
+    "Parse content range."
     if not value:
         return None
     match = _CONTENT_RANGE_RE.search(value)
@@ -361,6 +377,7 @@ def parse_content_range(value: str | None) -> tuple[int, int, int | None] | None
 
 
 def format_duration(seconds: float) -> str:
+    "Format duration."
     if seconds < 1:
         return f"{seconds * 1000:.0f}ms"
     if seconds < 60:
@@ -435,6 +452,7 @@ def content_disposition_filename(header: str | None) -> str | None:
 
 
 def validate_url(url: str, *, allow_extra_schemes: bool = False) -> str:
+    "Validate url."
     text = (url or "").strip()
     if not text:
         raise UsageError("empty URL")
@@ -462,6 +480,7 @@ def safe_unlink(path: Path) -> None:
 
 
 def ensure_directory(path: Path) -> None:
+    "Ensure directory."
     try:
         path.mkdir(parents=True, exist_ok=True)
     except OSError as exc:
@@ -500,6 +519,7 @@ def atomic_finalize(part_path: Path, final_path: Path) -> None:
 
 
 def apply_mtime(path: Path, timestamp: float | None) -> None:
+    "Apply mtime."
     if timestamp is None:
         return
     with suppress(OSError):
@@ -518,6 +538,7 @@ def unique_path(path: Path) -> Path:
 
 
 def ensure_free_space(directory: Path, needed: int, *, factor: float = 1.05) -> None:
+    "Ensure free space."
     with suppress(OSError):
         directory.mkdir(parents=True, exist_ok=True)
     try:
@@ -532,6 +553,7 @@ def ensure_free_space(directory: Path, needed: int, *, factor: float = 1.05) -> 
 
 
 def parse_netrc(path: Path | None = None) -> dict[str, tuple[str, str]]:
+    "Parse netrc."
     candidate = path or (Path.home() / ".netrc")
     try:
         text = candidate.read_text(encoding="utf-8", errors="replace")
@@ -616,6 +638,7 @@ def subtract_interval(interval: Interval, covered: Iterable[Interval]) -> list[I
 
 
 def split_segments(gaps: Sequence[Interval], target: int) -> list[Interval]:
+    "Split segments."
     total = sum(end - start for start, end in gaps)
     if not gaps or target <= 1 or total <= 0:
         return list(gaps)
@@ -632,6 +655,8 @@ def split_segments(gaps: Sequence[Interval], target: int) -> list[Interval]:
 
 @dataclass
 class PartState:
+    "Store part_path, url, size, etag, last_modified and related state."
+
     part_path: Path
     url: str
     size: int | None
@@ -791,6 +816,7 @@ def open_part_state(
     allow_unvalidated: bool,
     log: Logger,
 ) -> tuple[PartState, bool]:
+    "Open part state."
     existing = PartState.load(part_path) if resume else None
     if existing is not None and not part_path.exists():
         existing.discard()
@@ -831,6 +857,7 @@ def open_part_state(
 
 class TokenBucket:
     def __init__(self, rate: float, burst: float | None = None) -> None:
+        "Initialize the instance state from the supplied arguments."
         if rate <= 0:
             raise UsageError("rate limit must be positive")
         self.rate = float(rate)
@@ -868,6 +895,7 @@ class TokenBucket:
 
 class MultiLimiter:
     def __init__(self, limiters: Sequence[TokenBucket] = ()) -> None:
+        "Initialize the instance state from the supplied arguments."
         self._limiters = [limiter for limiter in limiters if limiter is not None]
 
     @property
@@ -881,6 +909,8 @@ class MultiLimiter:
 
 @dataclass(frozen=True)
 class RetryPolicy:
+    "Store max_retries, delay, backoff, max_delay, jitter and related state."
+
     max_retries: int = 5
     delay: float = 1.0
     backoff: float = 2.0
@@ -911,15 +941,19 @@ class RetryPolicy:
 
 @dataclass(frozen=True)
 class ChecksumSpec:
+    "Store algorithm, expected, source."
+
     algorithm: str
     expected: str
     source: str = "cli"
 
     def __str__(self) -> str:
+        "Return the object's display string."
         return f"{self.algorithm}:{self.expected}"
 
 
 def parse_checksum(value: str, *, source: str = "cli") -> ChecksumSpec:
+    "Parse checksum."
     text = (value or "").strip()
     if not text:
         raise UsageError("empty checksum value")
@@ -941,10 +975,12 @@ def parse_checksum(value: str, *, source: str = "cli") -> ChecksumSpec:
 
 
 def parse_checksums(values: Sequence[str] | None) -> list[ChecksumSpec]:
+    "Parse checksums."
     return [parse_checksum(value) for value in (values or ()) if value and value.strip()]
 
 
 def load_checksum_file(path: Path) -> dict[str, list[ChecksumSpec]]:
+    "Load checksum file."
     try:
         text = path.read_text(encoding="utf-8", errors="replace")
     except OSError as exc:
@@ -986,6 +1022,7 @@ def digest_file(path: Path, algorithm: str) -> str:
 
 
 def verify_file(path: Path, specs: Sequence[ChecksumSpec]) -> dict[str, str]:
+    "Verify file."
     results: dict[str, str] = {}
     for spec in specs:
         actual = digest_file(path, spec.algorithm)
@@ -997,6 +1034,8 @@ def verify_file(path: Path, specs: Sequence[ChecksumSpec]) -> dict[str, str]:
 
 @dataclass(frozen=True)
 class Response:
+    "Store status, url, headers."
+
     status: int
     url: str
     headers: Mapping[str, str] = field(default_factory=dict)
@@ -1016,6 +1055,8 @@ class Response:
 
 @dataclass(frozen=True)
 class ProbeResult:
+    "Store url, final_url, status, size, etag and related state."
+
     url: str
     final_url: str
     status: int
@@ -1036,6 +1077,7 @@ class ProbeResult:
 
 class CookieJar:
     def __init__(self) -> None:
+        "Initialize the instance state from the supplied arguments."
         self._cookies: dict[str, dict[str, str]] = {}
         self._lock = threading.Lock()
 
@@ -1068,6 +1110,7 @@ class CookieJar:
         return "; ".join(values) if values else None
 
     def load_file(self, path: Path) -> None:
+        "Load file."
         try:
             text = path.read_text(encoding="utf-8", errors="replace")
         except OSError as exc:
@@ -1098,6 +1141,8 @@ class CookieJar:
 
 @dataclass(frozen=True)
 class RequestOptions:
+    "Store timeout, connect_timeout, max_redirects, insecure, ca_cert and related state."
+
     timeout: float = 30.0
     connect_timeout: float = 10.0
     max_redirects: int = 10
@@ -1168,6 +1213,7 @@ class HttpClient:
         cookies: CookieJar | None = None,
         retry_status: frozenset[int] = DEFAULT_RETRY_STATUS,
     ) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.request_options = request
         self.log = log
         self.cookies = cookies
@@ -1382,6 +1428,7 @@ class DiskSink:
         limiters: MultiLimiter,
         interrupt: InterruptFlag,
     ) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.fd = fd
         self.offset = offset
         self.start = offset
@@ -1430,6 +1477,7 @@ class MemorySink:
         limiters: MultiLimiter,
         interrupt: InterruptFlag,
     ) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.buffer = bytearray()
         self.written = 0
         self._progress = progress
@@ -1454,6 +1502,7 @@ class MemorySink:
 
 class ProgressReporter:
     def __init__(self, mode: str = "rich", *, quiet: bool = False, overall: bool = False) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.mode = "none" if quiet else mode
         self._lock = threading.Lock()
         self._names: dict[int, str] = {}
@@ -1480,6 +1529,7 @@ class ProgressReporter:
                 self._rich_overall = self._rich.add_task("total", total=None, status="")
 
     def add_file(self, name: str, size: int | None, already: int = 0) -> int:
+        "Add file."
         with self._lock:
             handle = self._counter
             self._counter += 1
@@ -1545,6 +1595,7 @@ class ProgressReporter:
         print(f"\r{label}", file=sys.stderr, flush=True)
 
     def clear_line(self) -> None:
+        "Clear line."
         if self.mode == "plain":
             print("\r" + " " * 78 + "\r", end="", file=sys.stderr, flush=True)
 
@@ -1566,6 +1617,8 @@ class ProgressReporter:
 
 @dataclass(frozen=True)
 class OutputOptions:
+    "Store directory, output, template, no_clobber, overwrite and related state."
+
     directory: Path = field(default_factory=Path)
     output: Path | None = None
     template: str | None = None
@@ -1579,6 +1632,8 @@ class OutputOptions:
 
 @dataclass(frozen=True)
 class Settings:
+    "Store connections, max_per_host, jobs, max_active, retry and related state."
+
     connections: int = 8
     max_per_host: int = 6
     jobs: int = 1
@@ -1643,6 +1698,8 @@ class Settings:
 
 @dataclass(frozen=True)
 class Resolution:
+    "Store path, skip_reason, detail."
+
     path: Path
     skip_reason: str | None = None
     detail: str | None = None
@@ -1658,6 +1715,7 @@ class _SafeDict(dict[str, Any]):
 
 
 def validate_template(template: str) -> None:
+    "Validate template."
     for _, field_name, _, _ in string.Formatter().parse(template):
         if not field_name:
             continue
@@ -1669,6 +1727,7 @@ def validate_template(template: str) -> None:
 
 
 def render_template(template: str, values: Mapping[str, Any]) -> str:
+    "Render template."
     try:
         return string.Formatter().vformat(template, (), _SafeDict(values))
     except (ValueError, IndexError) as exc:
@@ -1695,6 +1754,7 @@ def template_values(url: str, filename: str, index: int, size: int | None) -> di
 
 
 def resolve_output(options: OutputOptions, probe: ProbeResult, url: str, *, index: int = 0) -> Resolution:
+    "Resolve output."
     filename = filename_from_url(url)
     if options.content_disposition:
         from_header = content_disposition_filename(probe.header("content-disposition"))
@@ -1744,6 +1804,7 @@ def write_manifest(
     size: int | None = None,
     digests: Mapping[str, str] | None = None,
 ) -> Path:
+    "Write manifest."
     payload: dict[str, Any] = {
         "manifest_version": 1,
         "tool": f"wget2-single {__version__}",
@@ -1768,6 +1829,7 @@ def write_manifest(
 
 class HostLimiter:
     def __init__(self, limit: int) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.limit = max(1, limit)
         self._semaphores: dict[str, threading.Semaphore] = {}
         self._lock = threading.Lock()
@@ -1793,6 +1855,7 @@ class HostLimiter:
 
 class PathLocks:
     def __init__(self) -> None:
+        "Initialize the instance state from the supplied arguments."
         self._locks: dict[str, threading.Lock] = {}
         self._guard = threading.Lock()
 
@@ -1820,6 +1883,8 @@ class PathLocks:
 
 @dataclass
 class Result:
+    "Store url, path, status, error, error_kind and related state."
+
     url: str
     path: Path | None = None
     status: str = "pending"
@@ -1872,6 +1937,7 @@ class Downloader:
         path_locks: PathLocks,
         global_limiter: TokenBucket | None,
     ) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.settings = settings
         self.log = log
         self.progress = progress
@@ -2444,6 +2510,7 @@ class Crawler:
         client_factory: Callable[[], HttpClient],
         level: int,
     ) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.settings = settings
         self.log = log
         self.client_factory = client_factory
@@ -2524,6 +2591,7 @@ class Runner:
         progress: ProgressReporter,
         interrupt: InterruptFlag,
     ) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.settings = settings
         self.log = log
         self.progress = progress
@@ -2890,6 +2958,7 @@ def _report(results: Sequence[Result], elapsed: float, exit_code: int) -> dict[s
 
 
 def run_check(settings: Settings, log: Logger) -> int:
+    "Run check."
     console = Console()
     console.print(f"wget2-single {__version__}")
     console.print(f"python {sys.version.split()[0]} on {sys.platform}")
@@ -3071,6 +3140,7 @@ def main(
     check: bool = typer.Option(False, "--check", help="Verify the environment and exit."),
     version: bool = typer.Option(False, "--version", help="Print the version and exit."),
 ) -> None:
+    "Run the command-line interface."
     if version:
         typer.echo(f"wget2-single {__version__}")
         raise typer.Exit(EXIT_OK)

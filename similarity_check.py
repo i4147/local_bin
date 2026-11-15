@@ -1,5 +1,7 @@
 #!/data/data/com.termux/files/usr/bin/env python
 
+"Utilities for similarity check."
+
 import argparse
 import ast
 import collections
@@ -90,6 +92,7 @@ def _hash_shingle(s: str) -> int:
 
 
 def discover_files(root: pathlib.Path) -> list[pathlib.Path]:
+    "Discover files."
     try:
         out = subprocess.run(
             ["git", "ls-files", "*.py"],
@@ -108,6 +111,7 @@ def discover_files(root: pathlib.Path) -> list[pathlib.Path]:
 
 
 def read_source(path: pathlib.Path) -> tuple[str, str]:
+    "Read source."
     raw = path.read_bytes()
     for enc in ("utf-8-sig", "utf-8", "latin-1"):
         try:
@@ -118,6 +122,7 @@ def read_source(path: pathlib.Path) -> tuple[str, str]:
 
 
 def build_stem_lexicon(names: Iterable[str]) -> set[str]:
+    "Build stem lexicon."
     counts: collections.Counter[str] = collections.Counter()
     for name in names:
         stem = (name[:-3] if name.endswith(".py") else name).lower()
@@ -247,7 +252,7 @@ def extract(path: pathlib.Path, lexicon: set[str]) -> dict[str, Any]:
     feats: dict[str, float] = collections.defaultdict(float)
     api: dict[str, float] = collections.defaultdict(float)
 
-    def add(prefix: str, value: str, weight: float = 1.0, api_feature: bool = False):
+    def add(prefix: str, value: str, weight: float = 1.0, api_feature: bool = False) -> None:
         if not value:
             return
         key = f"{prefix}:{value}"
@@ -547,6 +552,7 @@ def cluster(n: int, scores: dict[tuple[int, int], float], threshold: float) -> t
 
 
 def group_label(members: list[dict[str, Any]]) -> tuple[str, list[str], str]:
+    "Group label."
     name_counts: collections.Counter[str] = collections.Counter()
     word_counts: collections.Counter[str] = collections.Counter()
     for m in members:
@@ -564,6 +570,7 @@ def group_label(members: list[dict[str, Any]]) -> tuple[str, list[str], str]:
 
 
 def build_report(root: pathlib.Path, threshold: float) -> dict[str, Any]:
+    "Build report."
     files = discover_files(root)
     n = len(files)
     print(f"[1/5] extracting features from {n} Python files ...", flush=True)
@@ -846,6 +853,7 @@ def build_report(root: pathlib.Path, threshold: float) -> dict[str, Any]:
 
 
 def render_markdown(rep: dict[str, Any], out: pathlib.Path) -> None:
+    "Render markdown."
     s = rep["summary"]
     L = [
         "# Python script similarity report",
@@ -1013,6 +1021,7 @@ def squarify(
 
 
 def render_svg(rep: dict[str, Any], out: pathlib.Path) -> None:
+    "Render svg."
     s = rep["summary"]
     W, H = 1920, 1980
     svg: list[str] = [
@@ -1062,7 +1071,7 @@ def render_svg(rep: dict[str, Any], out: pathlib.Path) -> None:
             text(x + 18, 210, f"{val:,}", 32, col, font_weight="700"),
         ]
 
-    def frame(x, y, w, h, title, sub=""):
+    def frame(x, y, w, h, title, sub: str = ""):
         svg.append(rect(x, y, w, h, "#0d1729", rx=12, stroke="#22314f"))
         svg.append(text(x + 20, y + 32, title, 18, "#e2e8f0", font_weight="700"))
         if sub:
@@ -1324,6 +1333,7 @@ def render_svg(rep: dict[str, Any], out: pathlib.Path) -> None:
 
 
 def main() -> int:
+    "Run the command-line interface."
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--root", type=pathlib.Path, default=ROOT, help="repository root")
     ap.add_argument("--out-dir", type=pathlib.Path, default=pathlib.Path(__file__).resolve().parent)
@@ -1357,4 +1367,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    raise SystemExit(main())

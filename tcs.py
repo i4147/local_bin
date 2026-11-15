@@ -1,5 +1,7 @@
 #!/data/data/com.termux/files/usr/bin/env python
 
+"Utilities for tcs."
+
 import ast
 import builtins
 import keyword
@@ -39,6 +41,7 @@ def die(msg: str, code: int = 1) -> None:
 
 
 def send_to_clipboard(text: str) -> bool:
+    "Send to clipboard."
     try:
         proc = subprocess.run(
             ["termux-clipboard-set"],
@@ -152,6 +155,7 @@ if cst is not None:
 
     class CompressTransformer(cst.CSTTransformer):
         def __init__(self, mapping: dict[str, str]) -> None:
+            "Initialize the instance state from the supplied arguments."
             self.m = mapping
 
         def _r(self, name: str) -> str:
@@ -304,6 +308,7 @@ def compress_source(source: str) -> str | None:
 
 
 def is_python_file(path: Path, source: str) -> bool:
+    "Return whether python file."
     if path.suffix.lower() == ".py":
         return True
     if path.suffix == "":
@@ -316,22 +321,27 @@ def is_python_file(path: Path, source: str) -> bool:
 
 
 def strip_x(source: str) -> str | None:
+    "Strip x."
     if cst is None:
         return None
 
     def is_string_expr(expr: cst.Expr) -> bool:
+        "Return whether string expr."
         return isinstance(expr.value, (cst.SimpleString, cst.ConcatenatedString))
 
     def is_docstring_stmt(stmt: cst.BaseStatement) -> bool:
+        "Return whether docstring stmt."
         if not isinstance(stmt, cst.SimpleStatementLine) or len(stmt.body) != 1:
             return False
         s = stmt.body[0]
         return isinstance(s, cst.Expr) and is_string_expr(s)
 
     def is_docstring_small(s: cst.BaseSmallStatement) -> bool:
+        "Return whether docstring small."
         return isinstance(s, cst.Expr) and is_string_expr(s)
 
     def is_future_import_line(stmt: cst.BaseStatement) -> bool:
+        "Return whether future import line."
         if not isinstance(stmt, cst.SimpleStatementLine) or len(stmt.body) != 1:
             return False
         s = stmt.body[0]
@@ -341,6 +351,7 @@ def strip_x(source: str) -> str | None:
         return isinstance(m, cst.Name) and m.value == "__future__"
 
     def strip_suite(suite):
+        "Strip suite."
         if isinstance(suite, cst.IndentedBlock):
             body = list(suite.body)
             if body and is_docstring_stmt(body[0]):
@@ -407,6 +418,7 @@ def build_payload(
     mangle: bool,
     strip: bool,
 ) -> str:
+    "Build payload."
     if strip:
         if not is_python_file(path, source):
             print("Note: -x only applies to Python files; copied as-is.", file=sys.stderr)
@@ -439,6 +451,7 @@ def build_payload(
 
 
 def main(argv: list[str]) -> None:
+    "Run the command-line interface."
     raw = argv[1:]
     mangle = False
     strip = False

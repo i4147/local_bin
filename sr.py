@@ -119,6 +119,8 @@ FILE_TYPES: dict[str, list[str]] = {
 
 @dataclass
 class Config:
+    "Store mode, search, eliminate, replace, filenames and related state."
+
     mode: str = "search"
     search: re.Pattern = None
     eliminate: Optional[re.Pattern] = None
@@ -175,6 +177,7 @@ def matches_glob(name: str, patterns: list[str]) -> bool:
 
 
 def make_console(color_mode: str) -> Console:
+    "Create console."
     if color_mode == "never":
         return Console(color_system=None, force_terminal=False, highlight=False)
     if color_mode == "always":
@@ -196,6 +199,7 @@ def highlight_matches(line: str, pattern: re.Pattern) -> Text:
 
 
 def print_match_line(lineno: int, line: str, cfg: Config, console: Console) -> None:
+    "Print match line."
     if len(line) > cfg.output_limit:
         console.print(f"[dim]{lineno}:[/dim]LINE IS TOO LONG (>{cfg.output_limit})")
         return
@@ -209,6 +213,7 @@ def print_match_line(lineno: int, line: str, cfg: Config, console: Console) -> N
 
 
 def print_context_line(lineno: int, line: str, cfg: Config, console: Console) -> None:
+    "Print context line."
     if len(line) > cfg.output_limit:
         return
     out = Text()
@@ -218,6 +223,7 @@ def print_context_line(lineno: int, line: str, cfg: Config, console: Console) ->
 
 
 def print_only_matching(lineno: int, line: str, cfg: Config, console: Console) -> None:
+    "Print only matching."
     for m in cfg.search.finditer(line):
         out = Text()
         out.append(f"{lineno}:", style="dim")
@@ -262,6 +268,7 @@ def should_enter_dir(dirname: str, cfg: Config) -> bool:
 
 
 def iter_files(cfg: Config):
+    "Yield files from the supplied input."
     for target in cfg.targets:
         try:
             target = target.resolve()
@@ -277,6 +284,7 @@ def iter_files(cfg: Config):
 
 
 def walk_dir(root: Path, cfg: Config):
+    "Walk dir."
     for dirpath, dirnames, filenames in os.walk(root, followlinks=cfg.follow):
         if cfg.max_depth is not None:
             try:
@@ -301,6 +309,7 @@ def walk_dir(root: Path, cfg: Config):
 
 
 def search_file(path: Path, cfg: Config, console: Console) -> tuple[int, bool]:
+    "Search for file."
     if cfg.json_output:
         return _search_file_json(path, cfg)
 
@@ -545,6 +554,7 @@ def main(
     ),
     help_types: bool = typer.Option(False, "--help-types", "--list-types", help="List available file types and exit"),
 ) -> None:
+    "Run the command-line interface."
     if help_types:
         _display_file_types()
         raise typer.Exit()

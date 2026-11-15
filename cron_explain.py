@@ -121,6 +121,7 @@ def parse_field(field: str, min_val: int, max_val: int, name_map: dict[str, int]
 
 
 def resolve_token(token: str, min_val: int, max_val: int, name_map: dict[str, int] | None) -> int:
+    "Resolve token."
     token_lower = token.lower()
     if name_map and token_lower in name_map:
         return name_map[token_lower]
@@ -139,6 +140,7 @@ def resolve_token(token: str, min_val: int, max_val: int, name_map: dict[str, in
 
 
 def parse_cron_line(line: str, source_file: str = "stdin", line_number: int = 1) -> CronSpec | None:
+    "Parse cron line."
     line = line.strip()
     if not line or line.startswith("#"):
         return None
@@ -230,6 +232,7 @@ def parse_cron_line(line: str, source_file: str = "stdin", line_number: int = 1)
 
 
 def explain_cron(spec: CronSpec) -> str:
+    "Explain cron."
     if spec.macro_name == "@reboot":
         return "Runs once at startup / system boot."
 
@@ -251,12 +254,14 @@ def explain_cron(spec: CronSpec) -> str:
 
 
 def explain_field_vals(vals: set[int], min_v: int, max_v: int, label: str) -> str:
+    "Explain field vals."
     if len(vals) == (max_v - min_v + 1):
         return f"every {label}"
     return set_to_str(vals)
 
 
 def set_to_str(vals: set[int]) -> str:
+    "Set to str."
     sorted_v = sorted(vals)
     if not sorted_v:
         return "none"
@@ -304,6 +309,7 @@ def matches_spec(dt: datetime, spec: CronSpec) -> bool:
 def compute_next_runs(
     spec: CronSpec, tz: ZoneInfo, start_after: datetime, n: int = 5
 ) -> tuple[list[RunInstance], list[str]]:
+    "Compute next runs."
     runs: list[RunInstance] = []
     warnings: list[str] = []
 
@@ -393,6 +399,7 @@ def analyze_overlaps(specs: list[CronSpec], default_duration_minutes: int = 30) 
 
 
 def discover_sources(file_path: str | None) -> list[tuple[str, int, str]]:
+    "Discover sources."
     lines = []
     if file_path:
         if not os.path.exists(file_path):
@@ -417,6 +424,7 @@ def discover_sources(file_path: str | None) -> list[tuple[str, int, str]]:
 
 
 def main() -> None:
+    "Run the command-line interface."
     parser = argparse.ArgumentParser(description="Advanced Crontab Explainer & DST Simulator")
     parser.add_argument("expression", nargs="?", help="Cron expression string (e.g., '*/5 9-17 * * MON-FRI')")
     parser.add_argument("--file", help="Path to crontab or cron.d file")
@@ -512,4 +520,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

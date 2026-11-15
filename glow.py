@@ -1,5 +1,7 @@
 #!/data/data/com.termux/files/usr/bin/env python
 
+"Render Markdown in your terminal, page through it, and convert between Markdown and HTML.  No subprocess / os.system is used."
+
 from __future__ import annotations
 
 import argparse
@@ -68,6 +70,8 @@ else:
 
 
 class ExitCode(IntEnum):
+    "Enumerate the supported ExitCode values."
+
     OK = 0
     ERROR = 1
     USAGE = 2
@@ -163,6 +167,8 @@ PAGER_HELP: Final = """glow.py pager -- keyboard reference
 
 
 class GlowError(Exception):
+    "Signal an error raised by this module."
+
     pass
 
 
@@ -184,6 +190,8 @@ class ConversionError(GlowError):
 
 @dataclass(slots=True, frozen=True)
 class Options:
+    "Store sources, pager, convert, input_format, output and related state."
+
     sources: tuple[str, ...]
     pager: bool
     convert: ConvertMode
@@ -223,6 +231,8 @@ class Options:
 
 @dataclass(slots=True, frozen=True)
 class Dependency:
+    "Store distribution, import_name, purpose, required."
+
     distribution: str
     import_name: str
     purpose: str
@@ -241,6 +251,7 @@ DEPENDENCIES: Final[tuple[Dependency, ...]] = (
 
 
 def has_module(name: str) -> bool:
+    "Return whether module."
     try:
         return importlib.util.find_spec(name) is not None
     except (ImportError, ValueError):
@@ -254,6 +265,7 @@ def module_version(distribution: str) -> str:
 
 
 def resolve_backend(opts: Options) -> Literal["rich", "builtin"]:
+    "Resolve backend."
     if opts.backend == "builtin":
         return "builtin"
     if has_module("rich"):
@@ -270,6 +282,7 @@ def char_width(ch: str) -> int:
 
 
 def strip_ansi(text: str) -> str:
+    "Strip ansi."
     return ANSI_RE.sub("", text)
 
 
@@ -318,6 +331,8 @@ def ansi(codes: SgrCodes, text: str, *, enabled: bool = True) -> str:
 
 @dataclass(slots=True, frozen=True)
 class Palette:
+    "Store h1, h2, heading, code_fg, code_bg and related state."
+
     h1: str
     h2: str
     heading: str
@@ -367,10 +382,12 @@ MONO_PALETTE: Final = Palette("", "", "", "", "", "", "", "", "", "", "", "", ""
 
 
 def get_palette(theme: ThemeName) -> Palette:
+    "Return palette."
     return {"dark": DARK_PALETTE, "light": LIGHT_PALETTE, "mono": MONO_PALETTE}[theme]
 
 
 def resolve_color(opts: Options) -> bool:
+    "Resolve color."
     if opts.color == "always":
         return True
     if opts.color == "never":
@@ -385,6 +402,7 @@ def resolve_color(opts: Options) -> bool:
 
 
 def resolve_width(opts: Options, text: str | None = None) -> int:
+    "Resolve width."
     if opts.width:
         return max(MIN_WIDTH, min(MAX_WIDTH, opts.width))
     terminal = shutil.get_terminal_size((DEFAULT_WIDTH, 24)).columns
@@ -409,6 +427,7 @@ def bootstrap_logging() -> None:
 
 
 def configure_logging(opts: Options) -> None:
+    "Configure logging."
     logger.remove()
     level = "DEBUG" if opts.verbose else "WARNING"
     logger.add(
@@ -435,31 +454,43 @@ def configure_logging(opts: Options) -> None:
 
 @dataclass(slots=True, frozen=True)
 class Text:
+    "Store text."
+
     text: str
 
 
 @dataclass(slots=True, frozen=True)
 class CodeSpan:
+    "Store text."
+
     text: str
 
 
 @dataclass(slots=True, frozen=True)
 class Strong:
+    "Store body."
+
     body: tuple[InlineNode, ...]
 
 
 @dataclass(slots=True, frozen=True)
 class Emph:
+    "Store body."
+
     body: tuple[InlineNode, ...]
 
 
 @dataclass(slots=True, frozen=True)
 class Strike:
+    "Store body."
+
     body: tuple[InlineNode, ...]
 
 
 @dataclass(slots=True, frozen=True)
 class Link:
+    "Store body, href, title."
+
     body: tuple[InlineNode, ...]
     href: str
     title: str | None = None
@@ -467,6 +498,8 @@ class Link:
 
 @dataclass(slots=True, frozen=True)
 class Image:
+    "Store alt, src, title."
+
     alt: str
     src: str
     title: str | None = None
@@ -484,6 +517,8 @@ class HardBreak:
 
 @dataclass(slots=True, frozen=True)
 class RawHtml:
+    "Store html."
+
     html: str
 
 
@@ -495,28 +530,38 @@ else:
 
 @dataclass(slots=True, frozen=True)
 class Heading:
+    "Store level, body."
+
     level: int
     body: tuple[InlineNode, ...]
 
 
 @dataclass(slots=True, frozen=True)
 class Paragraph:
+    "Store body."
+
     body: tuple[InlineNode, ...]
 
 
 @dataclass(slots=True, frozen=True)
 class CodeBlock:
+    "Store language, code."
+
     language: str
     code: str
 
 
 @dataclass(slots=True, frozen=True)
 class QuoteBlock:
+    "Store blocks."
+
     blocks: tuple[Block, ...]
 
 
 @dataclass(slots=True, frozen=True)
 class ListItem:
+    "Store marker, checked, blocks."
+
     marker: str
     checked: bool | None
     blocks: tuple[Block, ...]
@@ -524,6 +569,8 @@ class ListItem:
 
 @dataclass(slots=True, frozen=True)
 class ListBlock:
+    "Store ordered, start, items."
+
     ordered: bool
     start: int
     items: tuple[ListItem, ...]
@@ -531,6 +578,8 @@ class ListBlock:
 
 @dataclass(slots=True, frozen=True)
 class TableBlock:
+    "Store headers, aligns, rows."
+
     headers: tuple[tuple[InlineNode, ...], ...]
     aligns: tuple[Align, ...]
     rows: tuple[tuple[tuple[InlineNode, ...], ...], ...]
@@ -538,11 +587,15 @@ class TableBlock:
 
 @dataclass(slots=True, frozen=True)
 class RuleBlock:
+    "Store char."
+
     char: str
 
 
 @dataclass(slots=True, frozen=True)
 class HtmlBlock:
+    "Store raw."
+
     raw: str
 
 
@@ -602,6 +655,7 @@ def normalise_label(label: str) -> str:
 
 
 def collect_refs(lines: Sequence[str]) -> dict[str, LinkRef]:
+    "Collect refs."
     refs: dict[str, LinkRef] = {}
     for line in lines:
         m = _REF_RE.match(line)
@@ -621,10 +675,12 @@ def parse_inline(
     *,
     allow_html: bool = True,
 ) -> tuple[InlineNode, ...]:
+    "Parse inline."
     nodes: list[InlineNode] = []
     pos = 0
 
     def add_text(value: str) -> None:
+        "Add text."
         if value:
             nodes.append(Text(html.unescape(value)))
 
@@ -752,6 +808,7 @@ def parse_list(
     *,
     allow_html: bool,
 ) -> tuple[ListBlock, int]:
+    "Parse list."
     first = _LIST_RE.match(lines[start])
     assert first is not None
     indent = len(first.group("indent"))
@@ -818,6 +875,7 @@ def parse_table(
     *,
     allow_html: bool,
 ) -> tuple[TableBlock, int]:
+    "Parse table."
     header_cells = _split_table_row(lines[start])
     delim_cells = _split_table_row(lines[start + 1])
     aligns = _table_aligns(delim_cells)
@@ -841,6 +899,7 @@ def parse_blocks(
     *,
     allow_html: bool = True,
 ) -> tuple[Block, ...]:
+    "Parse blocks."
     out: list[Block] = []
     i = 0
     n = len(lines)
@@ -949,12 +1008,15 @@ def parse_blocks(
 
 
 def parse_markdown(text: str, *, allow_html: bool = True) -> tuple[Block, ...]:
+    "Parse markdown."
     lines = text.replace("\r\n", "\n").replace("\r", "\n").expandtabs(4).split("\n")
     return parse_blocks(lines, collect_refs(lines), allow_html=allow_html)
 
 
 @dataclass(slots=True, frozen=True)
 class Segment:
+    "Store text, codes."
+
     text: str
     codes: SgrCodes = ()
 
@@ -1042,6 +1104,7 @@ def _group_chars(chars: list[tuple[str, SgrCodes]]) -> StyledLine:
 
 
 def wrap_styled(line: StyledLine, width: int) -> list[StyledLine]:
+    "Wrap styled."
     width = max(1, width)
     chars: list[tuple[str, SgrCodes]] = []
     for seg in line:
@@ -1109,6 +1172,7 @@ class BuiltinRenderer:
         color: bool,
         opts: Options,
     ) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.width = width
         self.pal = pal
         self.color = color
@@ -1306,6 +1370,7 @@ class BuiltinRenderer:
 
 
 def render_markdown_builtin(text: str, opts: Options) -> str:
+    "Render markdown builtin."
     renderer = BuiltinRenderer(
         width=resolve_width(opts, text),
         pal=get_palette(opts.theme),
@@ -1533,6 +1598,7 @@ _HTML_BLOCK_TAGS: Final = frozenset({
 
 
 def clean_html(text: str) -> tuple[str, str]:
+    "Clean html."
     title = ""
     tm = re.search(r"<title[^>]*>(.*?)</title>", text, re.IGNORECASE | re.DOTALL)
     if tm:
@@ -1622,6 +1688,7 @@ def html_to_markdown_bs4(cleaned: str, opts: Options) -> str:
         return f"\n\n{body}\n\n" if body else "\n\n"
 
     def render_list(node: Tag, depth: int) -> str:
+        "Render list."
         ordered = node.name == "ol"
         try:
             start = int(node.get("start", "1"))
@@ -1638,6 +1705,7 @@ def html_to_markdown_bs4(cleaned: str, opts: Options) -> str:
         return block("\n".join(lines))
 
     def render_table(node: Tag) -> str:
+        "Render table."
         rows: list[list[str]] = []
         header_count = 0
         for tr in node.find_all("tr"):
@@ -1714,6 +1782,7 @@ def html_to_markdown_plain(text: str) -> str:
 
     class _Parser(html.parser.HTMLParser):
         def __init__(self) -> None:
+            "Initialize the instance state from the supplied arguments."
             super().__init__(convert_charrefs=True)
             self.out: list[str] = []
             self.skip = 0
@@ -1721,6 +1790,7 @@ def html_to_markdown_plain(text: str) -> str:
             self.list_depth = 0
 
         def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+            "Handle starttag."
             if tag in _SKIP_TAGS:
                 self.skip += 1
                 return
@@ -1753,6 +1823,7 @@ def html_to_markdown_plain(text: str) -> str:
                 self.out.append(f"![{alt}]({src})")
 
         def handle_endtag(self, tag: str) -> None:
+            "Handle endtag."
             if tag in _SKIP_TAGS:
                 self.skip = max(0, self.skip - 1)
                 return
@@ -1775,6 +1846,7 @@ def html_to_markdown_plain(text: str) -> str:
                 self.out.append("\n")
 
         def handle_data(self, data: str) -> None:
+            "Handle data."
             if self.skip:
                 return
             if self.pre:
@@ -1848,6 +1920,7 @@ def preprocess_for_rich(text: str) -> str:
 
 
 def render_with_rich(text: str, opts: Options) -> str:
+    "Render with rich."
     from rich.console import Console
     from rich.markdown import Markdown
     from rich.theme import Theme
@@ -1887,6 +1960,7 @@ def render_with_rich(text: str, opts: Options) -> str:
 
 
 def render_markdown(text: str, opts: Options) -> str:
+    "Render markdown."
     backend = resolve_backend(opts)
     if backend == "rich":
         try:
@@ -1902,6 +1976,8 @@ def separator_line(width: int, pal: Palette, color: bool) -> str:
 
 @dataclass(slots=True, frozen=True)
 class Source:
+    "Store label, kind, path, url."
+
     label: str
     kind: Literal["stdin", "file", "url"]
     path: Path | None = None
@@ -1910,6 +1986,8 @@ class Source:
 
 @dataclass(slots=True, frozen=True)
 class Document:
+    "Store source, text, fmt, title."
+
     source: Source
     text: str
     fmt: DocFormat
@@ -1964,6 +2042,7 @@ def expand_sources(patterns: Sequence[str]) -> list[Source]:
 
 
 def decode_bytes(data: bytes, encoding: str, label: str) -> str:
+    "Decode bytes."
     candidates: list[str] = []
     if encoding:
         candidates.append(encoding)
@@ -1977,6 +2056,7 @@ def decode_bytes(data: bytes, encoding: str, label: str) -> str:
 
 
 def read_source(src: Source, opts: Options, stdin_cache: dict[str, str]) -> tuple[str, str | None]:
+    "Read source."
     if src.kind == "stdin":
         if "<stdin>" in stdin_cache:
             return stdin_cache["<stdin>"], None
@@ -2018,6 +2098,7 @@ def read_source(src: Source, opts: Options, stdin_cache: dict[str, str]) -> tupl
 
 
 def detect_format(src: Source, text: str, declared: str | None, opts: Options) -> DocFormat:
+    "Detect format."
     if opts.input_format != "auto":
         return opts.input_format
     if declared and "html" in declared.lower():
@@ -2033,6 +2114,7 @@ def detect_format(src: Source, text: str, declared: str | None, opts: Options) -
 
 
 def extract_title(text: str, fmt: DocFormat, fallback: str) -> str:
+    "Extract title."
     if fmt == "markdown":
         m = re.search(r"^#{1,6}\s+(.+?)\s*#*\s*$", text, re.MULTILINE)
         if m:
@@ -2049,6 +2131,7 @@ def extract_title(text: str, fmt: DocFormat, fallback: str) -> str:
 
 
 def load_documents(opts: Options) -> list[Document]:
+    "Load documents."
     sources = expand_sources(opts.sources)
     cache: dict[str, str] = {}
     docs: list[Document] = []
@@ -2094,6 +2177,7 @@ def standalone_html(fragments: Sequence[tuple[str, str]], opts: Options) -> str:
 
 
 def run_to_html(docs: Sequence[Document], opts: Options) -> str:
+    "Run to html."
     fragments: list[tuple[str, str]] = []
     for doc in docs:
         if doc.fmt == "html":
@@ -2115,6 +2199,7 @@ def run_to_html(docs: Sequence[Document], opts: Options) -> str:
 
 
 def run_to_markdown(docs: Sequence[Document], opts: Options) -> str:
+    "Run to markdown."
     parts: list[str] = []
     for doc in docs:
         if doc.fmt == "markdown":
@@ -2131,6 +2216,7 @@ def run_to_markdown(docs: Sequence[Document], opts: Options) -> str:
 
 
 def run_render(docs: Sequence[Document], opts: Options) -> str:
+    "Run render."
     parts: list[str] = []
     for doc in docs:
         if doc.fmt == "html":
@@ -2162,6 +2248,7 @@ class Pager:
     _BOTTOM = frozenset({"G", ">", "\x1b[F", "\x1b[4~", "\x1bOF"})
 
     def __init__(self, lines: Sequence[str], *, color: bool) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.lines: list[str] = list(lines) or [""]
         self.color = color
         self.top = 0
@@ -2359,6 +2446,7 @@ class Pager:
 
 
 def write_output(text: str, opts: Options) -> None:
+    "Write output."
     payload = text if text.endswith("\n") else text + "\n"
     if opts.output is None or str(opts.output) == "-":
         if opts.pager and not opts.writes_to_file:
@@ -2380,6 +2468,7 @@ def write_output(text: str, opts: Options) -> None:
 
 
 def print_doctor(opts: Options) -> None:
+    "Print doctor."
     rows: list[tuple[str, str, str]] = [
         ("glow.py", VERSION, ""),
         ("Python", platform.python_version(), ">=3.12 required"),
@@ -2420,6 +2509,7 @@ class GlowArgumentParser(argparse.ArgumentParser):
 
 
 def build_parser() -> GlowArgumentParser:
+    "Build parser."
     parser = GlowArgumentParser(
         prog=APP_NAME,
         description=(
@@ -2561,6 +2651,7 @@ def build_parser() -> GlowArgumentParser:
 
 
 def parse_args(argv: Sequence[str]) -> Options:
+    "Parse args."
     parser = build_parser()
     ns = parser.parse_args(list(argv))
 
@@ -2635,6 +2726,7 @@ def _silence_broken_pipe() -> None:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    "Run the command-line interface."
     bootstrap_logging()
     opts: Options | None = None
     try:

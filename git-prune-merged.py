@@ -1,4 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/env python
+"List and bulk-delete branches that are already merged into the base branch."
+
 from __future__ import annotations
 
 import argparse
@@ -32,11 +34,15 @@ FIELDS = "%1f".join((
 
 
 class GitError(Exception):
+    "Signal an error raised by this module."
+
     pass
 
 
 @dataclass(slots=True)
 class Branch:
+    "Store scope, name, display, refname, sha and related state."
+
     scope: Scope
     name: str
     display: str
@@ -51,6 +57,8 @@ class Branch:
 
 @dataclass(frozen=True, slots=True)
 class Policy:
+    "Store protected, include, exclude, pattern, older_than and related state."
+
     protected: tuple[str, ...]
     include: tuple[str, ...]
     exclude: tuple[str, ...]
@@ -61,6 +69,8 @@ class Policy:
 
 @dataclass(frozen=True, slots=True)
 class Options:
+    "Store repo, remote, scopes, base, policy and related state."
+
     repo: Path
     remote: str
     scopes: tuple[Scope, ...]
@@ -79,6 +89,8 @@ class Options:
 
 @dataclass(slots=True)
 class Scan:
+    "Store candidates, skipped, unmerged, filtered."
+
     candidates: list[Branch]
     skipped: list[tuple[Branch, str]]
     unmerged: int = 0
@@ -91,6 +103,8 @@ def paint(text: str, code: str, enabled: bool) -> str:
 
 @dataclass(frozen=True, slots=True)
 class Console:
+    "Store color."
+
     color: bool
 
     def say(self, text: str = "") -> None:
@@ -105,6 +119,7 @@ class Console:
 
 class Git:
     def __init__(self, cwd: Path) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.cwd = cwd
         self.env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
 
@@ -142,6 +157,7 @@ def ref_exists(git: Git, ref: str) -> bool:
 
 
 def detect_base(git: Git, remote: str, explicit: str | None) -> tuple[str, str]:
+    "Detect base."
     if explicit:
         if not ref_exists(git, explicit):
             raise GitError(f"base ref not found: {explicit}")
@@ -295,6 +311,7 @@ def command(branch: Branch, remote: str) -> str:
 
 
 def restore_command(branch: Branch, remote: str) -> str:
+    "Restore command."
     if branch.scope == "local":
         return f"git branch {shlex.quote(branch.name)} {branch.sha}"
     target = shlex.quote("refs/heads/" + branch.name)
@@ -437,6 +454,7 @@ def run(opts: Options) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
+    "Build parser."
     parser = argparse.ArgumentParser(
         prog="git-prune-merged",
         description="List and bulk-delete branches that are already merged into the base branch.",
@@ -488,6 +506,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def build_options(parser: argparse.ArgumentParser, args: argparse.Namespace) -> Options:
+    "Build options."
     if args.as_json and args.delete:
         parser.error("--json cannot be combined with --delete")
     if args.older_than is not None and args.older_than < 0:
@@ -530,6 +549,7 @@ def build_options(parser: argparse.ArgumentParser, args: argparse.Namespace) -> 
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    "Run the command-line interface."
     parser = build_parser()
     opts = build_options(parser, parser.parse_args(argv))
     for stream in (sys.stdout, sys.stderr):
@@ -547,4 +567,4 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    raise SystemExit(main())

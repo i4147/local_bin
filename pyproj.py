@@ -1,5 +1,7 @@
 #!/data/data/com.termux/files/usr/bin/env python
 
+"Scaffold a new Python project or rename an existing one. Dry-run by default; use --apply / -g for side effects."
+
 import argparse
 import json
 import os
@@ -174,6 +176,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 @dataclass
 class ProjectConfig:
+    "Store name, version, author, email, description and related state."
+
     name: str
     version: str = DEFAULT_VERSION
     author: str = ""
@@ -256,6 +260,7 @@ def github_request(
 
 
 def get_github_token(env_var: str) -> str:
+    "Return github token."
     token: str | None = os.environ.get(env_var)
     if not token:
         raise SystemExit(f"{env_var} not found. Add it to {ENV_PATH} or export it, e.g.\n    {env_var}=ghp_xxx")
@@ -263,11 +268,13 @@ def get_github_token(env_var: str) -> str:
 
 
 def get_github_user(token: str) -> str:
+    "Return github user."
     data: dict[str, Any] = github_request("GET", f"{GITHUB_API}/user", token)
     return str(data["login"])
 
 
 def set_github_topics(token: str, owner: str, name: str, topics: list[str]) -> None:
+    "Set github topics."
     if not topics:
         return
     github_request(
@@ -286,6 +293,7 @@ def create_github_repo(
     description: str = "",
     org: str = "",
 ) -> dict[str, Any]:
+    "Create github repo."
     if org:
         url = f"{GITHUB_API}/orgs/{org}/repos"
     else:
@@ -312,6 +320,7 @@ def get_or_create_github_repo(
     description: str = "",
     org: str = "",
 ) -> dict[str, Any]:
+    "Return or create github repo."
     try:
         return github_request("GET", f"{GITHUB_API}/repos/{owner}/{name}", token)
     except SystemExit as exc:
@@ -328,6 +337,7 @@ def get_or_create_github_repo(
 
 
 def parse_py_version(spec: str) -> str | None:
+    "Parse py version."
     m = re.match(r"(?:>=?|==|~=)?\s*(\d+)\.(\d+)", spec)
     if m:
         return f"py{m.group(1)}{m.group(2)}"
@@ -335,6 +345,7 @@ def parse_py_version(spec: str) -> str | None:
 
 
 def render_pyproject(cfg: ProjectConfig) -> str:
+    "Render pyproject."
     lines: list[str] = []
     if cfg.backend == "setuptools":
         lines += ["[build-system]", 'requires = ["setuptools"]', 'build-backend = "setuptools.build_meta"']
@@ -404,6 +415,7 @@ def render_pyproject(cfg: ProjectConfig) -> str:
 
 
 def render_setup_py(cfg: ProjectConfig) -> str:
+    "Render setup py."
     if cfg.layout == "cython":
         directives = {"language_level": "3"}
         directives.update(cfg.cython_directives)
@@ -456,6 +468,7 @@ def render_setup_py(cfg: ProjectConfig) -> str:
 
 
 def render_setup_cfg(cfg: ProjectConfig) -> str:
+    "Render setup cfg."
     if cfg.layout == "package":
         return (
             "[options]\n"
@@ -471,10 +484,12 @@ def render_setup_cfg(cfg: ProjectConfig) -> str:
 
 
 def render_init_py(cfg: ProjectConfig) -> str:
+    "Render init py."
     return f'__version__ = "{cfg.version}"\n'
 
 
 def render_cli_py_typer(cfg: ProjectConfig) -> str:
+    "Render cli py typer."
     return (
         "import typer\n"
         "from rich.console import Console\n\n"
@@ -489,6 +504,7 @@ def render_cli_py_typer(cfg: ProjectConfig) -> str:
 
 
 def render_cli_py_argparse(cfg: ProjectConfig) -> str:
+    "Render cli py argparse."
     return (
         "import argparse\n\n\n"
         "def main() -> None:\n"
@@ -496,22 +512,24 @@ def render_cli_py_argparse(cfg: ProjectConfig) -> str:
         "    parser.parse_args()\n"
         '    print("Hello from ' + cfg.name + '")\n\n\n'
         'if __name__ == "__main__":\n'
-        "    main()\n"
+        "        raise SystemExit(main())\n"
     )
 
 
 def render_cli_py_click(cfg: ProjectConfig) -> str:
+    "Render cli py click."
     return (
         "import click\n\n\n"
         "@click.command()\n"
         "def main() -> None:\n"
         '    click.echo("Hello from ' + cfg.name + '")\n\n\n'
         'if __name__ == "__main__":\n'
-        "    main()\n"
+        "        raise SystemExit(main())\n"
     )
 
 
 def render_cli_py(cfg: ProjectConfig) -> str:
+    "Render cli py."
     if cfg.cli_framework == "argparse":
         return render_cli_py_argparse(cfg)
     if cfg.cli_framework == "click":
@@ -520,6 +538,7 @@ def render_cli_py(cfg: ProjectConfig) -> str:
 
 
 def render_single_file_py(cfg: ProjectConfig) -> str:
+    "Render single file py."
     lines: list[str] = []
     if cfg.executable:
         lines.append("#!/usr/bin/env python3")
@@ -555,13 +574,14 @@ def render_single_file_py(cfg: ProjectConfig) -> str:
             ]
         else:
             lines += ["", "", "def main() -> None:", '    print("Hello from ' + cfg.name + '")']
-        lines += ["", "", 'if __name__ == "__main__":', "    main()"]
+        lines += ["", "", 'if __name__ == "__main__":', "        raise SystemExit(main())"]
     elif cfg.executable:
         pass
     return "\n".join(lines) + "\n"
 
 
 def render_cython_pyx(cfg: ProjectConfig) -> str:
+    "Render cython pyx."
     ext = ".py" if cfg.cython_pure_python else ".pyx"
     lines: list[str] = [f"# cython: language_level=3"]
     lines.append(f'"""{cfg.name} -- a Cython extension module."""')
@@ -574,6 +594,7 @@ def render_cython_pyx(cfg: ProjectConfig) -> str:
 
 
 def render_test(cfg: ProjectConfig) -> str:
+    "Render test."
     if cfg.layout == "package" and cfg.with_cli:
         import_target = f"{cfg.name}.cli"
         has_main = True
@@ -590,7 +611,7 @@ def render_test(cfg: ProjectConfig) -> str:
                 f"from {import_target} import main\n\n\n"
                 "class TestMain(unittest.TestCase):\n"
                 "    def test_main(self) -> None:\n"
-                "        main()\n"
+                "            raise SystemExit(main())\n"
             )
         return (
             "import unittest\n\n"
@@ -600,11 +621,12 @@ def render_test(cfg: ProjectConfig) -> str:
             f"        self.assertIsNotNone({import_target})\n"
         )
     if has_main:
-        return f"from {import_target} import main\n\n\ndef test_main() -> None:\n    main()\n"
+        return f"from {import_target} import main\n\n\ndef test_main() -> None:\n        raise SystemExit(main())\n"
     return f"import {import_target}\n\n\ndef test_import() -> None:\n    assert {import_target} is not None\n"
 
 
 def render_license(cfg: ProjectConfig) -> str:
+    "Render license."
     import datetime
 
     year = datetime.date.today().year
@@ -617,6 +639,7 @@ def render_license(cfg: ProjectConfig) -> str:
 
 
 def render_pre_commit(_cfg: ProjectConfig) -> str:
+    "Render pre commit."
     return (
         "repos:\n"
         "  - repo: https://github.com/astral-sh/ruff-pre-commit\n"
@@ -636,6 +659,7 @@ def render_pre_commit(_cfg: ProjectConfig) -> str:
 
 
 def render_ci_github(cfg: ProjectConfig) -> str:
+    "Render ci github."
     return (
         "name: CI\n"
         "on: [push, pull_request]\n"
@@ -658,6 +682,7 @@ def render_ci_github(cfg: ProjectConfig) -> str:
 
 
 def render_ci_gitlab(_cfg: ProjectConfig) -> str:
+    "Render ci gitlab."
     return (
         "stages:\n"
         "  - test\n\n"
@@ -673,22 +698,27 @@ def render_ci_gitlab(_cfg: ProjectConfig) -> str:
 
 
 def render_dockerfile(cfg: ProjectConfig) -> str:
+    "Render dockerfile."
     return f'FROM python:3.12-slim\nWORKDIR /app\nCOPY . .\nRUN pip install --no-cache-dir -e .\nCMD ["{cfg.name}"]\n'
 
 
 def render_dockerignore(_cfg: ProjectConfig) -> str:
+    "Render dockerignore."
     return ".git\n.venv\n__pycache__\n*.pyc\n.pytest_cache\n.mypy_cache\n.ruff_cache\n"
 
 
 def render_mkdocs_yml(cfg: ProjectConfig) -> str:
+    "Render mkdocs yml."
     return f"site_name: {cfg.name}\nnav:\n  - Home: index.md\ntheme:\n  name: material\n"
 
 
 def render_docs_index_md(cfg: ProjectConfig) -> str:
+    "Render docs index md."
     return f"# {cfg.name}\n\n{cfg.description}\n"
 
 
 def render_sphinx_conf(cfg: ProjectConfig) -> str:
+    "Render sphinx conf."
     return (
         f'project = "{cfg.name}"\n'
         f'release = "{cfg.version}"\n'
@@ -700,11 +730,13 @@ def render_sphinx_conf(cfg: ProjectConfig) -> str:
 
 
 def render_docs_index_rst(cfg: ProjectConfig) -> str:
+    "Render docs index rst."
     title = cfg.name.capitalize()
     return f"{title}\n=" * len(title) + f"\n\n{cfg.description}\n"
 
 
 def render_readme(cfg: ProjectConfig) -> str:
+    "Render readme."
     if cfg.readme_format == "rst":
         title = cfg.name.capitalize()
         return f"{title}\n{'=' * len(title)}\n\n{cfg.description}\n"
@@ -712,6 +744,7 @@ def render_readme(cfg: ProjectConfig) -> str:
 
 
 def render_repo_templates(cfg: ProjectConfig) -> dict[Path, str]:
+    "Render repo templates."
     templates: dict[Path, str] = {}
     templates[Path(".github") / "ISSUE_TEMPLATE" / "bug_report.md"] = (
         "---\nname: Bug report\nabout: Report a bug\n---\n\n"
@@ -732,6 +765,7 @@ def render_repo_templates(cfg: ProjectConfig) -> dict[Path, str]:
 
 
 def render_files(cfg: ProjectConfig) -> dict[Path, str]:
+    "Render files."
     files: dict[Path, str] = {}
     files[Path(".gitignore")] = GITIGNORE
     files[Path(f"README.{cfg.readme_format}")] = render_readme(cfg)
@@ -796,6 +830,7 @@ def render_files(cfg: ProjectConfig) -> dict[Path, str]:
 
 
 def validate_name(name: str, *, strict: bool = True) -> None:
+    "Validate name."
     if not name.isidentifier():
         raise SystemExit(f"Error: {name!r} is not a valid Python identifier")
     if strict and name.lower() in RESERVED_NAMES:
@@ -803,6 +838,7 @@ def validate_name(name: str, *, strict: bool = True) -> None:
 
 
 def check_pypi_availability(name: str) -> bool:
+    "Check pypi availability."
     url = f"https://pypi.org/pypi/{name}/json"
     try:
         with urllib.request.urlopen(url, timeout=10) as resp:
@@ -818,6 +854,7 @@ def check_pypi_availability(name: str) -> bool:
 
 
 def check_git_clean(cwd: Path) -> None:
+    "Check git clean."
     try:
         out = subprocess.run(
             ["git", "rev-parse", "--is-inside-work-tree"],
@@ -903,6 +940,7 @@ def scrub_remote_token(cfg: ProjectConfig, root: Path, owner: str, quiet: bool) 
 
 
 def rename_tree(root: Path, old: str, new: str) -> None:
+    "Rename tree."
     for entry in list(root.iterdir()):
         if entry.name in SKIP_DIRS:
             continue
@@ -1063,6 +1101,7 @@ CONFIG_KEYS: Final[dict[str, Any]] = {
 
 
 def load_config_file(path: Path, profile: str | None) -> dict[str, Any]:
+    "Load config file."
     if not path.exists():
         return {}
     with path.open("rb") as f:
@@ -1073,12 +1112,14 @@ def load_config_file(path: Path, profile: str | None) -> dict[str, Any]:
 
 
 def apply_config(args: argparse.Namespace, config: dict[str, Any]) -> None:
+    "Apply config."
     for key, default in CONFIG_KEYS.items():
         if not hasattr(args, key) or getattr(args, key, None) is None:
             setattr(args, key, config.get(key, default))
 
 
 def save_config(args: argparse.Namespace, path: Path, profile: str | None) -> None:
+    "Save config."
     path.parent.mkdir(parents=True, exist_ok=True)
     lines: list[str] = []
     if profile:
@@ -1097,6 +1138,7 @@ def save_config(args: argparse.Namespace, path: Path, profile: str | None) -> No
 
 
 def print_tree(path: Path, prefix: str = "", is_last: bool = True, root: bool = True) -> None:
+    "Print tree."
     if path.is_dir() and path.name in SKIP_DIRS:
         return
     connector = "" if root else ("└── " if is_last else "├── ")
@@ -1113,6 +1155,7 @@ def print_tree(path: Path, prefix: str = "", is_last: bool = True, root: bool = 
 
 
 def print_next_steps(cfg: ProjectConfig, root: Path, *, did_git: bool, github_url: str | None) -> None:
+    "Print next steps."
     print("\nNext steps:")
     print(f"  cd {root.name}")
     print("  python -m venv .venv && source .venv/bin/activate")
@@ -1128,6 +1171,7 @@ def print_next_steps(cfg: ProjectConfig, root: Path, *, did_git: bool, github_ur
 
 
 def build_config_from_args(args: argparse.Namespace) -> ProjectConfig:
+    "Build config from args."
     layout = args.layout or ("single" if args.single_file else "cython" if args.cython else "package")
     if args.cython_package:
         layout = "cython"
@@ -1193,6 +1237,7 @@ def build_config_from_args(args: argparse.Namespace) -> ProjectConfig:
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
+    "Parse args."
     parser = argparse.ArgumentParser(
         prog=Path(sys.argv[0]).name,
         description=(
@@ -1278,6 +1323,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 
 
 def main(argv: list[str] | None = None) -> int:
+    "Run the command-line interface."
     args: argparse.Namespace = parse_args(argv if argv is not None else sys.argv[1:])
 
     if args.no_dotenv:

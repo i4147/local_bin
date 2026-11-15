@@ -35,6 +35,7 @@ SKIP_DIRS = {
 
 
 def iter_py_files(root: Path):
+    "Yield py files from the supplied input."
     for p in sorted(root.rglob("*.py")):
         if any(part in SKIP_DIRS for part in p.parts):
             continue
@@ -50,7 +51,8 @@ def _label_special(text: str) -> str | None:
     return None
 
 
-def scan_comments(path: Path):
+def scan_comments(path: Path) -> tuple:
+    "Scan comments."
     ordinary, special = [], []
     try:
         with path.open("rb") as f:
@@ -78,7 +80,7 @@ def _parse(path: Path):
         return None
 
 
-def scan(path: Path):
+def scan(path: Path) -> tuple:
     """Return (ordinary_comments, special_comments, docstrings, bare_strings)."""
     ordinary, special = scan_comments(path)
 
@@ -110,7 +112,8 @@ def scan(path: Path):
     return ordinary, special, docstrings, bare_strings
 
 
-def main(argv):
+def main(argv) -> int:
+    "Run the command-line interface."
     root = Path(argv[1]) if len(argv) > 1 else Path(".")
     if not root.is_dir():
         print(f"error: not a directory: {root}", file=sys.stderr)

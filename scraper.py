@@ -1,4 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/env python
+"Utilities for scraper."
+
 import argparse
 import contextlib
 import hashlib
@@ -44,6 +46,7 @@ def cprint(msg: str, color: str | None = None) -> None:
 
 
 def get_installed_packages() -> dict[str, str]:
+    "Return installed packages."
     import importlib.metadata as md
 
     out: dict[str, str] = {}
@@ -68,6 +71,7 @@ def http_get(url: str, *, timeout: float = 15, headers: dict | None = None, stre
 
 
 def make_session(headers: dict | None = None) -> requests.Session:
+    "Create session."
     s = requests.Session()
     h = {"User-Agent": DEFAULT_UA}
     if headers:
@@ -77,6 +81,7 @@ def make_session(headers: dict | None = None) -> requests.Session:
 
 
 def read_lines(path: str | Path) -> list[str]:
+    "Read lines."
     try:
         with open(path, encoding="utf-8") as f:
             return [ln.strip() for ln in f if ln.strip()]
@@ -85,11 +90,13 @@ def read_lines(path: str | Path) -> list[str]:
 
 
 def write_lines(path: str | Path, items: Iterable[str]) -> None:
+    "Write lines."
     with open(path, "w", encoding="utf-8") as f:
         f.writelines(f"{x}\n" for x in items)
 
 
 def strip_fragment(url: str) -> str:
+    "Strip fragment."
     return urldefrag(url)[0]
 
 
@@ -106,6 +113,7 @@ def fmt_bytes(n: float) -> str:
 
 
 def build_robots(session: requests.Session, base_url: str) -> RobotFileParser | None:
+    "Build robots."
     rp = RobotFileParser()
     rp.set_url(urljoin(base_url, "/robots.txt"))
     try:
@@ -589,12 +597,14 @@ def _movie_basic(args: argparse.Namespace) -> int:
         print(f"📂 Loaded {len(found)} movies from {movies_file}")
 
     def save_state() -> None:
+        "Save state."
         state_file.write_text(
             json.dumps({"visited": list(visited), "found_movies": found}, indent=2),
             encoding="utf-8",
         )
 
     def add_movie(url: str) -> None:
+        "Add movie."
         if url not in found:
             found.append(url)
             with movies_file.open("a", encoding="utf-8") as f:
@@ -728,7 +738,7 @@ def _sigint(_sig, _frame):
     print("\n⚠️ Interrupt received. Saving progress...")
 
 
-def _parallel_worker(url: str, max_mb: float):
+def _parallel_worker(url: str, max_mb: float) -> tuple:
     from loguru import logger
 
     matches: list[dict] = []
@@ -796,6 +806,7 @@ def _movie_parallel(args: argparse.Namespace) -> int:
         queue = [base]
 
     def save_state(q, v):
+        "Save state."
         state_file.write_text(json.dumps({"queue": list(q), "visited": list(v)}), encoding="utf-8")
 
     def append(matches):
@@ -1295,6 +1306,7 @@ def cmd_web_size(args: argparse.Namespace) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
+    "Build parser."
     p = argparse.ArgumentParser(
         prog="merged_tools.py",
         description=__doc__,
@@ -1381,6 +1393,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    "Run the command-line interface."
     parser = build_parser()
     args = parser.parse_args(argv)
     try:

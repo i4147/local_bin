@@ -1,4 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/env python
+"Convert a vCard (.vcf) file to JSON or CSV."
+
 from __future__ import annotations
 
 import argparse
@@ -11,6 +13,7 @@ from typing import Any
 
 
 def split_unquoted(value: str, separator: str) -> list[str]:
+    "Split unquoted."
     parts: list[str] = []
     start = 0
     quoted = False
@@ -32,6 +35,7 @@ def split_unquoted(value: str, separator: str) -> list[str]:
 
 
 def decode_text(value: str) -> str:
+    "Decode text."
     replacements = {
         "n": "\n",
         "N": "\n",
@@ -44,6 +48,7 @@ def decode_text(value: str) -> str:
 
 
 def parse_parameters(tokens: list[str]) -> dict[str, list[str]]:
+    "Parse parameters."
     parameters: dict[str, list[str]] = {}
 
     for token in tokens:
@@ -58,6 +63,7 @@ def parse_parameters(tokens: list[str]) -> dict[str, list[str]]:
 
 
 def parse_property(line: str, line_number: int) -> tuple[str, dict[str, list[str]], str]:
+    "Parse property."
     if ":" not in line:
         raise ValueError(f"Malformed property on line {line_number}: missing ':'")
 
@@ -72,6 +78,7 @@ def parse_property(line: str, line_number: int) -> tuple[str, dict[str, list[str
 
 
 def parse_vcards(text: str) -> list[dict[str, list[dict[str, Any]]]]:
+    "Parse vcards."
     cards: list[dict[str, list[dict[str, Any]]]] = []
     current_card: dict[str, list[dict[str, Any]]] | None = None
     unfolded_lines: list[tuple[int, str]] = []
@@ -115,6 +122,7 @@ def parse_vcards(text: str) -> list[dict[str, list[dict[str, Any]]]]:
 
 
 def write_json(cards: list[dict[str, list[dict[str, Any]]]], output_path: Path, compact: bool) -> None:
+    "Write json."
     with output_path.open("w", encoding="utf-8", newline="") as output_file:
         json.dump(
             cards,
@@ -127,6 +135,7 @@ def write_json(cards: list[dict[str, list[dict[str, Any]]]], output_path: Path, 
 
 
 def write_csv(cards: list[dict[str, list[dict[str, Any]]]], output_path: Path) -> None:
+    "Write csv."
     with output_path.open("w", encoding="utf-8", newline="") as output_file:
         writer = csv.writer(output_file)
         writer.writerow(["card", "property", "parameters", "value"])
@@ -143,6 +152,7 @@ def write_csv(cards: list[dict[str, list[dict[str, Any]]]], output_path: Path) -
 
 
 def build_parser() -> argparse.ArgumentParser:
+    "Build parser."
     parser = argparse.ArgumentParser(description="Convert a vCard (.vcf) file to JSON or CSV.")
     parser.add_argument("input", type=Path, help="Path to the input .vcf file")
 
@@ -189,6 +199,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> int:
+    "Run the command-line interface."
     parser = build_parser()
     args = parser.parse_args()
     input_path: Path = args.input

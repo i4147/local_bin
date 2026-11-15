@@ -146,6 +146,7 @@ class LogicalLine:
 
     @property
     def is_code(self) -> bool:
+        "Return whether code."
         return bool(self.tokens)
 
     @property
@@ -167,6 +168,7 @@ def _logical_lines(source: str) -> list[LogicalLine]:
     used: set[int] = set()
 
     def close_current() -> None:
+        "Close current."
         nonlocal current
         if current.physical:
             # The first line of a logical line carries the indentation;
@@ -371,6 +373,7 @@ class Indenter:
     """
 
     def __init__(self, lines: Sequence[LogicalLine]) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.lines = list(lines)
         self.levels: list[int] = [0] * len(self.lines)
         #: The block headers whose nesting was a decision.
@@ -1020,6 +1023,7 @@ class _Scope:
     __slots__ = ("parent", "kind", "names", "globals", "nonlocals")
 
     def __init__(self, parent: "_Scope | None" = None, kind: str = "module"):
+        "Initialize the instance state from the supplied arguments."
         self.parent = parent
         self.kind = kind
         self.names: set[str] = set()
@@ -1042,6 +1046,7 @@ class _ScopeChecker:
     """Count the names that are read before they are bound."""
 
     def __init__(self) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.undefined: list[tuple[str, int]] = []
         self.scope = _Scope(None, "module")
         self.builtins = set(dir(builtins))
@@ -1860,6 +1865,7 @@ def reformat(source: str) -> str:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    "Run the command-line interface."
     parser = argparse.ArgumentParser(
         prog="reformat_python",
         description="Restore indentation to a flattened Python source file.",

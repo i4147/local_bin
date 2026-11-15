@@ -1,4 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/env python
+"Utilities for infer."
+
 import re
 import sys
 from pathlib import Path
@@ -43,6 +45,7 @@ class _ReturnCollector(cst.CSTVisitor):
     """Collects return values in a function body, skipping nested scopes."""
 
     def __init__(self) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.returns = []
         self.has_yield = False
 
@@ -115,6 +118,7 @@ def infer_return(func) -> str | None:
 
 class AnnotateTransformer(cst.CSTTransformer):
     def __init__(self) -> None:
+        "Initialize the instance state from the supplied arguments."
         super().__init__()
         self.changes = 0
 
@@ -154,6 +158,7 @@ class AnnotateTransformer(cst.CSTTransformer):
 
 
 def main() -> None:
+    "Run the command-line interface."
     if len(sys.argv) != 2:
         sys.exit(f"Usage: {sys.argv[0]} <file.py>")
 
@@ -173,4 +178,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

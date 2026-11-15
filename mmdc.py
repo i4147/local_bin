@@ -119,6 +119,7 @@ class UnsupportedDiagramError(MermaidParseError):
     """Raised for diagram types the pure-Python renderer does not implement."""
 
     def __init__(self, diagram_type: str) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.diagram_type = diagram_type
         super().__init__(
             f"Diagram type '{diagram_type}' is not supported by the "
@@ -289,6 +290,7 @@ _ENTITIES = {
 
 
 def unescape_entities(s: str) -> str:
+    "Unescape entities."
     for k, v in _ENTITIES.items():
         s = s.replace(k, v)
     return s
@@ -2094,6 +2096,8 @@ def preprocess_definition(definition: str) -> tuple[list[str], dict[str, Any], s
 
 @dataclass
 class FNode:
+    "Store id, label, shape, group, classes and related state."
+
     id: str
     label: str = ""
     shape: str = "rect"
@@ -2104,6 +2108,8 @@ class FNode:
 
 @dataclass
 class FEdge:
+    "Store src, dst, style, head, tail and related state."
+
     src: str
     dst: str
     style: str = "solid"  # solid | dotted | thick
@@ -2116,6 +2122,8 @@ class FEdge:
 
 @dataclass
 class FGroup:
+    "Store id, title, parent."
+
     id: str
     title: str
     parent: str | None = None
@@ -2123,6 +2131,8 @@ class FGroup:
 
 @dataclass
 class FlowIR:
+    "Store direction, nodes, edges, groups, class_defs and related state."
+
     direction: str = "TB"
     nodes: dict[str, FNode] = field(default_factory=dict)
     edges: list[FEdge] = field(default_factory=list)
@@ -2393,6 +2403,7 @@ def parse_flowchart(statements: Sequence[str]) -> FlowIR:
     counter: dict[str, int] = {"n": 0}
 
     def ensure_node(nid: str, label: str | None, shape: str | None, classes: list[str]) -> str:
+        "Ensure node."
         if nid not in ir.nodes:
             ir.nodes[nid] = FNode(
                 id=nid,
@@ -3078,6 +3089,8 @@ def _transform_pts(pts: list[Pt], direction: str, w: float, h: float) -> list[Pt
 
 @dataclass
 class SeqParticipant:
+    "Store id, label, actor."
+
     id: str
     label: str
     actor: bool = False
@@ -3085,6 +3098,8 @@ class SeqParticipant:
 
 @dataclass
 class SeqMessage:
+    "Store src, dst, arrow, label, src_flag and related state."
+
     src: str
     dst: str
     arrow: str
@@ -3095,6 +3110,8 @@ class SeqMessage:
 
 @dataclass
 class SeqNote:
+    "Store placement, targets, text."
+
     placement: str  # left | right | over
     targets: list[str]
     text: str
@@ -3102,12 +3119,16 @@ class SeqNote:
 
 @dataclass
 class SeqActivation:
+    "Store target, action."
+
     target: str
     action: str  # activate | deactivate
 
 
 @dataclass
 class SeqBlock:
+    "Store kind, label, children."
+
     kind: str
     label: str
     children: list = field(default_factory=list)
@@ -3115,11 +3136,15 @@ class SeqBlock:
 
 @dataclass
 class SeqElse:
+    "Store label."
+
     label: str
 
 
 @dataclass
 class SeqIR:
+    "Store participants, items, autonumber, autonumber_start, title."
+
     participants: list[SeqParticipant] = field(default_factory=list)
     items: list = field(default_factory=list)
     autonumber: bool = False
@@ -3161,6 +3186,7 @@ def parse_sequence(statements: Sequence[str]) -> SeqIR:
         return stack[-1].children if stack else ir.items
 
     def find_part(pid: str) -> SeqParticipant | None:
+        "Find part."
         for p in ir.participants:
             if p.id == pid:
                 return p
@@ -3259,6 +3285,7 @@ class _SeqState:
     """Mutable layout state while walking sequence items."""
 
     def __init__(self, ir: SeqIR, theme: Theme, config: dict[str, Any]) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.ir = ir
         self.theme = theme
         cfg = config.get("sequence") or {}
@@ -3804,6 +3831,8 @@ def _seq_note(st: _SeqState, note: SeqNote) -> None:
 
 @dataclass
 class ClsClass:
+    "Store name, annotations, members, note."
+
     name: str
     annotations: list[str] = field(default_factory=list)
     members: list[str] = field(default_factory=list)
@@ -3812,6 +3841,8 @@ class ClsClass:
 
 @dataclass
 class ClsRel:
+    "Store left, right, op, left_card, right_card and related state."
+
     left: str
     right: str
     op: str
@@ -3822,6 +3853,8 @@ class ClsRel:
 
 @dataclass
 class ClassIR:
+    "Store direction, classes, rels."
+
     direction: str = "TB"
     classes: dict[str, ClsClass] = field(default_factory=dict)
     rels: list[ClsRel] = field(default_factory=list)
@@ -4210,6 +4243,8 @@ def render_class(statements: Sequence[str], theme: Theme, config: dict[str, Any]
 
 @dataclass
 class ErAttr:
+    "Store type, name, key, comment."
+
     type: str
     name: str
     key: str | None = None
@@ -4218,12 +4253,16 @@ class ErAttr:
 
 @dataclass
 class ErEntity:
+    "Store name, attrs."
+
     name: str
     attrs: list[ErAttr] = field(default_factory=list)
 
 
 @dataclass
 class ErRel:
+    "Store left, right, ltoken, rtoken, dashed and related state."
+
     left: str
     right: str
     ltoken: str
@@ -4234,6 +4273,8 @@ class ErRel:
 
 @dataclass
 class ErIR:
+    "Store entities, rels."
+
     entities: dict[str, ErEntity] = field(default_factory=dict)
     rels: list[ErRel] = field(default_factory=list)
 
@@ -4488,6 +4529,8 @@ def render_er(statements: Sequence[str], theme: Theme, config: dict[str, Any]) -
 
 @dataclass
 class StState:
+    "Store id, label, kind, group, note."
+
     id: str
     label: str
     kind: str = "state"  # state | start | end | choice | fork | join
@@ -4497,6 +4540,8 @@ class StState:
 
 @dataclass
 class StTrans:
+    "Store src, dst, label."
+
     src: str
     dst: str
     label: str = ""
@@ -4504,6 +4549,8 @@ class StTrans:
 
 @dataclass
 class StateIR:
+    "Store direction, states, trans, groups."
+
     direction: str = "TB"
     states: dict[str, StState] = field(default_factory=dict)
     trans: list[StTrans] = field(default_factory=list)
@@ -4878,6 +4925,8 @@ def render_state(statements: Sequence[str], theme: Theme, config: dict[str, Any]
 
 @dataclass
 class PieIR:
+    "Store title, rows, show_data."
+
     title: str | None = None
     rows: list[tuple[str, float]] = field(default_factory=list)
     show_data: bool = False
@@ -5262,9 +5311,11 @@ class _CommanderParser(argparse.ArgumentParser):
     """An argparse parser styled after commander's help/error output."""
 
     def format_usage(self) -> str:
+        "Format usage."
         return "Usage: mmdc [options]\n"
 
     def format_help(self) -> str:
+        "Format help."
         entries: list[tuple[str, str]] = []
         for action in self._actions:
             if not action.option_strings:
@@ -5629,8 +5680,9 @@ def cli(argv: Sequence[str] | None = None) -> int:
 
 #: Pythonic alias used by ``python mmdc.py``.
 def main(argv: Sequence[str] | None = None) -> int:
+    "Run the command-line interface."
     return cli(argv)
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    raise SystemExit(main())

@@ -83,6 +83,7 @@ def truncate(text: str, width: int) -> str:
 
 
 def clean_ws(text: str) -> str:
+    "Clean ws."
     return " ".join(text.split())
 
 
@@ -98,9 +99,11 @@ class Style:
     """Tiny ANSI helper that becomes a no-op when colour is disabled."""
 
     def __init__(self, enabled: bool) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.enabled = enabled
 
     def __call__(self, text: str, *codes: str) -> str:
+        "Invoke the behavior represented by this object."
         if not self.enabled or not text:
             return text
         return f"\x1b[{';'.join(codes)}m{text}\x1b[0m"
@@ -199,6 +202,7 @@ def dedupe(items: Sequence[str]) -> list[str]:
 
 
 def normalize_tags(raw: Sequence[str]) -> list[str]:
+    "Normalize tags."
     tags: list[str] = []
     for chunk in raw:
         for piece in chunk.split(","):
@@ -219,6 +223,8 @@ class FetchError(Exception):
 
 @dataclass(frozen=True, slots=True)
 class FetchOptions:
+    "Store timeout, max_bytes, user_agent, jobs."
+
     timeout: float = 20.0
     max_bytes: int = 10 * 1024 * 1024
     user_agent: str = DEFAULT_UA
@@ -227,6 +233,8 @@ class FetchOptions:
 
 @dataclass(frozen=True, slots=True)
 class Page:
+    "Store final_url, text, content_type."
+
     final_url: str
     text: str
     content_type: str
@@ -236,6 +244,7 @@ META_CHARSET: Final = re.compile(rb"""<meta[^>]+charset\s*=\s*["']?\s*([A-Za-z0-
 
 
 def decode_html(raw: bytes, declared: str | None = None) -> str:
+    "Decode html."
     if raw.startswith(codecs.BOM_UTF8):
         return raw.decode("utf-8-sig", errors="replace")
     candidates: list[str] = []
@@ -303,6 +312,8 @@ MAX_DEPTH: Final = 120
 
 @dataclass(eq=False, slots=True)
 class Node:
+    "Store tag, attrs, parent, children."
+
     tag: str
     attrs: dict[str, str] = field(default_factory=dict)
     parent: Node | None = None
@@ -314,11 +325,13 @@ class Node:
 
 class TreeBuilder(HTMLParser):
     def __init__(self) -> None:
+        "Initialize the instance state from the supplied arguments."
         super().__init__(convert_charrefs=True)
         self.root = Node("#root")
         self.stack: list[Node] = [self.root]
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        "Handle starttag."
         top = self.stack[-1]
         if len(self.stack) > 1 and (tag in AUTO_CLOSE and top.tag == tag or tag in P_CLOSERS and top.tag == "p"):
             self.stack.pop()
@@ -328,6 +341,7 @@ class TreeBuilder(HTMLParser):
             self.stack.append(node)
 
     def handle_endtag(self, tag: str) -> None:
+        "Handle endtag."
         if tag in VOID:
             return
         for i in range(len(self.stack) - 1, 0, -1):
@@ -336,6 +350,7 @@ class TreeBuilder(HTMLParser):
                 return
 
     def handle_data(self, data: str) -> None:
+        "Handle data."
         if data:
             self.stack[-1].children.append(data)
 
@@ -409,6 +424,7 @@ def class_tokens(node: Node) -> set[str]:
 
 
 def is_noise(node: Node, in_article: bool) -> bool:
+    "Return whether noise."
     tag = node.tag
     if tag in DROP_TAGS or (tag == "header" and not in_article):
         return True
@@ -517,6 +533,7 @@ QUOTE_PREFIX: Final = re.compile(r"^(?:>\s?)+")
 
 
 def has_block_child(node: Node) -> bool:
+    "Return whether block child."
     return any(isinstance(c, Node) and (c.tag in BLOCKISH or has_block_child(c)) for c in node.children)
 
 
@@ -524,6 +541,7 @@ class Renderer:
     """Walks a pruned node tree and emits (kind, text) blocks."""
 
     def __init__(self, base_url: str) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.base = base_url
         self.blocks: list[tuple[str, str]] = []
         self.buf: list[str] = []
@@ -659,6 +677,7 @@ class Renderer:
 
 
 def render_markdown(node: Node, base_url: str, title: str) -> str:
+    "Render markdown."
     renderer = Renderer(base_url)
     renderer.walk(node)
     renderer.flush()
@@ -675,6 +694,7 @@ def render_markdown(node: Node, base_url: str, title: str) -> str:
 
 
 def count_words(markdown: str) -> int:
+    "Count words."
     return len(re.findall(r"[\w'’-]+", LINK_RE.sub(r"\1", markdown)))
 
 
@@ -685,6 +705,8 @@ def count_words(markdown: str) -> int:
 
 @dataclass(slots=True)
 class Extracted:
+    "Store url, final_url, title, author, site and related state."
+
     url: str
     final_url: str
     title: str
@@ -759,6 +781,7 @@ def extract(page_text: str, url: str, final_url: str) -> Extracted:
 
 
 def extract_plain(text: str, url: str, final_url: str) -> Extracted:
+    "Extract plain."
     host = (urlsplit(final_url).hostname or "").removeprefix("www.")
     name = Path(urlsplit(final_url).path).name or host
     body = text.strip()
@@ -847,6 +870,8 @@ FLAG_ACTIONS: Final[dict[str, tuple[str, str]]] = {
 
 @dataclass(frozen=True, slots=True)
 class Hit:
+    "Store id, title, site, archived, snippet."
+
     id: int
     title: str
     site: str
@@ -870,6 +895,7 @@ class Library:
     """Thin wrapper around the SQLite database."""
 
     def __init__(self, path: Path | str) -> None:
+        "Initialize the instance state from the supplied arguments."
         if str(path) != ":memory:":
             Path(path).parent.mkdir(parents=True, exist_ok=True)
         self.conn = sqlite3.connect(path)
@@ -950,16 +976,19 @@ class Library:
             return article_id
 
     def add_tags(self, article_id: int, tags: Sequence[str]) -> None:
+        "Add tags."
         with self.conn:
             self.conn.executemany(
                 "INSERT OR IGNORE INTO tags (article_id, tag) VALUES (?, ?)", [(article_id, t) for t in tags]
             )
 
     def remove_tags(self, article_id: int, tags: Sequence[str]) -> None:
+        "Remove tags."
         with self.conn:
             self.conn.executemany("DELETE FROM tags WHERE article_id = ? AND tag = ?", [(article_id, t) for t in tags])
 
     def apply_flag(self, action: str, ids: Sequence[int]) -> int:
+        "Apply flag."
         clause = FLAG_ACTIONS[action][0]
         changed = 0
         with self.conn:
@@ -1019,9 +1048,12 @@ class Library:
 
 
 def render_terminal(row: sqlite3.Row, tags: Sequence[str], width: int, style: Style, show_links: bool) -> str:
+    "Render terminal."
     refs: dict[str, int] = {}
 
     def strip_links(text: str) -> str:
+        "Strip links."
+
         def repl(m: re.Match[str]) -> str:
             label, url = m.group(1), m.group(2)
             if not show_links:
@@ -1167,6 +1199,7 @@ def dedupe_ints(ids: Sequence[int]) -> list[int]:
 
 
 def fetch_options(args: argparse.Namespace) -> FetchOptions:
+    "Fetch options."
     return FetchOptions(
         timeout=args.timeout,
         max_bytes=int(args.max_size * 1024 * 1024),
@@ -1246,6 +1279,7 @@ def add_urls(
 
 
 def read_stdin_text() -> str:
+    "Read stdin text."
     return sys.stdin.buffer.read().decode("utf-8", errors="replace")
 
 
@@ -1567,6 +1601,7 @@ def cmd_stats(lib: Library, args: argparse.Namespace) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
+    "Build parser."
     parser = argparse.ArgumentParser(
         prog=APP,
         description="Local-first read-it-later: save pages to SQLite, read them in your terminal.",
@@ -1675,6 +1710,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    "Run the command-line interface."
     raw = list(sys.argv[1:] if argv is None else argv)
     if not raw:
         raw = ["ls"] if sys.stdin.isatty() else ["add"]
@@ -1699,4 +1735,4 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    raise SystemExit(main())

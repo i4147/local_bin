@@ -1,5 +1,7 @@
 #!/data/data/com.termux/files/usr/bin/env python
 
+"Utilities for ax."
+
 import contextlib
 import hashlib
 import html
@@ -32,6 +34,7 @@ __version__ = "0.1.3"
 
 class lazy_property:
     def __init__(self, func: Callable) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.__doc__ = func.__doc__
         self.func = func
 
@@ -52,20 +55,24 @@ def fscore(x: Any, y: Any) -> float:
 
 
 def normalize(s: str) -> str:
+    "Normalize input."
     return re.sub(r"\s+", lambda x: "\n" if "\n" in x.group(0) else " ", s).strip()
 
 
 def get_text_and_tail(node: Any) -> str:
+    "Return text and tail."
     text = node.text or ""
     tail = node.tail or ""
     return text + " " + tail
 
 
 def get_full_text(tree: Any) -> str:
+    "Return full text."
     return normalize("\n".join([get_text_and_tail(x) for x in tree.iter()]))
 
 
 def extract_domain(url: str) -> tuple[str, str]:
+    "Extract domain."
     tld = tldextract.extract(url)
     name = ".".join([x for x in tld if x])
     protocol = url.split("//", 1)[0]
@@ -73,6 +80,7 @@ def extract_domain(url: str) -> tuple[str, str]:
 
 
 def extract_links(tree: Any, domain: str, only_this_domain: bool = True) -> list[str]:
+    "Extract links."
     links = tree.xpath("//a/@href")
     links = [urljoin(domain, x) for x in links]
     if only_this_domain:
@@ -81,6 +89,7 @@ def extract_links(tree: Any, domain: str, only_this_domain: bool = True) -> list
 
 
 def extract_headings(tree: Any) -> list[str]:
+    "Extract headings."
     for h in ["//h1", "//h2", "//h3"]:
         headings = [x.text_content() for x in tree.xpath(h)]
         if headings:
@@ -89,6 +98,7 @@ def extract_headings(tree: Any) -> list[str]:
 
 
 def get_language(tree: Any, domain: Optional[str] = None, lang_default: str = "en") -> str:
+    "Return language."
     lang = None
     if lang is None and "lang" in tree.attrib:
         lang = tree.attrib["lang"]
@@ -114,6 +124,7 @@ def get_language(tree: Any, domain: Optional[str] = None, lang_default: str = "e
 
 
 def generate_rule_dictionary() -> dict:
+    "Generate rule dictionary."
     headers = ["h{}".format(i) for i in range(1, 5)]
     tags: list[str] = []
     atts = ["id", "class", ""]
@@ -133,6 +144,7 @@ def generate_rule_dictionary() -> dict:
 
 
 def get_score_from_title_dict(node: Any, dc: dict) -> tuple[int, str]:
+    "Return score from title dict."
     tag_found = dc.get(node.tag, "")
     if tag_found:
         maxi = 100
@@ -149,6 +161,7 @@ def get_score_from_title_dict(node: Any, dc: dict) -> tuple[int, str]:
 
 
 def get_meta_titles(tree: Any) -> list[str]:
+    "Return meta titles."
     res: list[str] = []
     head = tree.find("head")
     if head is not None:
@@ -175,6 +188,7 @@ rule_dc = generate_rule_dictionary()
 
 
 def get_title(tree: Any, url: Optional[str], rule_dict: dict = rule_dc) -> str:
+    "Return title."
     texts = sorted_title_candidates(tree, rule_dict)
     metas = get_meta_titles(tree)
     url = url or "./"
@@ -199,6 +213,7 @@ def get_title(tree: Any, url: Optional[str], rule_dict: dict = rule_dc) -> str:
 
 
 def get_title_index(tree: Any, title: str) -> Optional[int]:
+    "Return title index."
     title_index = None
     for num, node in enumerate(tree.iter()):
         if normalize(get_text_and_tail(node)) == title:
@@ -253,6 +268,7 @@ def get_images(
     title_index: Optional[int],
     wrong_atts: Optional[list[str]] = None,
 ) -> Optional[list[str]]:
+    "Return images."
     if title_index is None:
         return None
     if wrong_atts is None:
@@ -304,6 +320,7 @@ HTML_OR_JS_COMMENTLINE = re.compile(r"^\s*(//.*|<!--.*-->)")
 
 
 def extract_jsonld(tree: Any) -> list[Any]:
+    "Extract jsonld."
     results = []
     for script in tree.xpath('//script[@type="application/ld+json"]/text()'):
         try:
@@ -344,6 +361,7 @@ def different(text: str, title: str, date_str: str, simple: bool = True) -> bool
 
 
 def get_content(response_body: bytes, title: str, language: str, url: str) -> tuple[Any, Optional[str]]:
+    "Return content."
     language = language if language in lang_to_stoplist else "en"
     stoplist = lang_to_stoplist[language]
     good_inds = []
@@ -395,6 +413,7 @@ CACHE = diskcache.Cache(Path("~/.auto_extract").expanduser())
 
 class Article:
     def __init__(self, response_body: bytes, response_url: str) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.response_body = response_body
         self.tree = fromstring(response_body)
         self.url = response_url
@@ -476,6 +495,7 @@ class Article:
         return me.extract_items(self.tree, self.url)
 
     def __repr__(self) -> str:
+        "Return the object's developer-facing representation."
         obj = {
             "title": self.title,
             "domain": self.domain,
@@ -512,15 +532,18 @@ class Article:
 
 
 def parse_article(response_body: bytes, response_url: str) -> Article:
+    "Parse article."
     return Article(response_body, response_url)
 
 
 def extract_url(url: str) -> Article:
+    "Extract url."
     response = requests.get(url)
     return parse_article(response.content, response.url)
 
 
 def test_url(url: str) -> Article:
+    "Test url."
     return extract_url(url)
 
 
@@ -538,6 +561,7 @@ def re_count(char: str, min_count: int, max_count: int) -> re.Pattern:
 
 
 def make_regex(x: Any) -> re.Pattern:
+    "Create regex."
     if isinstance(x, str):
         return re.compile(x)
     return x
@@ -629,6 +653,7 @@ class Storage:
         root: str = "~/.tradex",
         notify: Callable[[list[Article]], None] = lambda articles: None,
     ) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.root = root
         self.project_name = project_name
         self._articles = None
@@ -639,9 +664,11 @@ class Storage:
             self.notify = False
 
     def __len__(self) -> int:
+        "Return the number of items represented by the object."
         return len(self.seen)
 
     def __repr__(self) -> str:
+        "Return the object's developer-facing representation."
         return '{}(path="{}", num_articles={})'.format(self.__class__.__name__, self.path, len(self))
 
     @property
@@ -661,6 +688,7 @@ class Storage:
         return Path(Path(self.index_path).expanduser()).is_file()
 
     def add_articles(self, articles: list[Article]) -> int:
+        "Add articles."
         if articles:
             print("{} new articles in {}".format(len(articles), self.project_name))
             if self.notify:
@@ -699,6 +727,7 @@ class Storage:
 
 
 def remove_hash_after_last_dash(article_url: str) -> str:
+    "Remove hash after last dash."
     return re.sub("-[a-f]*[0-9]+[a-f]+[0-9]+[a-f0-9]+$", "", article_url)
 
 
@@ -734,6 +763,7 @@ class Crawler:
         add_query_param_nonce: bool = False,
         auto_detect_fn: Optional[Callable] = None,
     ) -> None:
+        "Initialize the instance state from the supplied arguments."
         self.user_agent = "Upfrontbot/1.0 (+https://www.upfront.ai/)"
         self.headers = {"User-Agent": self.user_agent}
         self.seed_urls = seed_urls if isinstance(seed_urls, list) else [seed_urls]
@@ -758,6 +788,7 @@ class Crawler:
         self.seed_error = 0
 
     def setup_seeds(self, seed_urls: list[str]) -> None:
+        "Set up seeds."
         for seed_url in seed_urls:
             if not seed_url:
                 continue
@@ -769,6 +800,7 @@ class Crawler:
             self.robot_parsers.append(self.get_robo_parser_domain(domain))
 
     def get_robo_parser_domain(self, domain: str) -> Any:
+        "Return robo parser domain."
         rp = UpfrontRobotFileParser()
         robot_url = urllib.request.urljoin(domain, "robots.txt")
         rp.set_url(robot_url)
@@ -779,6 +811,7 @@ class Crawler:
 
             class rp:
                 def can_fetch(self, user_agent: str, url: str) -> bool:
+                    "Return whether fetch."
                     return True
 
         return rp
@@ -822,6 +855,7 @@ class Crawler:
         return seed_url + separator + "additionals_param=" + semi_random_nonce
 
     def get_links(self) -> dict[str, str]:
+        "Return links."
         links: dict[str, str] = {}
         self.seed_error = 0
         for seed_url, domain in zip(self.seed_urls, self.domains):
@@ -866,6 +900,7 @@ class Crawler:
         return links
 
     def save_articles_from_links(self, links: dict[str, str]) -> int:
+        "Save articles from links."
         articles = []
         for link_id, link in list(links.items()):
             article = Article.from_url(link, self.s)
@@ -880,6 +915,7 @@ class Crawler:
 
 class MediumCrawler(Crawler):
     def __init__(self, pages: Any, name: str, *args: Any, **kwargs: Any) -> None:
+        "Initialize the instance state from the supplied arguments."
         pages = pages if isinstance(pages, list) else [pages]
         seed_urls = ["https://medium.com/{}/latest".format(page) for page in pages]
         super().__init__(
@@ -900,6 +936,7 @@ class MediumCrawler(Crawler):
 
 class SteemitCrawler(Crawler):
     def __init__(self, pages: Any, name: str, *args: Any, **kwargs: Any) -> None:
+        "Initialize the instance state from the supplied arguments."
         pages = pages if isinstance(pages, list) else [pages]
         seed_urls = ["https://steemit.com/{}".format(page) for page in pages]
         super().__init__(
@@ -941,10 +978,11 @@ def view_html(x: str) -> None:
 
 
 def main() -> None:
+    "Run the command-line interface."
     from pprint import pprint
 
     pprint(test_url(sys.argv[1]))
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

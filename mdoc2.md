@@ -6,7 +6,7 @@ example of reformat:
 before:
 
 """Create a GitHub repository from a local project and push it.
-Subcommands: ``api`` creates the repository through the REST API, ``api-push`` also initialises, commits and pushes, ``gh-create`` mixes PyGithub and the ``gh`` CLI, ``gh-cli`` is a pure ``gh``/git workflow and ``gh-managed`` an interactive manager.
+Subcommands: ``api`` creates the repository through the REST API, ``api-push`` also initializes, commits and pushes, ``gh-create`` mixes PyGithub and the ``gh`` CLI, ``gh-cli`` is a pure ``gh``/git workflow and ``gh-managed`` an interactive manager.
 The token comes from ``~/.env`` and ``--backend`` picks the git implementation.
 Usage: gh_repo {api,api-push,gh-create,gh-cli,gh-managed} [options] Positional arguments: repo_name Name of the new repository.
 description Subcommands: api Create a repo via API (mkghrepo.py).

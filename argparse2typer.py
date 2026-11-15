@@ -98,6 +98,8 @@ class _ParserShim:
 
 
 class ConversionError(Exception):
+    "Signal an error raised by this module."
+
     pass
 
 
@@ -123,10 +125,12 @@ def dotted(node) -> str | None:
 
 
 def is_parser_ctor(node) -> bool:
+    "Return whether parser ctor."
     return isinstance(node, ast.Call) and dotted(node.func) in {"argparse.ArgumentParser", "ArgumentParser"}
 
 
 def is_parse_call(node, var: str) -> bool:
+    "Return whether parse call."
     return (
         isinstance(node, ast.Call)
         and isinstance(node.func, ast.Attribute)
@@ -137,6 +141,7 @@ def is_parse_call(node, var: str) -> bool:
 
 
 def is_main_guard(node) -> bool:
+    "Return whether main guard."
     if not (isinstance(node, ast.If) and isinstance(node.test, ast.Compare) and not node.orelse):
         return False
     t = node.test
@@ -219,6 +224,7 @@ class Source:
     """Byte-offset based text splicing driven by AST positions."""
 
     def __init__(self, text: str):
+        "Initialize the instance state from the supplied arguments."
         self.data = text.encode()
         self.line_starts = [0] + [m.end() for m in re.finditer(rb"\n", self.data)]
         self.edits: list[tuple[int, int, str]] = []
@@ -245,6 +251,7 @@ class Source:
         self.edits.append((start, end, new))
 
     def delete_stmt(self, node) -> None:
+        "Delete stmt."
         self.replace(self.line_start(node.lineno), self.line_end(node.end_lineno), "")
 
     def after_line(self, lineno: int, text: str) -> None:
@@ -268,6 +275,7 @@ class Source:
 
 class Ctx:
     def __init__(self, src: Source, tree: ast.Module):
+        "Initialize the instance state from the supplied arguments."
         self.src = src
         self.warnings: list[str] = []
         self.needed: set[str] = {"typer", "Annotated"}
@@ -293,6 +301,8 @@ class Ctx:
 # --------------------------------------------------------------------------- model
 @dataclass
 class Param:
+    "Store name, dest, positional, ann, default and related state."
+
     name: str
     dest: str
     positional: bool
@@ -307,6 +317,8 @@ class Param:
 
 @dataclass
 class Cmd:
+    "Store name, help, epilog, params, defaults and related state."
+
     name: str | None = None
     help: str | None = None
     epilog: str | None = None
@@ -319,6 +331,8 @@ class Cmd:
 
 @dataclass
 class Ref:
+    "Store kind, cmd, panel, excl."
+
     kind: str  # parser | group | subparsers
     cmd: Cmd
     panel: str | None = None
@@ -327,6 +341,8 @@ class Ref:
 
 @dataclass
 class Loc:
+    "Store owner, body, creation."
+
     owner: ast.AST
     body: list[ast.stmt]
     creation: ast.Assign
@@ -334,6 +350,8 @@ class Loc:
 
 @dataclass
 class Analysis:
+    "Store root, subs, sub_dest, creation, parser_var and related state."
+
     root: Cmd
     subs: list[Cmd]
     sub_dest: str | None
@@ -345,6 +363,7 @@ class Analysis:
 
 # --------------------------------------------------------------------------- add_argument
 def convert_type(node, ctx: Ctx) -> tuple[str, str | None]:
+    "Convert type."
     d = dotted(node)
     if d in {"int", "float", "str", "bool", "Path", "pathlib.Path"}:
         return d, None
@@ -359,6 +378,7 @@ def convert_type(node, ctx: Ctx) -> tuple[str, str | None]:
 
 
 def make_enum(dest: str, choices: list[str], ctx: Ctx) -> tuple[str, dict[str, str]]:
+    "Create enum."
     cls = ctx.unique("".join(w.capitalize() for w in re.split(r"\W+", dest) if w) or "Choice")
     members: dict[str, str] = {}
     for c in choices:
@@ -394,6 +414,7 @@ def help_expr(node, default_val, ctx: Ctx) -> tuple[str | None, bool]:
 
 
 def convert_add_argument(call: ast.Call, ctx: Ctx, panel: str | None) -> Param | None:
+    "Convert add argument."
     src = ctx.src
     if any(isinstance(a, ast.Starred) for a in call.args) or any(k.arg is None for k in call.keywords):
         ctx.warn(call, "add_argument() with */** unpacking - skipped")
@@ -691,6 +712,7 @@ def ordered(params: list[Param]) -> list[Param]:
 
 
 def render_param(p: Param) -> str:
+    "Render param."
     ann = f"{p.ann} | None" if p.default == "None" else p.ann
     args = [] if p.positional else [q(f) for f in p.flags]
     args += [f"{k}={v}" for k, v in p.kw.items()]
@@ -700,6 +722,7 @@ def render_param(p: Param) -> str:
 
 
 def render_sig(params: list[Param], ret: str = "") -> str:
+    "Render sig."
     if not params:
         return f"(){ret}"
     return "(\n" + "".join(f"{INDENT}{render_param(p)},\n" for p in ordered(params)) + f"){ret}"
@@ -756,6 +779,8 @@ def cmd_prologue(cmd: Cmd, ctx: Ctx) -> list[str]:
 # --------------------------------------------------------------------------- inline mode
 @dataclass
 class InlinePlan:
+    "Store pst, var, entry, exit_codes, header_end and related state."
+
     pst: ast.stmt
     var: str | None
     entry: ast.stmt | None = None
@@ -868,6 +893,7 @@ def plan_inline(tree, src: Source, loc: Loc, an: Analysis) -> InlinePlan | str:
 
 
 def apply_inline(tree, src: Source, ctx: Ctx, loc: Loc, an: Analysis, plan: InlinePlan) -> None:
+    "Apply inline."
     owner, body, pst, var = loc.owner, loc.body, plan.pst, plan.var
     root = an.root
     pidx = body.index(pst)
@@ -958,6 +984,7 @@ def apply_inline(tree, src: Source, ctx: Ctx, loc: Loc, an: Analysis, plan: Inli
 
 # --------------------------------------------------------------------------- bridge mode
 def find_entry(tree: ast.Module):
+    "Find entry."
     for st in tree.body:
         if is_main_guard(st):
             return "guard", st
@@ -973,6 +1000,7 @@ def state_update(cmd: Cmd, extra: list[tuple[str, str]]) -> str | None:
 
 
 def render_bridge(ctx: Ctx, an: Analysis, run: str) -> str:
+    "Render bridge."
     root, out = an.root, []
     multi = bool(an.subs)
     out.append(app_def(ctx, root.help if multi else None, root.epilog if multi else None))
@@ -998,6 +1026,7 @@ def render_bridge(ctx: Ctx, an: Analysis, run: str) -> str:
 
 
 def apply_bridge(tree, src: Source, ctx: Ctx, loc: Loc, an: Analysis, reason: str) -> None:
+    "Apply bridge."
     entry = find_entry(tree)
     if loc.owner is tree or entry is None:
         raise ConversionError(
@@ -1029,6 +1058,7 @@ def apply_bridge(tree, src: Source, ctx: Ctx, loc: Loc, an: Analysis, reason: st
 
 # --------------------------------------------------------------------------- finishing
 def check_leftovers(tree, an: Analysis, ctx: Ctx) -> None:
+    "Check leftovers."
     handled = {id(n) for st in an.handled for n in ast.walk(st)}
     for n in ast.walk(tree):
         if (
@@ -1150,6 +1180,7 @@ def convert(text: str) -> tuple[str, list[str]]:
 
 
 def main() -> int:
+    "Run the command-line interface."
     if len(sys.argv) != 2 or sys.argv[1] in {"-h", "--help"}:
         print(__doc__.split("How it works")[0].strip(), file=sys.stderr)
         return 0 if len(sys.argv) == 2 else 2
@@ -1177,4 +1208,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    raise SystemExit(main())
