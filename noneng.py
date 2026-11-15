@@ -21,25 +21,10 @@ from rich.console import Console, Group
 from rich.live import Live
 from rich.table import Table
 from rich.text import Text
+from dh import SKIP_DIRS
 
 Backend = Literal["langdetect", "lingua", "pycld2", "gcld3", "py3langid", "langid"]
 
-SKIP_DIRS = frozenset({
-    ".git",
-    ".hg",
-    ".svn",
-    ".venv",
-    "venv",
-    "env",
-    "__pycache__",
-    "node_modules",
-    ".mypy_cache",
-    ".pytest_cache",
-    ".ruff_cache",
-    ".tox",
-    "build",
-    "dist",
-})
 LIVE_FINDING_LIMIT = 15
 
 
