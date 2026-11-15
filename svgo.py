@@ -9190,7 +9190,7 @@ def _handle_task_result(
         _write_stdout(stdout_data)
     if not config.get("quiet") and output_path != "-":
         _print_line()
-        _print_line(f"{os.path.basename(input_path)}:")
+        _print_line(f"{Path(input_path).name}:")
         _print_line(f"Done in {elapsed_ms} ms!")
         _print_profit(input_size, output_size, state.color)
 
@@ -9297,7 +9297,7 @@ def _process_svg_data(
     if not config.get("quiet") and output != "-":
         if input_name:
             _print_line()
-            _print_line(f"{os.path.basename(input_name)}:")
+            _print_line(f"{Path(input_name).name}:")
         _print_line(f"Done in {processing_time} ms!")
         _print_profit(prev_file_size, result_file_size, state.color)
 
@@ -9312,7 +9312,7 @@ def _write_output(input_name: str | None, output: str, data: str, state: _RunSta
         target.write_text(data, encoding="utf-8")
     except IsADirectoryError:
         if input_name:
-            (target / os.path.basename(input_name)).write_text(data, encoding="utf-8")
+            (target / Path(input_name).name).write_text(data, encoding="utf-8")
         else:
             _print_error(f"Error: output '{output}' is not a directory.", state.color)
             raise _CliExit(EXIT_FAILURE)
@@ -9402,7 +9402,7 @@ def _run_cli(argv: Sequence[str]) -> int:
                     output[i] = (
                         input_list[i]
                         if _check_is_dir(input_list[i])
-                        else os.path.join(directory, os.path.basename(input_list[i]))
+                        else str(Path(directory) / Path(input_list[i]).name)
                     )
             elif len(output) < len(input_list):
                 output = output + input_list[len(output) :]

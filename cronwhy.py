@@ -9,6 +9,43 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Optional, Sequence
 from zoneinfo import ZoneInfo
+from types import SimpleNamespace
+from typing import Annotated
+
+import click
+import typer
+
+
+_STATE: dict[str, object] = {}
+
+
+class _Args(SimpleNamespace):
+    """argparse.Namespace look-alike: unknown attributes read as None."""
+
+    def __getattr__(self, name):
+        if name.startswith("__"):
+            raise AttributeError(name)
+        return None
+
+
+class _ParserShim:
+    """Stand-in for the removed argparse parser; hands back what Typer parsed."""
+
+    def parse_args(self, args=None, namespace=None):
+        'Parse args.'
+        return _Args(**_STATE)
+
+    def error(self, message):
+        raise typer.BadParameter(message)
+
+    def print_help(self, file=None):
+        'Print help.'
+        typer.echo(click.get_current_context().get_help(), file=file)
+
+    def print_usage(self, file=None):
+        'Print usage.'
+        typer.echo(click.get_current_context().get_usage(), file=file)
+
 
 MONTH_NAMES = {
     "jan": 1,
@@ -343,17 +380,7 @@ def detect_overlaps(specs: Sequence[CronSpec], tz: ZoneInfo, horizon_days: int =
 
 def build_parser() -> argparse.ArgumentParser:
     "Build parser."
-    parser = argparse.ArgumentParser(description="Explain cron expressions in plain English and estimate next runs.")
-    parser.add_argument("expression", nargs="?", help="A single cron expression like '*/5 * * * *'")
-    parser.add_argument("--file", help="Crontab file to parse instead of one expression")
-    parser.add_argument("--tz", default="UTC", help="Timezone to evaluate scheduling in, e.g. Europe/London")
-    parser.add_argument("--next", type=int, default=5, help="How many future run times to show")
-    parser.add_argument(
-        "--overlaps", action="store_true", help="Detect duplicate/overlapping schedules in a crontab file"
-    )
-    parser.add_argument("--dst-warnings", action="store_true", help="Call out times near DST transitions")
-    parser.add_argument("--json", action="store_true", help="Emit JSON output")
-    parser.add_argument("--horizon-days", type=int, default=30, help="Horizon used for overlap detection (days)")
+    parser = _ParserShim()
     return parser
 
 
@@ -467,5 +494,31 @@ def main() -> int:
     return 0
 
 
-if __name__ == "__main__":
+def _run() -> None:
     raise SystemExit(main())
+
+
+app = typer.Typer(
+    add_completion=False,
+    context_settings={"help_option_names": ["-h", "--help"]},
+    pretty_exceptions_show_locals=False,
+)
+
+
+@app.command(help="Explain cron expressions in plain English and estimate next runs.")
+def cli(
+    expression: Annotated[str | None, typer.Argument(help="A single cron expression like '*/5 * * * *'")] = None,
+    file: Annotated[str | None, typer.Option("--file", help="Crontab file to parse instead of one expression")] = None,
+    tz: Annotated[str, typer.Option("--tz", help="Timezone to evaluate scheduling in, e.g. Europe/London")] = "UTC",
+    next: Annotated[int, typer.Option("--next", help="How many future run times to show")] = 5,
+    overlaps: Annotated[bool, typer.Option("--overlaps", help="Detect duplicate/overlapping schedules in a crontab file")] = False,
+    dst_warnings: Annotated[bool, typer.Option("--dst-warnings", help="Call out times near DST transitions")] = False,
+    json: Annotated[bool, typer.Option("--json", help="Emit JSON output")] = False,
+    horizon_days: Annotated[int, typer.Option("--horizon-days", help="Horizon used for overlap detection (days)")] = 30,
+) -> None:
+    _STATE.update(expression=expression, file=file, tz=tz, next=next, overlaps=overlaps, dst_warnings=dst_warnings, json=json, horizon_days=horizon_days)
+    _run()
+
+
+if __name__ == "__main__":
+    app()

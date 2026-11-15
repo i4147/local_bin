@@ -1,7 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/env python
 "Consolidate a multi-file Python package into one module."
 
-import argparse
 import ast
 import re
 import sys
@@ -13,6 +12,10 @@ from typing import NoReturn, Optional
 
 from dh import MAX_WORKERS
 from loguru import logger
+from types import SimpleNamespace
+from typing import Annotated
+
+import typer
 
 LOGURU_LOGFORMAT: str = "{time:YYYY-MM-DD HH:mm:ss.SSS} {level} {file.name}:{line} {message}"
 MERGED_FILE_HEADER_RE: re.Pattern[str] = re.compile(r"^#\s*File:\s*(.+?)\s*$", re.MULTILINE)
@@ -1041,40 +1044,24 @@ def refactor(modules: list[ModuleInfo], output: Path, root_name: str) -> None:
     )
 
 
-def main(argv: Optional[list[str]] = None) -> int:
+app = typer.Typer(
+    add_completion=False,
+    context_settings={"help_option_names": ["-h", "--help"]},
+    pretty_exceptions_show_locals=False,
+)
+
+
+@app.command(help="Consolidate a multi-file Python package into one module.")
+def main(
+    input: Annotated[Path | None, typer.Argument(help="package directory or .py file (default: current directory)")] = None,
+    merged_file: Annotated[Path | None, typer.Option("-f", "--merged-file", help="read source from a single merged file containing '# File: <path>' section headers")] = None,
+    output: Annotated[Path | None, typer.Option("-o", "--output", help="output file (default: <current folder name>.py in cwd; never overwrites, adds _1, _2, ...)")] = None,
+    log_file: Annotated[Path, typer.Option("-l", "--log-file", help="loguru log file (default: next to the output file with .log suffix)")] = "/data/data/com.termux/files/home/tmp/apps/consolidate.log",
+) -> int:
     "Run the command-line interface."
-    parser = argparse.ArgumentParser(description="Consolidate a multi-file Python package into one module.")
-    parser.add_argument(
-        "input",
-        nargs="?",
-        type=Path,
-        default=None,
-        help="package directory or .py file (default: current directory)",
-    )
-    parser.add_argument(
-        "-f",
-        "--merged-file",
-        type=Path,
-        default=None,
-        help="read source from a single merged file containing '# File: <path>' section headers",
-    )
-    parser.add_argument(
-        "-o",
-        "--output",
-        type=Path,
-        default=None,
-        help="output file (default: <current folder name>.py in cwd; never overwrites, adds _1, _2, ...)",
-    )
-    parser.add_argument(
-        "-l",
-        "--log-file",
-        type=Path,
-        default="/data/data/com.termux/files/home/tmp/apps/consolidate.log",
-        help="loguru log file (default: next to the output file with .log suffix)",
-    )
-    args = parser.parse_args(argv)
+    args = SimpleNamespace(input=input, merged_file=merged_file, output=output, log_file=log_file)
     if args.merged_file is not None and args.input is not None:
-        parser.error("Provide either a positional INPUT or -f/--merged-file, not both")
+        raise typer.BadParameter("Provide either a positional INPUT or -f/--merged-file, not both")
     cwd = Path.cwd()
     requested: Path = args.output if args.output is not None else cwd / f"{cwd.name or 'merged'}.py"
     output = unique_path(requested)
@@ -1099,8 +1086,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         if input_path.is_dir():
             root_name = input_path.resolve().name
     refactor(modules, output, root_name)
-    return 0
+    return
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    app()

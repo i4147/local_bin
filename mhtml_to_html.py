@@ -55,7 +55,7 @@ import base64
 import binascii
 import ipaddress
 import json
-import logging
+from loguru import logger
 import re
 import socket
 import threading
@@ -67,6 +67,49 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Iterable, Optional, Sequence
+from types import SimpleNamespace
+from typing import Annotated
+
+import click
+import typer
+
+
+def _version_callback(value: bool) -> None:
+    if value:
+        typer.echo(f"%(prog)s {__version__}")
+        raise typer.Exit()
+
+
+_STATE: dict[str, object] = {}
+
+
+class _Args(SimpleNamespace):
+    """argparse.Namespace look-alike: unknown attributes read as None."""
+
+    def __getattr__(self, name):
+        if name.startswith("__"):
+            raise AttributeError(name)
+        return None
+
+
+class _ParserShim:
+    """Stand-in for the removed argparse parser; hands back what Typer parsed."""
+
+    def parse_args(self, args=None, namespace=None):
+        'Parse args.'
+        return _Args(**_STATE)
+
+    def error(self, message):
+        raise typer.BadParameter(message)
+
+    def print_help(self, file=None):
+        'Print help.'
+        typer.echo(click.get_current_context().get_help(), file=file)
+
+    def print_usage(self, file=None):
+        'Print usage.'
+        typer.echo(click.get_current_context().get_usage(), file=file)
+
 
 __version__ = "2.1.0-py1"
 
@@ -78,7 +121,7 @@ except ImportError:  # pragma: no cover - reported at use time
     html5lib = None
     minidom = None  # type: ignore
 
-log = logging.getLogger("mhtml_to_html")
+log = logger
 
 
 # ---------------------------------------------------------------------------
@@ -4436,83 +4479,7 @@ def _default_output_path(input_path: Path) -> Path:
 
 def build_arg_parser() -> argparse.ArgumentParser:
     "Build arg parser."
-    parser = argparse.ArgumentParser(
-        prog="mhtml-to-html",
-        description="Convert MHTML/MHT archives into single self-contained HTML files "
-        "(Python port of the mhtml-to-html library).",
-        epilog="examples:\n"
-        "  mhtml-to-html page.mht\n"
-        "  mhtml-to-html page.mht --output out.html\n"
-        "  mhtml-to-html folder/            # recursive batch conversion\n"
-        "  mhtml-to-html *.mht *.mhtml\n",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
-    parser.add_argument(
-        "inputs",
-        nargs="*",
-        metavar="INPUT",
-        help="input .mht/.mhtml files, directories (searched recursively) "
-        "or glob patterns; defaults to a recursive search of the "
-        "current directory",
-    )
-    parser.add_argument(
-        "--output",
-        "-o",
-        metavar="OUTPUT",
-        help="output HTML file (single input only); default: the input name with a .html extension",
-    )
-    parser.add_argument(
-        "--enable-scripts",
-        action="store_true",
-        default=True,
-        help="keep scripts enabled (default: enabled in this port; the original defaults to disabled)",
-    )
-    parser.add_argument(
-        "--no-scripts",
-        dest="enable_scripts",
-        action="store_false",
-        help="remove scripts and event handlers (the original's default)",
-    )
-    parser.add_argument(
-        "--fetch-missing-resources",
-        action="store_true",
-        default=True,
-        help="fetch resources missing from the archive over the network "
-        "(default: enabled in this port; the original defaults to "
-        "disabled)",
-    )
-    parser.add_argument(
-        "--no-fetch-missing-resources",
-        dest="fetch_missing_resources",
-        action="store_false",
-        help="do not fetch missing resources (the original's default)",
-    )
-    parser.add_argument(
-        "--allow-private-network",
-        action="store_true",
-        help="allow fetching from loopback/private/link-local addresses (blocked by default as an SSRF protection)",
-    )
-    parser.add_argument(
-        "--timeout",
-        type=float,
-        default=None,
-        metavar="SECONDS",
-        help="connect/read timeout for network fetches (default: 15/30s)",
-    )
-    parser.add_argument(
-        "--max-size",
-        type=int,
-        default=None,
-        metavar="BYTES",
-        help="maximum response size for network fetches (default: 64 MiB)",
-    )
-    parser.add_argument("--fail-fast", action="store_true", help="abort the batch on the first conversion failure")
-    parser.add_argument("--no-clobber", action="store_true", help="never overwrite an existing output file")
-    parser.add_argument("-v", "--verbose", action="store_true", help="verbose logging")
-    parser.add_argument("-q", "--quiet", action="store_true", help="suppress per-file logs")
-    parser.add_argument(
-        "--version", action="version", version=f"%(prog)s {__version__}", help="show the version number and exit"
-    )
+    parser = _ParserShim()
     return parser
 
 
@@ -4527,11 +4494,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = build_arg_parser()
     args = parser.parse_args(argv)
 
-    logging.basicConfig(
-        level=logging.DEBUG if args.verbose else (logging.ERROR if args.quiet else logging.INFO),
-        format="%(levelname)s: %(message)s",
-        force=True,
-    )
+    logger.remove()
+    level = "DEBUG" if args.verbose else ("ERROR" if args.quiet else "INFO")
+    logger.add(sys.stderr, level=level, format="<level>{level}</level>: {message}")
 
     fetch_config = FetchConfig()
     if args.allow_private_network:
@@ -4598,5 +4563,36 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     return 0
 
 
-if __name__ == "__main__":
+def _run() -> None:
     raise SystemExit(main())
+
+
+app = typer.Typer(
+    add_completion=False,
+    context_settings={"help_option_names": ["-h", "--help"]},
+    pretty_exceptions_show_locals=False,
+)
+
+
+@app.command(help="Convert MHTML/MHT archives into single self-contained HTML files (Python port of the mhtml-to-html library).", epilog="examples:\n  mhtml-to-html page.mht\n  mhtml-to-html page.mht --output out.html\n  mhtml-to-html folder/            # recursive batch conversion\n  mhtml-to-html *.mht *.mhtml\n")
+def cli(
+    inputs: Annotated[list[str] | None, typer.Argument(help="input .mht/.mhtml files, directories (searched recursively) or glob patterns; defaults to a recursive search of the current directory", metavar="INPUT")] = None,
+    output: Annotated[str | None, typer.Option("--output", "-o", help="output HTML file (single input only); default: the input name with a .html extension", metavar="OUTPUT")] = None,
+    enable_scripts: Annotated[bool, typer.Option("--enable-scripts/--no-scripts", help="keep scripts enabled (default: enabled in this port; the original defaults to disabled)")] = True,
+    fetch_missing_resources: Annotated[bool, typer.Option("--fetch-missing-resources/--no-fetch-missing-resources", help="fetch resources missing from the archive over the network (default: enabled in this port; the original defaults to disabled)")] = True,
+    allow_private_network: Annotated[bool, typer.Option("--allow-private-network", help="allow fetching from loopback/private/link-local addresses (blocked by default as an SSRF protection)")] = False,
+    timeout: Annotated[float | None, typer.Option("--timeout", help="connect/read timeout for network fetches (default: 15/30s)", metavar="SECONDS")] = None,
+    max_size: Annotated[int | None, typer.Option("--max-size", help="maximum response size for network fetches (default: 64 MiB)", metavar="BYTES")] = None,
+    fail_fast: Annotated[bool, typer.Option("--fail-fast", help="abort the batch on the first conversion failure")] = False,
+    no_clobber: Annotated[bool, typer.Option("--no-clobber", help="never overwrite an existing output file")] = False,
+    verbose: Annotated[bool, typer.Option("-v", "--verbose", help="verbose logging")] = False,
+    quiet: Annotated[bool, typer.Option("-q", "--quiet", help="suppress per-file logs")] = False,
+    version: Annotated[bool, typer.Option("--version", callback=_version_callback, is_eager=True, help="show the version number and exit")] = False,
+) -> None:
+    inputs = inputs or []
+    _STATE.update(inputs=inputs, output=output, enable_scripts=enable_scripts, fetch_missing_resources=fetch_missing_resources, allow_private_network=allow_private_network, timeout=timeout, max_size=max_size, fail_fast=fail_fast, no_clobber=no_clobber, verbose=verbose, quiet=quiet)
+    _run()
+
+
+if __name__ == "__main__":
+    app()

@@ -17,6 +17,71 @@ from enum import Enum
 
 import numpy as np
 from PIL import Image, ImageOps
+from enum import StrEnum
+from types import SimpleNamespace
+from typing import Annotated
+
+import click
+import typer
+
+
+class Color_space(StrEnum):
+    'Enumerate the supported Color space values.'
+    rgb = "rgb"
+    din99d = "din99d"
+
+
+class Dither2(StrEnum):
+    'Enumerate the supported Dither2 values.'
+    none = "none"
+    ordered = "ordered"
+    diffusion = "diffusion"
+    noise = "noise"
+
+
+class Align(StrEnum):
+    'Enumerate the supported Align values.'
+    start = "start"
+    center = "center"
+    end = "end"
+
+
+def _version_callback(value: bool) -> None:
+    if value:
+        typer.echo("chafa.py 1.0 (chafa clone)")
+        raise typer.Exit()
+
+
+_STATE: dict[str, object] = {}
+
+
+class _Args(SimpleNamespace):
+    """argparse.Namespace look-alike: unknown attributes read as None."""
+
+    def __getattr__(self, name):
+        if name.startswith("__"):
+            raise AttributeError(name)
+        return None
+
+
+class _ParserShim:
+    """Stand-in for the removed argparse parser; hands back what Typer parsed."""
+
+    def parse_args(self, args=None, namespace=None):
+        'Parse args.'
+        return _Args(**_STATE)
+
+    def error(self, message):
+        raise typer.BadParameter(message)
+
+    def print_help(self, file=None):
+        'Print help.'
+        typer.echo(click.get_current_context().get_help(), file=file)
+
+    def print_usage(self, file=None):
+        'Print usage.'
+        typer.echo(click.get_current_context().get_usage(), file=file)
+
 
 SYMP_W = 8
 SYMP_H = 8
@@ -1982,64 +2047,7 @@ def _parse_color(val: str, what: str) -> tuple[int, int, int]:
 
 def build_arg_parser() -> argparse.ArgumentParser:
     "Build arg parser."
-    p = argparse.ArgumentParser(
-        prog="chafa.py",
-        description="Show images in your terminal (single-file chafa clone).",
-        epilog=(
-            "examples:\n"
-            "  chafa.py photo.jpg\n"
-            "  chafa.py -c none --symbols ascii in.png      # old-school art\n"
-            "  chafa.py -f sixels -c full in.jpg               # graphics terminal\n"
-            "\n"
-            "symbol classes for --symbols/--fill:\n"
-            "  all none space solid stipple block border diagonal dot quad half\n"
-            "  hhalf vhalf inverted braille sextant wedge technical geometric\n"
-            "  ascii alpha digit narrow wide ambiguous ugly extra alnum bad\n"
-            "  legacy latin import octant\n"
-            "combine with + and -, e.g. block+border-diagonal or all-wide;\n"
-            "raw characters in [..], code point ranges like 2500..25ff\n"
-        ),
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
-    p.add_argument("files", nargs="*", metavar="FILE", help="image file, or - for stdin")
-    p.add_argument("-s", "--size", metavar="WxH", help="output size in cells")
-    p.add_argument("-c", "--colors", metavar="MODE", help=("none|2|8|16/8|16|240|256|full (default: auto)"))
-    p.add_argument(
-        "-f", "--format", metavar="FMT", help=("symbols|sixels|kitty|iterm|auto (default: symbols or auto-detected)")
-    )
-    p.add_argument("--symbols", metavar="SPEC", help="output symbols (see below)")
-    p.add_argument("--fill", metavar="SPEC", help="fill symbols for gradients")
-    p.add_argument("--color-space", choices=["rgb", "din99d"], help=("color distance metric (default: din99d)"))
-    p.add_argument(
-        "-w", "--work", type=int, metavar="1..9", help=("work factor; 1-2 uses nearest-neighbor scaling (default: 5)")
-    )
-    p.add_argument("--dither", choices=["none", "ordered", "diffusion", "noise"], help="dither mode (default: none)")
-    p.add_argument("--dither-intensity", type=float, metavar="0..1", help="dither intensity (default: 1.0)")
-    p.add_argument("--dither-grain", metavar="WxH", help="dither grain size, 1/2/4/8 (default: 4x4)")
-    p.add_argument(
-        "--no-preprocess",
-        dest="preprocess",
-        action="store_false",
-        help="disable auto-contrast/saturation preprocessing",
-    )
-    p.add_argument(
-        "-t", "--threshold", type=float, metavar="0..1", help="transparency threshold (default: 0.5; 1.0 = opaque)"
-    )
-    p.add_argument("--fg", metavar="COLOR", help="default foreground color")
-    p.add_argument("--bg", metavar="COLOR", help="default background color")
-    p.add_argument("--fg-only", action="store_true", help="never emit background colors")
-    p.add_argument("--invert", action="store_true", help="swap foreground and background colors")
-    p.add_argument("--stretch", action="store_true", help="stretch image to fill output dimensions")
-    p.add_argument("--align", choices=["start", "center", "end"], help="horizontal alignment (default: start)")
-    p.add_argument(
-        "--animate",
-        dest="animate",
-        action="store_true",
-        default=None,
-        help="dump all frames of animated input (default)",
-    )
-    p.add_argument("--still", dest="animate", action="store_false", help="render only the first frame")
-    p.add_argument("-V", "--version", action="version", version="chafa.py 1.0 (chafa clone)")
+    p = _ParserShim()
     return p
 
 
@@ -2253,5 +2261,45 @@ def main() -> None:
         sys.exit(130)
 
 
-if __name__ == "__main__":
+def _run() -> None:
     raise SystemExit(main())
+
+
+app = typer.Typer(
+    add_completion=False,
+    context_settings={"help_option_names": ["-h", "--help"]},
+    pretty_exceptions_show_locals=False,
+)
+
+
+@app.command(help="Show images in your terminal (single-file chafa clone).", epilog="examples:\n  chafa.py photo.jpg\n  chafa.py -c none --symbols ascii in.png      # old-school art\n  chafa.py -f sixels -c full in.jpg               # graphics terminal\n\nsymbol classes for --symbols/--fill:\n  all none space solid stipple block border diagonal dot quad half\n  hhalf vhalf inverted braille sextant wedge technical geometric\n  ascii alpha digit narrow wide ambiguous ugly extra alnum bad\n  legacy latin import octant\ncombine with + and -, e.g. block+border-diagonal or all-wide;\nraw characters in [..], code point ranges like 2500..25ff\n")
+def cli(
+    files: Annotated[list[str] | None, typer.Argument(help="image file, or - for stdin", metavar="FILE")] = None,
+    size: Annotated[str | None, typer.Option("-s", "--size", help="output size in cells", metavar="WxH")] = None,
+    colors: Annotated[str | None, typer.Option("-c", "--colors", help="none|2|8|16/8|16|240|256|full (default: auto)", metavar="MODE")] = None,
+    format: Annotated[str | None, typer.Option("-f", "--format", help="symbols|sixels|kitty|iterm|auto (default: symbols or auto-detected)", metavar="FMT")] = None,
+    symbols: Annotated[str | None, typer.Option("--symbols", help="output symbols (see below)", metavar="SPEC")] = None,
+    fill: Annotated[str | None, typer.Option("--fill", help="fill symbols for gradients", metavar="SPEC")] = None,
+    color_space: Annotated[Color_space | None, typer.Option("--color-space", help="color distance metric (default: din99d)")] = None,
+    work: Annotated[int | None, typer.Option("-w", "--work", help="work factor; 1-2 uses nearest-neighbor scaling (default: 5)", metavar="1..9")] = None,
+    dither: Annotated[Dither2 | None, typer.Option("--dither", help="dither mode (default: none)")] = None,
+    dither_intensity: Annotated[float | None, typer.Option("--dither-intensity", help="dither intensity (default: 1.0)", metavar="0..1")] = None,
+    dither_grain: Annotated[str | None, typer.Option("--dither-grain", help="dither grain size, 1/2/4/8 (default: 4x4)", metavar="WxH")] = None,
+    preprocess: Annotated[bool, typer.Option("--no-preprocess", help="disable auto-contrast/saturation preprocessing")] = True,
+    threshold: Annotated[float | None, typer.Option("-t", "--threshold", help="transparency threshold (default: 0.5; 1.0 = opaque)", metavar="0..1")] = None,
+    fg: Annotated[str | None, typer.Option("--fg", help="default foreground color", metavar="COLOR")] = None,
+    bg: Annotated[str | None, typer.Option("--bg", help="default background color", metavar="COLOR")] = None,
+    fg_only: Annotated[bool, typer.Option("--fg-only", help="never emit background colors")] = False,
+    invert: Annotated[bool, typer.Option("--invert", help="swap foreground and background colors")] = False,
+    stretch: Annotated[bool, typer.Option("--stretch", help="stretch image to fill output dimensions")] = False,
+    align: Annotated[Align | None, typer.Option("--align", help="horizontal alignment (default: start)")] = None,
+    animate: Annotated[bool | None, typer.Option("--animate/--still", help="dump all frames of animated input (default)")] = None,
+    version: Annotated[bool, typer.Option("-V", "--version", callback=_version_callback, is_eager=True, help="show program's version number and exit")] = False,
+) -> None:
+    files = files or []
+    _STATE.update(files=files, size=size, colors=colors, format=format, symbols=symbols, fill=fill, color_space=color_space, work=work, dither=dither, dither_intensity=dither_intensity, dither_grain=dither_grain, preprocess=preprocess, threshold=threshold, fg=fg, bg=bg, fg_only=fg_only, invert=invert, stretch=stretch, align=align, animate=animate)
+    _run()
+
+
+if __name__ == "__main__":
+    app()

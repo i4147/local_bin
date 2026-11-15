@@ -19,6 +19,43 @@ import lz4.block
 import lz4.frame
 import py7zr
 import zstandard
+from types import SimpleNamespace
+from typing import Annotated
+
+import click
+import typer
+
+
+_STATE: dict[str, object] = {}
+
+
+class _Args(SimpleNamespace):
+    """argparse.Namespace look-alike: unknown attributes read as None."""
+
+    def __getattr__(self, name):
+        if name.startswith("__"):
+            raise AttributeError(name)
+        return None
+
+
+class _ParserShim:
+    """Stand-in for the removed argparse parser; hands back what Typer parsed."""
+
+    def parse_args(self, args=None, namespace=None):
+        'Parse args.'
+        return _Args(**_STATE)
+
+    def error(self, message):
+        raise typer.BadParameter(message)
+
+    def print_help(self, file=None):
+        'Print help.'
+        typer.echo(click.get_current_context().get_help(), file=file)
+
+    def print_usage(self, file=None):
+        'Print usage.'
+        typer.echo(click.get_current_context().get_usage(), file=file)
+
 
 try:
     import brotli
@@ -270,15 +307,7 @@ def find_archives(directory: str = ".") -> list[Path]:
 
 def main() -> None:
     "Run the command-line interface."
-    parser: argparse.ArgumentParser = argparse.ArgumentParser(
-        description="Extract supported archives; originals are removed after successful extraction."
-    )
-    parser.add_argument(
-        "archives",
-        nargs="*",
-        type=Path,
-        help="archive files to extract; defaults to a recursive scan of the current directory",
-    )
+    parser = _ParserShim()
     args: argparse.Namespace = parser.parse_args()
     archives: list[Path]
     if args.archives:
@@ -301,5 +330,25 @@ def main() -> None:
     print(f"Summary: {successful} successful, {failed} failed/skipped")
 
 
-if __name__ == "__main__":
+def _run() -> None:
     raise SystemExit(main())
+
+
+app = typer.Typer(
+    add_completion=False,
+    context_settings={"help_option_names": ["-h", "--help"]},
+    pretty_exceptions_show_locals=False,
+)
+
+
+@app.command(help="Extract supported archives; originals are removed after successful extraction.")
+def cli(
+    archives: Annotated[list[Path] | None, typer.Argument(help="archive files to extract; defaults to a recursive scan of the current directory")] = None,
+) -> None:
+    archives = archives or []
+    _STATE.update(archives=archives)
+    _run()
+
+
+if __name__ == "__main__":
+    app()

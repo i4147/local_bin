@@ -22,6 +22,43 @@ from bibtexparser.bparser import BibTexParser
 from bibtexparser.bwriter import BibTexWriter
 from SPARQLWrapper import JSON, SPARQLWrapper
 from termcolor import colored
+from types import SimpleNamespace
+from typing import Annotated
+
+import click
+import typer
+
+
+_STATE: dict[str, object] = {}
+
+
+class _Args(SimpleNamespace):
+    """argparse.Namespace look-alike: unknown attributes read as None."""
+
+    def __getattr__(self, name):
+        if name.startswith("__"):
+            raise AttributeError(name)
+        return None
+
+
+class _ParserShim:
+    """Stand-in for the removed argparse parser; hands back what Typer parsed."""
+
+    def parse_args(self, args=None, namespace=None):
+        'Parse args.'
+        return _Args(**_STATE)
+
+    def error(self, message):
+        raise typer.BadParameter(message)
+
+    def print_help(self, file=None):
+        'Print help.'
+        typer.echo(click.get_current_context().get_help(), file=file)
+
+    def print_usage(self, file=None):
+        'Print usage.'
+        typer.echo(click.get_current_context().get_usage(), file=file)
+
 
 CITATION_DATABASE: dict[str, dict] = {}
 CACHED_JOURNALS: dict[str, str] = {}
@@ -786,40 +823,39 @@ def run_validate(args: argparse.Namespace) -> None:
 
 def main() -> None:
     "Run the command-line interface."
-    parser = argparse.ArgumentParser()
-    subparsers = parser.add_subparsers(dest="subcommand", required=True)
-    check_parser = subparsers.add_parser("check")
-    check_parser.add_argument("input", type=argparse.FileType("r"), help="Input file, default is stdin.")
-    check_parser.add_argument(
-        "--output",
-        type=argparse.FileType("w"),
-        default=sys.stdout,
-        help="Optional output file.",
-    )
-    check_parser.add_argument(
-        "--try-fix",
-        default=False,
-        action="store_true",
-        help="Flag to search information to fix the database.",
-    )
-    check_parser.add_argument(
-        "--add-todo",
-        default=False,
-        action="store_true",
-        help="Adds TODO for missing fields.",
-    )
-    check_parser.add_argument(
-        "--anthologies",
-        type=str,
-        nargs="+",
-        help="List of BibTeX files with know papers.",
-    )
-    check_parser.set_defaults(func=run_check)
-    validate_parser = subparsers.add_parser("validate")
-    validate_parser.set_defaults(func=run_validate)
+    parser = _ParserShim()
     args = parser.parse_args()
     args.func(args)
 
 
-if __name__ == "__main__":
+def _run() -> None:
     raise SystemExit(main())
+
+
+app = typer.Typer(
+    add_completion=False,
+    context_settings={"help_option_names": ["-h", "--help"]},
+    pretty_exceptions_show_locals=False,
+)
+
+
+@app.command("check")
+def cmd_check(
+    input: Annotated[typer.FileText, typer.Argument(help="Input file, default is stdin.")],
+    output: Annotated[typer.FileTextWrite, typer.Option("--output", help="Optional output file.")] = sys.stdout,
+    try_fix: Annotated[bool, typer.Option("--try-fix", help="Flag to search information to fix the database.")] = False,
+    add_todo: Annotated[bool, typer.Option("--add-todo", help="Adds TODO for missing fields.")] = False,
+    anthologies: Annotated[list[str] | None, typer.Option("--anthologies", help="List of BibTeX files with know papers.")] = None,
+) -> None:
+    _STATE.update(input=input, output=output, try_fix=try_fix, add_todo=add_todo, anthologies=anthologies, subcommand="check", func=run_check)
+    _run()
+
+
+@app.command("validate")
+def cmd_validate() -> None:
+    _STATE.update(subcommand="validate", func=run_validate)
+    _run()
+
+
+if __name__ == "__main__":
+    app()

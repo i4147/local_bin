@@ -3,6 +3,7 @@
 
 import glob
 import os
+from pathlib import Path
 import shutil
 
 from dh import gsz
@@ -52,7 +53,8 @@ def purge_system():
 
     for pattern in DIRS_TO_DELETE:
         for path in expand_and_resolve(pattern):
-            if os.path.exists(path) and os.path.isdir(path):
+            p = Path(path)
+        if p.exists() and p.is_dir():
                 try:
                     total += gsz(path)
                     shutil.rmtree(path)
@@ -65,9 +67,9 @@ def purge_system():
         expanded_zone = os.path.expandvars(zone)
         for ext in FILE_EXTENSIONS:
             # Recursively match anything ending in the extension
-            search_pattern = os.path.join(expanded_zone, f"**/*{ext}")
+            search_pattern = str(Path(expanded_zone) / f"**/*{ext}")
             for file_path in glob.glob(search_pattern, recursive=True):
-                if os.path.isfile(file_path):
+                if Path(file_path).is_file():
                     try:
                         os.remove(file_path)
                         print(f"[-] Removed File: {file_path}")

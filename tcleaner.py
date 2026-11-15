@@ -3,6 +3,7 @@
 
 import glob
 import os
+from pathlib import Path
 import shutil
 import subprocess
 
@@ -53,9 +54,9 @@ def expand_and_resolve(pattern):
 
 def is_exempt(path) -> bool:
     "Return whether exempt."
-    normalized_path = os.path.normpath(path)
+    normalized_path = str(Path(path).resolve())
     for exemption in KEEP_EXEMPTIONS:
-        norm_exemption = os.path.normpath(exemption)
+        norm_exemption = str(Path(exemption).resolve())
         if normalized_path == norm_exemption or normalized_path.startswith(norm_exemption + os.sep):
             return True
         if norm_exemption.startswith(normalized_path + os.sep):
@@ -66,17 +67,16 @@ def is_exempt(path) -> bool:
 def get_size(path):
     "Return size."
     try:
-        if os.path.islink(path):
+        p = Path(path)
+        if p.is_symlink():
             return 0
-        if os.path.isfile(path):
-            return os.path.getsize(path)
+        if p.is_file():
+            return p.stat().st_size
 
         total_size = 0
-        for dirpath, dirnames, filenames in os.walk(path):
-            for f in filenames:
-                fp = os.path.join(dirpath, f)
-                if not os.path.islink(fp) and os.path.exists(fp):
-                    total_size += os.path.getsize(fp)
+        for item in p.rglob("*"):
+            if not item.is_symlink() and item.is_file():
+                total_size += item.stat().st_size
         return total_size
     except Exception:
         return 0
@@ -105,7 +105,8 @@ def purge_system():
         progress.update(dir_task, total=len(resolved_dirs) if resolved_dirs else 1)
 
         for path in resolved_dirs:
-            if os.path.exists(path) and not is_exempt(path) and os.path.isdir(path):
+            p = Path(path)
+            if p.exists() and not is_exempt(path) and p.is_dir():
                 try:
                     dir_size = get_size(path)
                     shutil.rmtree(path)
@@ -126,12 +127,12 @@ def purge_system():
         for zone in SCAN_ZONES:
             expanded_zone = os.path.expandvars(zone)
             for ext in FILE_EXTENSIONS:
-                match_files.extend(glob.glob(os.path.join(expanded_zone, f"**/*{ext}"), recursive=True))
+                match_files.extend(str(p) for p in Path(expanded_zone).rglob(f"*{ext}"))
 
         progress.update(file_task, total=len(match_files) if match_files else 1)
 
         for file_path in match_files:
-            if os.path.isfile(file_path) and not is_exempt(file_path):
+            if Path(file_path).is_file() and not is_exempt(file_path):
                 try:
                     file_size = get_size(file_path)
                     os.remove(file_path)

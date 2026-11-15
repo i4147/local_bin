@@ -1,7 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/env python
 "OCR CLI"
 
-import argparse
 import codecs
 import contextlib
 import ctypes
@@ -19,6 +18,48 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from loguru import logger
+from typing import Annotated
+
+import click
+import typer
+
+
+def _version_callback(value: bool) -> None:
+    if value:
+        typer.echo("pyocr " + __version__)
+        raise typer.Exit()
+
+
+_STATE: dict[str, object] = {}
+
+
+class _Args(SimpleNamespace):
+    """argparse.Namespace look-alike: unknown attributes read as None."""
+
+    def __getattr__(self, name):
+        if name.startswith("__"):
+            raise AttributeError(name)
+        return None
+
+
+class _ParserShim:
+    """Stand-in for the removed argparse parser; hands back what Typer parsed."""
+
+    def parse_args(self, args=None, namespace=None):
+        'Parse args.'
+        return _Args(**_STATE)
+
+    def error(self, message):
+        raise typer.BadParameter(message)
+
+    def print_help(self, file=None):
+        'Print help.'
+        typer.echo(click.get_current_context().get_help(), file=file)
+
+    def print_usage(self, file=None):
+        'Print usage.'
+        typer.echo(click.get_current_context().get_usage(), file=file)
+
 
 if sys.version_info < (3, 4):
     msg = "PyOCR requires Python 3.4+"
@@ -1819,31 +1860,7 @@ def _cmd_ocr(args):
 
 def main(argv=None) -> int:
     "Run the command-line interface."
-    parser = argparse.ArgumentParser(prog="pyocr", description="OCR CLI")
-    parser.add_argument("-v", "--version", action="version", version="pyocr " + __version__)
-    sub = parser.add_subparsers(dest="command")
-    p_tools = sub.add_parser("tools", help="list OCR tools")
-    p_tools.set_defaults(func=_cmd_tools)
-    p_langs = sub.add_parser("langs", help="list available languages")
-    p_langs.add_argument("-t", "--tool", choices=list(_TOOLS_BY_NAME), default="tesseract")
-    p_langs.set_defaults(func=_cmd_langs)
-    p_orient = sub.add_parser("orientation", help="detect image orientation")
-    p_orient.add_argument("image")
-    p_orient.add_argument("-t", "--tool", choices=list(_TOOLS_BY_NAME), default="tesseract")
-    p_orient.add_argument("-l", "--lang", default=None)
-    p_orient.set_defaults(func=_cmd_orientation)
-    p_ocr = sub.add_parser("ocr", help="run OCR on an image")
-    p_ocr.add_argument("image")
-    p_ocr.add_argument("-t", "--tool", choices=list(_TOOLS_BY_NAME), default="tesseract")
-    p_ocr.add_argument("-l", "--lang", default=None)
-    p_ocr.add_argument(
-        "-b",
-        "--builder",
-        choices=list(_BUILDERS),
-        default="text",
-        help="output builder: text, digit, word, line, digit_line, char",
-    )
-    p_ocr.set_defaults(func=_cmd_ocr)
+    parser = _ParserShim()
     args = parser.parse_args(argv)
     if not getattr(args, "command", None):
         parser.print_help()
@@ -1856,5 +1873,67 @@ def main(argv=None) -> int:
     return 0
 
 
-if __name__ == "__main__":
+def _run() -> None:
     raise SystemExit(main())
+
+
+app = typer.Typer(
+    help="OCR CLI",
+    add_completion=False,
+    context_settings={"help_option_names": ["-h", "--help"]},
+    pretty_exceptions_show_locals=False,
+)
+
+
+@app.callback()
+def _root(
+    version: Annotated[bool, typer.Option("-v", "--version", callback=_version_callback, is_eager=True, help="show program's version number and exit")] = False,
+) -> None:
+    pass
+
+
+@app.command("tools", help="list OCR tools")
+def cmd_tools() -> None:
+    _STATE.update(command="tools", func=_cmd_tools)
+    _run()
+
+
+@app.command("langs", help="list available languages")
+def cmd_langs(
+    tool: Annotated[str, typer.Option("-t", "--tool")] = "tesseract",
+) -> None:
+    if tool is not None and tool not in list(_TOOLS_BY_NAME):
+        raise typer.BadParameter(f"invalid choice: {tool!r} (choose from {list(_TOOLS_BY_NAME)})")
+    _STATE.update(tool=tool, command="langs", func=_cmd_langs)
+    _run()
+
+
+@app.command("orientation", help="detect image orientation")
+def cmd_orientation(
+    image: Annotated[str, typer.Argument()],
+    tool: Annotated[str, typer.Option("-t", "--tool")] = "tesseract",
+    lang: Annotated[str | None, typer.Option("-l", "--lang")] = None,
+) -> None:
+    if tool is not None and tool not in list(_TOOLS_BY_NAME):
+        raise typer.BadParameter(f"invalid choice: {tool!r} (choose from {list(_TOOLS_BY_NAME)})")
+    _STATE.update(image=image, tool=tool, lang=lang, command="orientation", func=_cmd_orientation)
+    _run()
+
+
+@app.command("ocr", help="run OCR on an image")
+def cmd_ocr(
+    image: Annotated[str, typer.Argument()],
+    tool: Annotated[str, typer.Option("-t", "--tool")] = "tesseract",
+    lang: Annotated[str | None, typer.Option("-l", "--lang")] = None,
+    builder: Annotated[str, typer.Option("-b", "--builder", help="output builder: text, digit, word, line, digit_line, char")] = "text",
+) -> None:
+    if tool is not None and tool not in list(_TOOLS_BY_NAME):
+        raise typer.BadParameter(f"invalid choice: {tool!r} (choose from {list(_TOOLS_BY_NAME)})")
+    if builder is not None and builder not in list(_BUILDERS):
+        raise typer.BadParameter(f"invalid choice: {builder!r} (choose from {list(_BUILDERS)})")
+    _STATE.update(image=image, tool=tool, lang=lang, builder=builder, command="ocr", func=_cmd_ocr)
+    _run()
+
+
+if __name__ == "__main__":
+    app()

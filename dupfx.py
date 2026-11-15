@@ -27,7 +27,6 @@ Examples:
 Command-line script: run ``python dupfx.py`` or the ``dupfx`` command. The module is importable as well.
 """
 
-import argparse
 from collections import defaultdict
 from multiprocessing import Pool
 from pathlib import Path
@@ -35,6 +34,18 @@ from typing import TYPE_CHECKING
 
 from loguru import logger
 from xxhash import xxh64
+from enum import StrEnum
+from typing import Annotated
+
+import typer
+
+
+class Keep(StrEnum):
+    'Enumerate the supported Keep values.'
+    first = "first"
+    oldest = "oldest"
+    newest = "newest"
+
 
 if TYPE_CHECKING:
     pass
@@ -126,60 +137,33 @@ def choose_keep(files, policy: str = "oldest"):
         return min(files, key=str)
 
 
-def main() -> None:
+app = typer.Typer(
+    add_completion=False,
+    context_settings={"help_option_names": ["-h", "--help"]},
+    pretty_exceptions_show_locals=False,
+)
+
+
+@app.command(help="Find and delete duplicate files by content.")
+def main(
+    recursive: Annotated[bool, typer.Option("--recursive", help="Search directories recursively (default: True).")] = True,
+    remove: Annotated[bool, typer.Option("-r", "--remove", help="Actually delete duplicate files. Without this flag, only report them.")] = True,
+    all: Annotated[bool, typer.Option("-a", "--all", help="Include .git directories in the search (symlinks are still skipped).")] = False,
+    dry_run: Annotated[bool, typer.Option("-n", "--dry-run", help="Don't delete; just show what would be done.")] = False,
+    follow_symlinks: Annotated[bool, typer.Option("--follow-symlinks", help="Follow symlinks to files.")] = False,
+    keep: Annotated[Keep, typer.Option("-k", "--keep", help="Which file to keep within duplicates.")] = Keep.oldest,
+) -> None:
     "Run the command-line interface."
     cwd = Path.cwd()
-    p = argparse.ArgumentParser(description="Find and delete duplicate files by content.")
-    p.add_argument(
-        "--recursive",
-        action="store_true",
-        default=True,
-        help="Search directories recursively (default: True).",
-    )
-    p.add_argument(
-        "-r",
-        "--remove",
-        action="store_true",
-        default=True,
-        help="Actually delete duplicate files. Without this flag, only report them.",
-    )
-    p.add_argument(
-        "-a",
-        "--all",
-        action="store_true",
-        default=False,
-        help="Include .git directories in the search (symlinks are still skipped).",
-    )
-    p.add_argument(
-        "-n",
-        "--dry-run",
-        action="store_true",
-        default=False,
-        help="Don't delete; just show what would be done.",
-    )
-    p.add_argument(
-        "--follow-symlinks",
-        action="store_true",
-        default=False,
-        help="Follow symlinks to files.",
-    )
-    p.add_argument(
-        "-k",
-        "--keep",
-        choices=("first", "oldest", "newest"),
-        default="oldest",
-        help="Which file to keep within duplicates.",
-    )
-    args = p.parse_args()
     root = Path.cwd()
     print("Phase 1: Scanning files and grouping by size...")
     size_groups = defaultdict(list)
     total_files = 0
     for f in iter_files(
         root,
-        args.recursive,
-        args.follow_symlinks,
-        include_git=args.all,
+        recursive,
+        follow_symlinks,
+        include_git=all,
     ):
         total_files += 1
         try:
@@ -239,7 +223,7 @@ def main() -> None:
         group_reps = [min(ps, key=str) for ps in inode_map.values()]
         if len(group_reps) < 2:
             continue
-        keep_file = choose_keep(group_reps, policy=args.keep)
+        keep_file = choose_keep(group_reps, policy=keep)
         for rep in group_reps:
             if rep != keep_file:
                 to_delete.append(rep)
@@ -253,13 +237,13 @@ def main() -> None:
         except ValueError:
             rel_path = p_del
         print(f"  {rel_path}")
-    if not args.remove:
+    if not remove:
         print(
             f"\nReport-only mode. {len(to_delete)} files would be deleted.\n"
             "Run with -r/--remove to actually delete them."
         )
         return
-    if args.dry_run:
+    if dry_run:
         print(f"\nDry-run complete. {len(to_delete)} files would be deleted.")
         return
     removed = 0
@@ -292,4 +276,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    app()

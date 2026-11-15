@@ -64,7 +64,6 @@ How it works
 
 from __future__ import annotations
 
-import argparse
 import ast
 import builtins
 import io
@@ -74,6 +73,16 @@ import tokenize
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Sequence
+from typing import Annotated
+
+import typer
+
+
+def _version_callback(value: bool) -> None:
+    if value:
+        typer.echo(__version__)
+        raise typer.Exit()
+
 
 __version__ = "1.0.0"
 
@@ -1864,46 +1873,41 @@ def reformat(source: str) -> str:
     return render(lines, levels)
 
 
-def main(argv: Sequence[str] | None = None) -> int:
+app = typer.Typer(
+    add_completion=False,
+    context_settings={"help_option_names": ["-h", "--help"]},
+    pretty_exceptions_show_locals=False,
+)
+
+
+@app.command(help="Restore indentation to a flattened Python source file.")
+def main(
+    source: Annotated[Path | None, typer.Argument(help="the Python file whose indentation should be restored")] = None,
+    output: Annotated[Path | None, typer.Option("-o", "--output", help="write the result to this file instead of stdout")] = None,
+    in_place: Annotated[bool, typer.Option("-i", "--in-place", help="overwrite the input file with the result")] = False,
+    no_validate: Annotated[bool, typer.Option("--no-validate", help="skip the final ast.parse() check")] = False,
+    version: Annotated[bool, typer.Option("--version", callback=_version_callback, is_eager=True, help="show program's version number and exit")] = False,
+) -> int:
     "Run the command-line interface."
-    parser = argparse.ArgumentParser(
-        prog="reformat_python",
-        description="Restore indentation to a flattened Python source file.",
-    )
-    parser.add_argument(
-        "source",
-        nargs="?",
-        type=Path,
-        help="the Python file whose indentation should be restored",
-    )
-    parser.add_argument("-o", "--output", type=Path, help="write the result to this file instead of stdout")
-    parser.add_argument("-i", "--in-place", action="store_true", help="overwrite the input file with the result")
-    parser.add_argument(
-        "--no-validate",
-        action="store_true",
-        help="skip the final ast.parse() check",
-    )
-    parser.add_argument("--version", action="version", version=__version__)
-    args = parser.parse_args(argv)
 
-    if args.source is None:
-        parser.error("a source file is required")
+    if source is None:
+        raise typer.BadParameter("a source file is required")
 
-    text = args.source.read_text(encoding="utf-8")
+    text = source.read_text(encoding="utf-8")
     try:
         result = reformat(text)
     except ReformatError as exc:
         print(f"error: {exc}", file=sys.stderr)
-        return 1
+        raise typer.Exit(1)
 
-    if args.in_place:
-        args.source.write_text(result, encoding="utf-8")
-    elif args.output:
-        args.output.write_text(result, encoding="utf-8")
+    if in_place:
+        source.write_text(result, encoding="utf-8")
+    elif output:
+        output.write_text(result, encoding="utf-8")
     else:
         sys.stdout.write(result)
-    return 0
+    return
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    app()

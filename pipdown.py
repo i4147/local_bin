@@ -26,6 +26,52 @@ from packaging.tags import (Tag, compatible_tags, cpython_tags, generic_tags,
 from packaging.utils import (InvalidWheelFilename, canonicalize_name,
                              parse_wheel_filename)
 from packaging.version import InvalidVersion, Version
+from enum import StrEnum
+from types import SimpleNamespace
+from typing import Annotated
+
+import click
+import typer
+
+
+class Backend(StrEnum):
+    'Enumerate the supported Backend values.'
+    httpx = "httpx"
+    requests = "requests"
+    pycurl = "pycurl"
+    aria2c = "aria2c"
+
+
+_STATE: dict[str, object] = {}
+
+
+class _Args(SimpleNamespace):
+    """argparse.Namespace look-alike: unknown attributes read as None."""
+
+    def __getattr__(self, name):
+        if name.startswith("__"):
+            raise AttributeError(name)
+        return None
+
+
+class _ParserShim:
+    """Stand-in for the removed argparse parser; hands back what Typer parsed."""
+
+    def parse_args(self, args=None, namespace=None):
+        'Parse args.'
+        return _Args(**_STATE)
+
+    def error(self, message):
+        raise typer.BadParameter(message)
+
+    def print_help(self, file=None):
+        'Print help.'
+        typer.echo(click.get_current_context().get_help(), file=file)
+
+    def print_usage(self, file=None):
+        'Print usage.'
+        typer.echo(click.get_current_context().get_usage(), file=file)
+
 
 PYPI = "https://pypi.org/simple/"
 TSINGHUA = "https://pypi.tuna.tsinghua.edu.cn/simple/"
@@ -735,64 +781,7 @@ def parse_requirements_file(path: Path) -> list[str]:
 
 def build_parser() -> argparse.ArgumentParser:
     "Build parser."
-    p = argparse.ArgumentParser(
-        prog="pkgfetch",
-        description="Find and download Python distributions from PEP 503/691 indexes.",
-    )
-    p.add_argument(
-        "requirement",
-        nargs="*",
-        type=str,
-        metavar="REQ",
-        help="one or more PEP 508 requirements, e.g. requests>=2.28 black==24.3.0",
-    )
-    p.add_argument(
-        "-f",
-        "--file",
-        action="append",
-        default=[],
-        type=Path,
-        metavar="FILE",
-        help="file containing one requirement per line; repeatable",
-    )
-    p.add_argument(
-        "-i",
-        "--index-url",
-        action="append",
-        default=[],
-        metavar="URL",
-        help="simple index URL, repeatable; defaults to PyPI, Tsinghua, Yandex",
-    )
-    p.add_argument(
-        "-L",
-        "--find-link",
-        action="append",
-        default=[],
-        metavar="DIR_OR_URL",
-        help="additional find-links source, repeatable",
-    )
-    p.add_argument("-d", "--dest", type=Path, default=Path("."), metavar="DIR", help="download destination directory")
-    p.add_argument(
-        "-b",
-        "--backend",
-        choices=("httpx", "requests", "pycurl", "aria2c"),
-        default="httpx",
-        help="download backend",
-    )
-    p.add_argument(
-        "--py-version", type=parse_version_arg, default=None, metavar="X.Y", help="override target Python version"
-    )
-    p.add_argument("--platform", action="append", default=[], metavar="TAG", help="override platform tag, repeatable")
-    p.add_argument("--abi", action="append", default=[], metavar="TAG", help="override ABI tag, repeatable")
-    p.add_argument("--impl", default=None, metavar="IMPL", help="override Python implementation")
-    g = p.add_mutually_exclusive_group()
-    g.add_argument("--no-binary", action="store_true", help="exclude wheels")
-    g.add_argument("--only-binary", action="store_true", help="wheels only")
-    p.add_argument("--pre", action="store_true", help="allow prereleases")
-    p.add_argument("-a", "--all", action="store_true", help="download every matching candidate")
-    p.add_argument("-j", "--json", action="store_true", help="print JSON metadata")
-    p.add_argument("--no-download", action="store_true", help="resolve only, no download")
-    p.add_argument("-v", "--verbose", action="store_true", help="debug logging")
+    p = _ParserShim()
     return p
 
 
@@ -882,5 +871,43 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-if __name__ == "__main__":
+def _run() -> None:
     raise SystemExit(main())
+
+
+app = typer.Typer(
+    add_completion=False,
+    context_settings={"help_option_names": ["-h", "--help"]},
+    pretty_exceptions_show_locals=False,
+)
+
+
+@app.command(help="Find and download Python distributions from PEP 503/691 indexes.")
+def cli(
+    requirement: Annotated[list[str] | None, typer.Argument(help="one or more PEP 508 requirements, e.g. requests>=2.28 black==24.3.0", metavar="REQ")] = None,
+    file: Annotated[list[Path], typer.Option("-f", "--file", help="file containing one requirement per line; repeatable", metavar="FILE")] = [],
+    index_url: Annotated[list[str], typer.Option("-i", "--index-url", help="simple index URL, repeatable; defaults to PyPI, Tsinghua, Yandex", metavar="URL")] = [],
+    find_link: Annotated[list[str], typer.Option("-L", "--find-link", help="additional find-links source, repeatable", metavar="DIR_OR_URL")] = [],
+    dest: Annotated[Path, typer.Option("-d", "--dest", help="download destination directory", metavar="DIR")] = Path("."),
+    backend: Annotated[Backend, typer.Option("-b", "--backend", help="download backend")] = Backend.httpx,
+    py_version: Annotated[str | None, typer.Option("--py-version", help="override target Python version", metavar="X.Y", parser=parse_version_arg)] = None,
+    platform: Annotated[list[str], typer.Option("--platform", help="override platform tag, repeatable", metavar="TAG")] = [],
+    abi: Annotated[list[str], typer.Option("--abi", help="override ABI tag, repeatable", metavar="TAG")] = [],
+    impl: Annotated[str | None, typer.Option("--impl", help="override Python implementation", metavar="IMPL")] = None,
+    no_binary: Annotated[bool, typer.Option("--no-binary", help="exclude wheels")] = False,
+    only_binary: Annotated[bool, typer.Option("--only-binary", help="wheels only")] = False,
+    pre: Annotated[bool, typer.Option("--pre", help="allow prereleases")] = False,
+    all: Annotated[bool, typer.Option("-a", "--all", help="download every matching candidate")] = False,
+    json: Annotated[bool, typer.Option("-j", "--json", help="print JSON metadata")] = False,
+    no_download: Annotated[bool, typer.Option("--no-download", help="resolve only, no download")] = False,
+    verbose: Annotated[bool, typer.Option("-v", "--verbose", help="debug logging")] = False,
+) -> None:
+    if sum((bool(no_binary), bool(only_binary),)) > 1:
+        raise typer.BadParameter("--no-binary, --only-binary are mutually exclusive")
+    requirement = requirement or []
+    _STATE.update(requirement=requirement, file=file, index_url=index_url, find_link=find_link, dest=dest, backend=backend, py_version=py_version, platform=platform, abi=abi, impl=impl, no_binary=no_binary, only_binary=only_binary, pre=pre, all=all, json=json, no_download=no_download, verbose=verbose)
+    _run()
+
+
+if __name__ == "__main__":
+    app()

@@ -1,7 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/env python
 """env-audit: Reconcile .env, .env.example, CI, and Python code via static AST analysis."""
 
-import argparse
 import ast
 import os
 import pathlib
@@ -10,6 +9,43 @@ import subprocess
 import sys
 from dataclasses import dataclass, field
 from typing import Any, Optional
+from types import SimpleNamespace
+from typing import Annotated
+
+import click
+import typer
+
+
+_STATE: dict[str, object] = {}
+
+
+class _Args(SimpleNamespace):
+    """argparse.Namespace look-alike: unknown attributes read as None."""
+
+    def __getattr__(self, name):
+        if name.startswith("__"):
+            raise AttributeError(name)
+        return None
+
+
+class _ParserShim:
+    """Stand-in for the removed argparse parser; hands back what Typer parsed."""
+
+    def parse_args(self, args=None, namespace=None):
+        'Parse args.'
+        return _Args(**_STATE)
+
+    def error(self, message):
+        raise typer.BadParameter(message)
+
+    def print_help(self, file=None):
+        'Print help.'
+        typer.echo(click.get_current_context().get_help(), file=file)
+
+    def print_usage(self, file=None):
+        'Print usage.'
+        typer.echo(click.get_current_context().get_usage(), file=file)
+
 
 # --- Constants & Ignored Defaults ---
 DEFAULT_IGNORE: set[str] = {
@@ -416,20 +452,8 @@ def reconcile(
 # --- CLI & Main Logic ---
 def main() -> None:
     "Run the command-line interface."
-    parser = argparse.ArgumentParser(description="env-audit: Reconcile .env, .env.example, CI, and Python code.")
-    subparsers = parser.add_subparsers(dest="command", required=True)
+    parser = _ParserShim()
 
-    p_check = subparsers.add_parser("check", help="Auto-discover and check environment configuration")
-    p_check.add_argument("--example", default=".env.example")
-    p_check.add_argument("--env", default=".env")
-    p_check.add_argument("--strict", action="store_true")
-
-    p_scan = subparsers.add_parser("scan", help="Generate usage table from source code alone")
-    p_scan.add_argument("--source", default=".")
-    p_scan.add_argument("--redact", action="store_true")
-
-    p_init = subparsers.add_parser("init", help="Propose a .env.example from code + current .env")
-    p_init.add_argument("--output", default=".env.example")
 
     args = parser.parse_args()
     root = pathlib.Path(".")
@@ -515,5 +539,44 @@ def main() -> None:
         sys.exit(0)
 
 
-if __name__ == "__main__":
+def _run() -> None:
     raise SystemExit(main())
+
+
+app = typer.Typer(
+    help="env-audit: Reconcile .env, .env.example, CI, and Python code.",
+    add_completion=False,
+    context_settings={"help_option_names": ["-h", "--help"]},
+    pretty_exceptions_show_locals=False,
+)
+
+
+@app.command("check", help="Auto-discover and check environment configuration")
+def cmd_check(
+    example: Annotated[str, typer.Option("--example")] = ".env.example",
+    env: Annotated[str, typer.Option("--env")] = ".env",
+    strict: Annotated[bool, typer.Option("--strict")] = False,
+) -> None:
+    _STATE.update(example=example, env=env, strict=strict, command="check")
+    _run()
+
+
+@app.command("scan", help="Generate usage table from source code alone")
+def cmd_scan(
+    source: Annotated[str, typer.Option("--source")] = ".",
+    redact: Annotated[bool, typer.Option("--redact")] = False,
+) -> None:
+    _STATE.update(source=source, redact=redact, command="scan")
+    _run()
+
+
+@app.command("init", help="Propose a .env.example from code + current .env")
+def cmd_init(
+    output: Annotated[str, typer.Option("--output")] = ".env.example",
+) -> None:
+    _STATE.update(output=output, command="init")
+    _run()
+
+
+if __name__ == "__main__":
+    app()

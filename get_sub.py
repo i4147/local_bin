@@ -26,6 +26,43 @@ from bs4 import BeautifulSoup
 from guessit import guessit
 from requests import exceptions
 from requests.utils import quote
+from types import SimpleNamespace
+from typing import Annotated
+
+import click
+import typer
+
+
+_STATE: dict[str, object] = {}
+
+
+class _Args(SimpleNamespace):
+    """argparse.Namespace look-alike: unknown attributes read as None."""
+
+    def __getattr__(self, name):
+        if name.startswith("__"):
+            raise AttributeError(name)
+        return None
+
+
+class _ParserShim:
+    """Stand-in for the removed argparse parser; hands back what Typer parsed."""
+
+    def parse_args(self, args=None, namespace=None):
+        'Parse args.'
+        return _Args(**_STATE)
+
+    def error(self, message):
+        raise typer.BadParameter(message)
+
+    def print_help(self, file=None):
+        'Print help.'
+        typer.echo(click.get_current_context().get_help(), file=file)
+
+    def print_usage(self, file=None):
+        'Print usage.'
+        typer.echo(click.get_current_context().get_usage(), file=file)
+
 
 __version__ = "0.0.0"
 SUB_FORMATS: list[str] = [".ass", ".srt", ".ssa", ".sub", ".sup"]
@@ -1057,58 +1094,7 @@ class GetSubtitles:
 
 def main() -> None:
     "Run the command-line interface."
-    arg_parser: argparse.ArgumentParser = argparse.ArgumentParser(
-        prog="GetSubtitles",
-        epilog="getsub %s\n\n@guoyuhang" % (__version__),
-        description="download subtitles easily",
-        formatter_class=argparse.RawTextHelpFormatter,
-    )
-    arg_parser.add_argument("name", help="the video's name or full path or a dir with videos")
-    arg_parser.add_argument(
-        "-p",
-        "--directory",
-        default="",
-        action="store",
-        help="set specified subtitle download path",
-    )
-    arg_parser.add_argument(
-        "-q",
-        "--query",
-        action="store_true",
-        help="show search results and choose one to download",
-    )
-    arg_parser.add_argument(
-        "-s",
-        "--single",
-        action="store_true",
-        help="show subtitles in the compacted file and choose one to download",
-    )
-    arg_parser.add_argument("-o", "--over", action="store_true", help="replace the subtitle already exists")
-    arg_parser.add_argument("-m", "--more", action="store_true", help="save original download file.")
-    arg_parser.add_argument(
-        "-n",
-        "--number",
-        action="store",
-        help="set max number of subtitles to be choosen when in query mode",
-    )
-    arg_parser.add_argument(
-        "-b",
-        "--both",
-        action="store_true",
-        help="save .srt and .ass subtitles at the same time if two types exist in the same archive",
-    )
-    arg_parser.add_argument(
-        "-d",
-        "--downloader",
-        action="store",
-        help="choose downloader from " + ", ".join(DownloaderManager.downloader_names),
-    )
-    arg_parser.add_argument("--debug", action="store_true", help="show more info of the error")
-    arg_parser.add_argument(
-        "--plex",
-        action="store_true",
-        help="add .zh to the subtitle's name for plex to recognize",
-    )
+    arg_parser = _ParserShim()
     args: argparse.Namespace = arg_parser.parse_args()
     if args.over:
         print("\nThe script will replace the old subtitles if exist...\n")
@@ -1127,5 +1113,34 @@ def main() -> None:
     ).start()
 
 
-if __name__ == "__main__":
+def _run() -> None:
     raise SystemExit(main())
+
+
+app = typer.Typer(
+    add_completion=False,
+    context_settings={"help_option_names": ["-h", "--help"]},
+    pretty_exceptions_show_locals=False,
+)
+
+
+@app.command(help="download subtitles easily")
+def cli(
+    name: Annotated[str, typer.Argument(help="the video's name or full path or a dir with videos")],
+    directory: Annotated[str, typer.Option("-p", "--directory", help="set specified subtitle download path")] = "",
+    query: Annotated[bool, typer.Option("-q", "--query", help="show search results and choose one to download")] = False,
+    single: Annotated[bool, typer.Option("-s", "--single", help="show subtitles in the compacted file and choose one to download")] = False,
+    over: Annotated[bool, typer.Option("-o", "--over", help="replace the subtitle already exists")] = False,
+    more: Annotated[bool, typer.Option("-m", "--more", help="save original download file.")] = False,
+    number: Annotated[str | None, typer.Option("-n", "--number", help="set max number of subtitles to be choosen when in query mode")] = None,
+    both: Annotated[bool, typer.Option("-b", "--both", help="save .srt and .ass subtitles at the same time if two types exist in the same archive")] = False,
+    downloader: Annotated[str | None, typer.Option("-d", "--downloader", help="choose downloader from " + ", ".join(DownloaderManager.downloader_names))] = None,
+    debug: Annotated[bool, typer.Option("--debug", help="show more info of the error")] = False,
+    plex: Annotated[bool, typer.Option("--plex", help="add .zh to the subtitle's name for plex to recognize")] = False,
+) -> None:
+    _STATE.update(name=name, directory=directory, query=query, single=single, over=over, more=more, number=number, both=both, downloader=downloader, debug=debug, plex=plex)
+    _run()
+
+
+if __name__ == "__main__":
+    app()

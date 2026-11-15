@@ -15,6 +15,17 @@ from dh import MAX_WORKERS
 from loguru import logger
 from rich.console import Console
 from rich.table import Table
+from types import SimpleNamespace
+from typing import Annotated
+
+import typer
+
+
+def _version_callback(value: bool) -> None:
+    if value:
+        typer.echo("dupe-refactor 1.0.0")
+        raise typer.Exit()
+
 
 if TYPE_CHECKING:
     from multiprocessing.pool import AsyncResult
@@ -261,123 +272,33 @@ def print_report(repeated: list[dict[str, Any]]) -> None:
         console.print(f"[dim]... and {len(repeated) - REPORT_ROW_LIMIT} more[/]")
 
 
-def parse_args(argv: list[str]) -> argparse.Namespace:
+app = typer.Typer(
+    add_completion=False,
+    context_settings={"help_option_names": ["-h", "--help"]},
+    pretty_exceptions_show_locals=False,
+)
+
+
+@app.command(help="Find duplicated Python definitions and optionally strip them.")
+def parse_args(
+    apply: Annotated[bool, typer.Option("-a", "--apply", help="Apply changes (default: report only, source files are not modified).")] = False,
+    min_files: Annotated[int, typer.Option("-m", "--min-files", help=f"Minimum number of files containing a duplicate (default: {DEFAULT_MIN_FILES}).", metavar="N")] = DEFAULT_MIN_FILES,
+    json: Annotated[Path, typer.Option("-j", "--json", help=f"Path to write the JSON report (default: {REPEATED_JSON_PATH}).", metavar="PATH")] = REPEATED_JSON_PATH,
+    workers: Annotated[int, typer.Option("-w", "--workers", help=f"Number of parallel workers when applying (default: {MAX_WORKERS}).", metavar="N")] = MAX_WORKERS,
+    root: Annotated[Path, typer.Option("-r", "--root", help="Root directory to scan (default: current directory).", metavar="DIR")] = Path.cwd(),
+    exclude: Annotated[list[str] | None, typer.Option("-e", "--exclude", help="Substring to exclude from scanning (repeatable).", metavar="PATTERN")] = None,
+    quiet: Annotated[bool, typer.Option("-q", "--quiet", help="Suppress the summary table.")] = False,
+    no_json: Annotated[bool, typer.Option("--no-json", help="Do not write the JSON report.")] = False,
+    version: Annotated[bool, typer.Option("-V", "--version", callback=_version_callback, is_eager=True, help="show program's version number and exit")] = False,
+) -> argparse.Namespace:
     "Parse args."
-    parser = argparse.ArgumentParser(
-        prog="dupe-refactor",
-        description="Find duplicated Python definitions and optionally strip them.",
-    )
-    parser.add_argument(
-        "-a",
-        "--apply",
-        action="store_true",
-        help="Apply changes (default: report only, source files are not modified).",
-    )
-    parser.add_argument(
-        "-m",
-        "--min-files",
-        type=int,
-        default=DEFAULT_MIN_FILES,
-        metavar="N",
-        help=f"Minimum number of files containing a duplicate (default: {DEFAULT_MIN_FILES}).",
-    )
-    parser.add_argument(
-        "-j",
-        "--json",
-        type=Path,
-        default=REPEATED_JSON_PATH,
-        metavar="PATH",
-        help=f"Path to write the JSON report (default: {REPEATED_JSON_PATH}).",
-    )
-    parser.add_argument(
-        "-w",
-        "--workers",
-        type=int,
-        default=MAX_WORKERS,
-        metavar="N",
-        help=f"Number of parallel workers when applying (default: {MAX_WORKERS}).",
-    )
-    parser.add_argument(
-        "-r",
-        "--root",
-        type=Path,
-        default=Path.cwd(),
-        metavar="DIR",
-        help="Root directory to scan (default: current directory).",
-    )
-    parser.add_argument(
-        "-e",
-        "--exclude",
-        action="append",
-        default=None,
-        metavar="PATTERN",
-        help="Substring to exclude from scanning (repeatable).",
-    )
-    parser.add_argument(
-        "-q",
-        "--quiet",
-        action="store_true",
-        help="Suppress the summary table.",
-    )
-    parser.add_argument(
-        "--no-json",
-        action="store_true",
-        help="Do not write the JSON report.",
-    )
-    parser.add_argument(
-        "-V",
-        "--version",
-        action="version",
-        version="dupe-refactor 1.0.0",
-    )
-    args = parser.parse_args(argv)
+    args = SimpleNamespace(apply=apply, min_files=min_files, json=json, workers=workers, root=root, exclude=exclude, quiet=quiet, no_json=no_json)
     if args.exclude is None:
         args.exclude = []
     return args
 
 
-def main(argv: list[str] | None = None) -> int:
-    "Run the command-line interface."
-    args: argparse.Namespace = parse_args(argv if argv is not None else sys.argv[1:])
-    root: Path = args.root
-    exclude: list[str] = args.exclude
-    if not args.quiet:
-        console.print(f"🔎 Analyzing Python files under [bold]{root}[/] ...")
-    repeated: list[dict[str, Any]] = analyze_files(root, args.min_files, exclude)
-    if not repeated:
-        logger.warning(f"No definitions duplicated in {args.min_files} or more files. Nothing to do.")
-        return 0
-    if not args.quiet:
-        print_report(repeated)
-    if not args.no_json:
-        write_repeated_json(repeated, args.json)
-        console.print(f"[green]Wrote[/] {len(repeated)} entries to [bold]{args.json}[/]")
-    refactor_map: FileMap = build_refactor_map(repeated)
-    tasks: list[Task] = [(p, objs) for p, objs in refactor_map.items() if p.is_file()]
-    if not args.apply:
-        if tasks:
-            console.print(
-                f"[yellow]Dry-run:[/] would refactor [bold]{len(tasks)}[/] file(s). "
-                "Re-run with [bold]-a/--apply[/] to apply changes."
-            )
-        else:
-            console.print("[yellow]Dry-run:[/] no existing files to refactor.")
-        return 0
-    if not tasks:
-        console.print("No existing files to refactor.")
-        return 0
-    console.print(f"🚀 Refactoring [bold]{len(tasks)}[/] file(s) with [bold]{args.workers}[/] worker(s)...")
-    with Pool(processes=args.workers) as pool:
-        async_results: list[AsyncResult[bool]] = [
-            pool.apply_async(refactor_single_file, (file_path, objects)) for file_path, objects in tasks
-        ]
-        for async_res in async_results:
-            try:
-                async_res.get()
-            except Exception as exc:
-                logger.error(f"❌ Worker raised: {exc}")
-    console.print("🎉 Structural refactoring complete!")
-    return 0
+app()
 
 
 if __name__ == "__main__":

@@ -33,6 +33,43 @@ from rich.progress import (BarColumn, DownloadColumn, Progress, TaskID,
                            TransferSpeedColumn)
 from rich.table import Table
 from rich.text import Text
+from types import SimpleNamespace
+from typing import Annotated
+
+import click
+import typer
+
+
+_STATE: dict[str, object] = {}
+
+
+class _Args(SimpleNamespace):
+    """argparse.Namespace look-alike: unknown attributes read as None."""
+
+    def __getattr__(self, name):
+        if name.startswith("__"):
+            raise AttributeError(name)
+        return None
+
+
+class _ParserShim:
+    """Stand-in for the removed argparse parser; hands back what Typer parsed."""
+
+    def parse_args(self, args=None, namespace=None):
+        'Parse args.'
+        return _Args(**_STATE)
+
+    def error(self, message):
+        raise typer.BadParameter(message)
+
+    def print_help(self, file=None):
+        'Print help.'
+        typer.echo(click.get_current_context().get_help(), file=file)
+
+    def print_usage(self, file=None):
+        'Print usage.'
+        typer.echo(click.get_current_context().get_usage(), file=file)
+
 
 CHUNK: Final[int] = 1 << 20
 REPORT_INTERVAL: Final[float] = 0.1
@@ -529,16 +566,7 @@ def print_report(console: Console, results: list[Result], orig: int, wall: float
 
 def parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     "Parse args."
-    p = argparse.ArgumentParser(prog="compress_txt.py")
-    p.add_argument("path", type=Path)
-    p.add_argument("-o", "--out-dir", default="output", type=Path)
-    p.add_argument("-p", "--preset", choices=list(LEVELS), default="max")
-    p.add_argument("-a", "--algos", nargs="+", choices=ORDER, default=ORDER, metavar="ALGO")
-    p.add_argument("--verify", action="store_true", default=True)
-    p.add_argument("--force", action="store_true")
-    p.add_argument("--keep-tar", action="store_true")
-    p.add_argument("--tmp-dir", type=Path, default=os.environ.get("TMPDIR"))
-    p.add_argument("--json", type=Path, dest="json_path")
+    p = _ParserShim()
     return p.parse_args(argv)
 
 
@@ -626,5 +654,34 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 130
 
 
-if __name__ == "__main__":
+def _run() -> None:
     raise SystemExit(main())
+
+
+app = typer.Typer(
+    add_completion=False,
+    context_settings={"help_option_names": ["-h", "--help"]},
+    pretty_exceptions_show_locals=False,
+)
+
+
+@app.command()
+def cli(
+    path: Annotated[Path, typer.Argument()],
+    out_dir: Annotated[Path, typer.Option("-o", "--out-dir")] = "output",
+    preset: Annotated[str, typer.Option("-p", "--preset")] = "max",
+    algos: Annotated[list[str], typer.Option("-a", "--algos", metavar="ALGO")] = ORDER,
+    verify: Annotated[bool, typer.Option("--verify")] = True,
+    force: Annotated[bool, typer.Option("--force")] = False,
+    keep_tar: Annotated[bool, typer.Option("--keep-tar")] = False,
+    tmp_dir: Annotated[Path, typer.Option("--tmp-dir")] = os.environ.get("TMPDIR"),
+    json_path: Annotated[Path | None, typer.Option("--json")] = None,
+) -> None:
+    if preset is not None and preset not in list(LEVELS):
+        raise typer.BadParameter(f"invalid choice: {preset!r} (choose from {list(LEVELS)})")
+    _STATE.update(path=path, out_dir=out_dir, preset=preset, algos=algos, verify=verify, force=force, keep_tar=keep_tar, tmp_dir=tmp_dir, json_path=json_path)
+    _run()
+
+
+if __name__ == "__main__":
+    app()

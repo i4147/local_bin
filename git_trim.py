@@ -84,6 +84,49 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import StrEnum
 from pathlib import Path
+from types import SimpleNamespace
+from typing import Annotated
+
+import click
+import typer
+
+
+def _version_callback(value: bool) -> None:
+    if value:
+        typer.echo(f"git-trim {__version__}")
+        raise typer.Exit()
+
+
+_STATE: dict[str, object] = {}
+
+
+class _Args(SimpleNamespace):
+    """argparse.Namespace look-alike: unknown attributes read as None."""
+
+    def __getattr__(self, name):
+        if name.startswith("__"):
+            raise AttributeError(name)
+        return None
+
+
+class _ParserShim:
+    """Stand-in for the removed argparse parser; hands back what Typer parsed."""
+
+    def parse_args(self, args=None, namespace=None):
+        'Parse args.'
+        return _Args(**_STATE)
+
+    def error(self, message):
+        raise typer.BadParameter(message)
+
+    def print_help(self, file=None):
+        'Print help.'
+        typer.echo(click.get_current_context().get_help(), file=file)
+
+    def print_usage(self, file=None):
+        'Print usage.'
+        typer.echo(click.get_current_context().get_usage(), file=file)
+
 
 if sys.version_info < (3, 12):
     sys.exit("git-trim requires Python 3.12+")
@@ -724,19 +767,8 @@ exit codes: 0 nothing to do / success | 10 candidates found (CI hooks) | 1 error
 
 def build_parser() -> argparse.ArgumentParser:
     "Build parser."
-    parser = argparse.ArgumentParser(
-        prog="git-trim",
-        description="Bulk-safe branch cleanup that understands squash and rebase merges.",
-        epilog=EPILOG,
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
-    parser.add_argument("--version", action="version", version=f"git-trim {__version__}")
-    parser.add_argument(
-        "-C", "--repo", default=".", metavar="PATH", help="repository to operate on (default: current directory)"
-    )
-    parser.add_argument("--no-color", action="store_true", help="disable ANSI colors")
+    parser = _ParserShim()
 
-    sub = parser.add_subparsers(dest="command", metavar="COMMAND", required=True)
 
     def common(sp: argparse.ArgumentParser) -> argparse.ArgumentParser:
         sp.add_argument("--json", action="store_true", help="machine-readable JSON output")
@@ -794,18 +826,6 @@ def build_parser() -> argparse.ArgumentParser:
     )
     sp.set_defaults(func=cmd_prune_remote)
 
-    sp = sub.add_parser("undo", help="restore branches recorded in .git/trim-log.jsonl")
-    sp.add_argument("--json", action="store_true", help="machine-readable JSON output")
-    sp.set_defaults(func=cmd_undo)
-
-    sp = sub.add_parser("demo", help="build a throwaway repo and walk through the whole workflow")
-    sp.add_argument(
-        "--dir", metavar="PATH", default=None, help="directory for the demo repo (default: a fresh temp dir)"
-    )
-    sp.add_argument(
-        "--bench", type=int, default=0, metavar="N", help="also benchmark scan with N extra unmerged branches"
-    )
-    sp.set_defaults(func=cmd_demo)
 
     return parser
 
@@ -1776,5 +1796,43 @@ def test_demo_runs(tmp_path, capsys) -> None:
     assert "restored" in out and "prune-remote" in out and "undo" in out
 
 
-if __name__ == "__main__":
+def _run2() -> None:
     raise SystemExit(main())
+
+
+app = typer.Typer(
+    help="Bulk-safe branch cleanup that understands squash and rebase merges.",
+    add_completion=False,
+    context_settings={"help_option_names": ["-h", "--help"]},
+    pretty_exceptions_show_locals=False,
+)
+
+
+@app.callback()
+def _root(
+    version: Annotated[bool, typer.Option("--version", callback=_version_callback, is_eager=True, help="show program's version number and exit")] = False,
+    repo: Annotated[str, typer.Option("-C", "--repo", help="repository to operate on (default: current directory)", metavar="PATH")] = ".",
+    no_color: Annotated[bool, typer.Option("--no-color", help="disable ANSI colors")] = False,
+) -> None:
+    _STATE.update(repo=repo, no_color=no_color)
+
+
+@app.command("undo", help="restore branches recorded in .git/trim-log.jsonl")
+def cmd_undo2(
+    json: Annotated[bool, typer.Option("--json", help="machine-readable JSON output")] = False,
+) -> None:
+    _STATE.update(json=json, command="undo", func=cmd_undo)
+    _run2()
+
+
+@app.command("demo", help="build a throwaway repo and walk through the whole workflow")
+def cmd_demo2(
+    dir: Annotated[str | None, typer.Option("--dir", help="directory for the demo repo (default: a fresh temp dir)", metavar="PATH")] = None,
+    bench: Annotated[int, typer.Option("--bench", help="also benchmark scan with N extra unmerged branches", metavar="N")] = 0,
+) -> None:
+    _STATE.update(dir=dir, bench=bench, command="demo", func=cmd_demo)
+    _run2()
+
+
+if __name__ == "__main__":
+    app()

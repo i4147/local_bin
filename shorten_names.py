@@ -73,7 +73,6 @@ Requires Python 3.10+ and ``libcst``.
 
 from __future__ import annotations
 
-import argparse
 import ast
 import builtins
 import keyword
@@ -88,6 +87,9 @@ from typing import Iterator, Optional
 import libcst as cst
 from libcst.helpers import get_full_name_for_node
 from libcst.metadata import ClassScope, MetadataWrapper, ScopeProvider
+from typing import Annotated
+
+import typer
 
 __all__ = ["shorten_names"]
 
@@ -973,27 +975,34 @@ def shorten_names(
     return changed_any
 
 
-def _main(argv: Optional[list[str]] = None) -> int:
-    parser = argparse.ArgumentParser(description="Shorten identifier names in a Python file or package.")
-    parser.add_argument("path", help="a .py file or a package directory")
-    parser.add_argument("--no-backup", action="store_true", help="do not write .bak files")
-    parser.add_argument("--dry-run", action="store_true", help="analyze only, write nothing")
-    parser.add_argument("-q", "--quiet", action="store_true", help="suppress per-file output")
-    args = parser.parse_args(argv)
+app = typer.Typer(
+    add_completion=False,
+    context_settings={"help_option_names": ["-h", "--help"]},
+    pretty_exceptions_show_locals=False,
+)
+
+
+@app.command(help="Shorten identifier names in a Python file or package.")
+def _main(
+    path: Annotated[str, typer.Argument(help="a .py file or a package directory")],
+    no_backup: Annotated[bool, typer.Option("--no-backup", help="do not write .bak files")] = False,
+    dry_run: Annotated[bool, typer.Option("--dry-run", help="analyze only, write nothing")] = False,
+    quiet: Annotated[bool, typer.Option("-q", "--quiet", help="suppress per-file output")] = False,
+) -> int:
     try:
         changed = shorten_names(
-            args.path,
-            backup=not args.no_backup,
-            dry_run=args.dry_run,
-            verbose=not args.quiet,
+            path,
+            backup=not no_backup,
+            dry_run=dry_run,
+            verbose=not quiet,
         )
     except (SyntaxError, FileNotFoundError) as exc:
         print(f"error: {exc}", file=sys.stderr)
-        return 2
-    if not args.quiet:
+        raise typer.Exit(2)
+    if not quiet:
         print("done." if changed else "nothing to change.")
-    return 0
+    return
 
 
 if __name__ == "__main__":
-    raise SystemExit(_main())
+    app()
