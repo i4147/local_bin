@@ -1,0 +1,1411 @@
+archive_converter.py:149 require: no conservative summary from its name
+archive_converter.py:156 zstd_backend: no conservative summary from its name
+archive_converter.py:162 human: no conservative summary from its name
+archive_converter.py:180 readable: no conservative summary from its name
+archive_converter.py:183 readinto: no conservative summary from its name
+archive_converter.py:198 close: no conservative summary from its name
+archive_converter.py:210 writable: no conservative summary from its name
+archive_converter.py:213 write: no conservative summary from its name
+archive_converter.py:220 close: no conservative summary from its name
+archive_converter.py:297 peek: no conservative summary from its name
+archive_converter.py:312 codec_from_magic: no conservative summary from its name
+archive_converter.py:323 fmt_from_name: no conservative summary from its name
+archive_converter.py:348 sniff: no conservative summary from its name
+archive_converter.py:372 detect: no conservative summary from its name
+archive_converter.py:415 level_spec: no conservative summary from its name
+archive_converter.py:441 safe_path: no conservative summary from its name
+archive_converter.py:47 suffix: no conservative summary from its name
+archive_converter.py:495 extract: no conservative summary from its name
+archive_converter.py:507 entries: no conservative summary from its name
+archive_converter.py:517 scrub: no conservative summary from its name
+archive_converter.py:523 zip_time: no conservative summary from its name
+archive_converter.py:528 pack_tar: no conservative summary from its name
+archive_converter.py:537 pack_zip: no conservative summary from its name
+archive_converter.py:553 pack_7z: no conservative summary from its name
+archive_converter.py:561 pack: no conservative summary from its name
+archive_converter.py:573 recode: no conservative summary from its name
+archive_converter.py:582 staged: no conservative summary from its name
+archive_converter.py:622 streamable: no conservative summary from its name
+archive_converter.py:65 key: no conservative summary from its name
+archive_converter.py:665 convert: no conservative summary from its name
+archive_converter.py:674 report: no conservative summary from its name
+archive_converter.py:687 module_available: no conservative summary from its name
+archive_converter.py:69 suffix: no conservative summary from its name
+archive_converter.py:774 run: no conservative summary from its name
+archive_converter.py:81 label: no conservative summary from its name
+argparse2typer.py:105 literal: no conservative summary from its name
+argparse2typer.py:1060 finalize: no conservative summary from its name
+argparse2typer.py:1132 convert: no conservative summary from its name
+argparse2typer.py:114 dotted: no conservative summary from its name
+argparse2typer.py:151 py_name: no conservative summary from its name
+argparse2typer.py:160 q: no conservative summary from its name
+argparse2typer.py:164 kwargs_src: no conservative summary from its name
+argparse2typer.py:184 identifiers_in: no conservative summary from its name
+argparse2typer.py:226 pos: no conservative summary from its name
+argparse2typer.py:229 start: no conservative summary from its name
+argparse2typer.py:232 end: no conservative summary from its name
+argparse2typer.py:235 seg: no conservative summary from its name
+argparse2typer.py:238 line_start: no conservative summary from its name
+argparse2typer.py:241 line_end: no conservative summary from its name
+argparse2typer.py:244 replace: no conservative summary from its name
+argparse2typer.py:257 apply: no conservative summary from its name
+argparse2typer.py:269 class Ctx: role is not clear from its declaration
+argparse2typer.py:278 warn: no conservative summary from its name
+argparse2typer.py:281 need: no conservative summary from its name
+argparse2typer.py:284 unique: no conservative summary from its name
+argparse2typer.py:407 lit: no conservative summary from its name
+argparse2typer.py:543 dedupe: no conservative summary from its name
+argparse2typer.py:573 str_literal: no conservative summary from its name
+argparse2typer.py:578 locate_parser: no conservative summary from its name
+argparse2typer.py:602 analyze: no conservative summary from its name
+argparse2typer.py:689 ordered: no conservative summary from its name
+argparse2typer.py:708 app_def: no conservative summary from its name
+argparse2typer.py:722 cmd_kwargs: no conservative summary from its name
+argparse2typer.py:731 exclusive_checks: no conservative summary from its name
+argparse2typer.py:752 cmd_prologue: no conservative summary from its name
+argparse2typer.py:768 plan_inline: no conservative summary from its name
+argparse2typer.py:970 state_update: no conservative summary from its name
+argparse2typer.py:980 func: no conservative summary from its name
+autogp.py:106 staged_changes_only_whitespace: no conservative summary from its name
+autogp.py:160 looks_like_python_by_shebang: no conservative summary from its name
+autogp.py:242 git_add_all: no conservative summary from its name
+autogp.py:257 git_commit_and_push: no conservative summary from its name
+autogp.py:74 git_repo_root: no conservative summary from its name
+autogp.py:96 staged_changes_names: no conservative summary from its name
+ax.py:164 sorted_title_candidates: no conservative summary from its name
+ax.py:218 general_ok_img: no conservative summary from its name
+ax.py:239 dimensions_ok: no conservative summary from its name
+ax.py:33 class lazy_property: role is not clear from its declaration
+ax.py:331 edge_distance: no conservative summary from its name
+ax.py:335 different: no conservative summary from its name
+ax.py:396 class Article: role is not clear from its declaration
+ax.py:404 title: no conservative summary from its name
+ax.py:408 image: no conservative summary from its name
+ax.py:418 publish_date: no conservative summary from its name
+ax.py:423 article_text: no conservative summary from its name
+ax.py:428 domain: no conservative summary from its name
+ax.py:433 language: no conservative summary from its name
+ax.py:437 full_text: no conservative summary from its name
+ax.py:441 code: no conservative summary from its name
+ax.py:445 links: no conservative summary from its name
+ax.py:449 heading: no conservative summary from its name
+ax.py:45 fscore: no conservative summary from its name
+ax.py:453 extruct: no conservative summary from its name
+ax.py:464 jsonld: no conservative summary from its name
+ax.py:468 response_hash: no conservative summary from its name
+ax.py:472 microdata: no conservative summary from its name
+ax.py:488 from_url: no conservative summary from its name
+ax.py:492 to_dict: no conservative summary from its name
+ax.py:508 view: no conservative summary from its name
+ax.py:533 re_count: no conservative summary from its name
+ax.py:617 should_be_blocked: no conservative summary from its name
+ax.py:624 class Storage: role is not clear from its declaration
+ax.py:648 path: no conservative summary from its name
+ax.py:652 index_path: no conservative summary from its name
+ax.py:656 articles_path: no conservative summary from its name
+ax.py:660 index_path_exists: no conservative summary from its name
+ax.py:678 seen: no conservative summary from its name
+ax.py:684 articles: no conservative summary from its name
+ax.py:689 clear: no conservative summary from its name
+ax.py:695 drop_one: no conservative summary from its name
+ax.py:708 class UpfrontRobotFileParser: role is not clear from its declaration
+ax.py:709 read: no conservative summary from its name
+ax.py:722 class Crawler: role is not clear from its declaration
+ax.py:780 class rp: role is not clear from its declaration
+ax.py:786 robots_can_fetch: no conservative summary from its name
+ax.py:790 invalid_seeds: no conservative summary from its name
+ax.py:793 within_domain: no conservative summary from its name
+ax.py:799 get: no conservative summary from its name
+ax.py:808 pre_process_url: no conservative summary from its name
+ax.py:813 view_tree: no conservative summary from its name
+ax.py:819 return_seed_url_with_query_nonce: no conservative summary from its name
+ax.py:876 start: no conservative summary from its name
+ax.py:881 class MediumCrawler: role is not clear from its declaration
+ax.py:901 class SteemitCrawler: role is not clear from its declaration
+ax.py:931 article: no conservative summary from its name
+ax.py:935 view_html: no conservative summary from its name
+bibici.py:49 log_message: no conservative summary from its name
+bibici.py:58 err_message: no conservative summary from its name
+bibici.py:589 try_fix_with_doi: no conservative summary from its name
+bibici.py:62 similarity: no conservative summary from its name
+bibici.py:670 look_for_misspellings: no conservative summary from its name
+bibici.py:76 norm_booktitle: no conservative summary from its name
+br.py:1066 swallowed_directory: no conservative summary from its name
+br.py:115 class ParallelBrotliCompressor: role is not clear from its declaration
+br.py:136 compress_file: no conservative summary from its name
+br.py:166 decompress_file: no conservative summary from its name
+br.py:180 compress_bytes: no conservative summary from its name
+br.py:234 directory_size: no conservative summary from its name
+br.py:242 compressed_output_path: no conservative summary from its name
+br.py:246 decompressed_output_path: no conservative summary from its name
+br.py:252 relative_display: no conservative summary from its name
+br.py:267 compress_with_parallel: no conservative summary from its name
+br.py:288 decompress_with_parallel: no conservative summary from its name
+br.py:319 tar_directory: no conservative summary from its name
+br.py:333 compress_file_streaming: no conservative summary from its name
+br.py:395 decompress_file_streaming: no conservative summary from its name
+br.py:444 untar_file: no conservative summary from its name
+br.py:552 should_compress_file: no conservative summary from its name
+chafa.py:1015 tuck_and_align: no conservative summary from its name
+chafa.py:1030 boost_saturation: no conservative summary from its name
+chafa.py:104 work_factor_int: no conservative summary from its name
+chafa.py:117 rgb_to_din99d: no conservative summary from its name
+chafa.py:1196 class CellGrid: role is not clear from its declaration
+chafa.py:148 brightness: no conservative summary from its name
+chafa.py:1538 queue: no conservative summary from its name
+chafa.py:1546 flush: no conservative summary from its name
+chafa.py:1552 reset_attrs: no conservative summary from its name
+chafa.py:1559 reset_fg: no conservative summary from its name
+chafa.py:193 class Palette: role is not clear from its declaration
+chafa.py:2038 run: no conservative summary from its name
+chafa.py:238 lookup: no conservative summary from its name
+chafa.py:247 lookup2: no conservative summary from its name
+chafa.py:266 color_of: no conservative summary from its name
+chafa.py:403 class Symbol: role is not clear from its declaration
+chafa.py:569 all_symbols: no conservative summary from its name
+chafa.py:689 char_is_selected: no conservative summary from its name
+chafa.py:889 gen_bayer_matrix: no conservative summary from its name
+chafa.py:943 fs_dither: no conservative summary from its name
+clean-py.py:589 on_any_event: no conservative summary from its name
+compress_text.py:133 class Reporter: role is not clear from its declaration
+compress_text.py:152 sha256_file: no conservative summary from its name
+compress_text.py:160 part_path: no conservative summary from its name
+compress_text.py:164 zstd_encoder: no conservative summary from its name
+compress_text.py:180 zstd_decoder: no conservative summary from its name
+compress_text.py:187 brotli_encoder: no conservative summary from its name
+compress_text.py:194 brotli_decoder: no conservative summary from its name
+compress_text.py:201 bz2_encoder: no conservative summary from its name
+compress_text.py:206 bz2_decoder: no conservative summary from its name
+compress_text.py:211 xz_encoder: no conservative summary from its name
+compress_text.py:216 xz_decoder: no conservative summary from its name
+compress_text.py:221 ppmd_encoder: no conservative summary from its name
+compress_text.py:230 ppmd_decoder: no conservative summary from its name
+compress_text.py:257 stream_compress: no conservative summary from its name
+compress_text.py:269 compress_7z: no conservative summary from its name
+compress_text.py:337 drain: no conservative summary from its name
+compress_text.py:533 run: no conservative summary from its name
+consolidate.py:117 class LocalImportResolver: role is not clear from its declaration
+consolidate.py:124 locate: no conservative summary from its name
+consolidate.py:131 visit_ImportFrom: no conservative summary from its name
+consolidate.py:160 visit_Import: no conservative summary from its name
+consolidate.py:180 class NameRewriter: role is not clear from its declaration
+consolidate.py:194 visit_Name: no conservative summary from its name
+consolidate.py:200 visit_Attribute: no conservative summary from its name
+consolidate.py:211 class SixImportRewriter: role is not clear from its declaration
+consolidate.py:212 visit_ImportFrom: no conservative summary from its name
+consolidate.py:225 visit_Import: no conservative summary from its name
+consolidate.py:234 class SixTransformer: role is not clear from its declaration
+consolidate.py:235 visit_Attribute: no conservative summary from its name
+consolidate.py:246 visit_Call: no conservative summary from its name
+consolidate.py:266 class OsPathTransformer: role is not clear from its declaration
+consolidate.py:279 visit_Call: no conservative summary from its name
+consolidate.py:326 visit_Subscript: no conservative summary from its name
+consolidate.py:350 visit_Call: no conservative summary from its name
+consolidate.py:364 class ExecutorTransformer: role is not clear from its declaration
+consolidate.py:365 visit_With: no conservative summary from its name
+consolidate.py:414 class LoggingTransformer: role is not clear from its declaration
+consolidate.py:415 visit_Assign: no conservative summary from its name
+consolidate.py:428 visit_Attribute: no conservative summary from its name
+consolidate.py:434 visit_Expr: no conservative summary from its name
+consolidate.py:508 fail: no conservative summary from its name
+consolidate.py:513 unique_path: no conservative summary from its name
+consolidate.py:657 inject_standard_imports: no conservative summary from its name
+consolidate.py:665 fix_empty_bodies: no conservative summary from its name
+consolidate.py:674 defined_names: no conservative summary from its name
+consolidate.py:684 top_level_names: no conservative summary from its name
+consolidate.py:691 bound_import_names: no conservative summary from its name
+consolidate.py:703 unique_name: no conservative summary from its name
+consolidate.py:713 module_prefix: no conservative summary from its name
+consolidate.py:718 plan_renames: no conservative summary from its name
+consolidate.py:792 merge_modules: no conservative summary from its name
+consolidate.py:808 dependencies: no conservative summary from its name
+consolidate.py:814 constant_name: no conservative summary from its name
+consolidate.py:856 unique_nodes: no conservative summary from its name
+consolidate.py:868 merge_imports: no conservative summary from its name
+consolidate.py:87 class LoadNames: role is not clear from its declaration
+consolidate.py:900 order_by_dependencies: no conservative summary from its name
+consolidate.py:91 visit_Name: no conservative summary from its name
+consolidate.py:910 emit: no conservative summary from its name
+consolidate.py:95 visit_Lambda: no conservative summary from its name
+consolidate.py:973 refactor: no conservative summary from its name
+consolidate.py:98 visit_FunctionDef: no conservative summary from its name
+consolidator.py:1151 render: no conservative summary from its name
+consolidator.py:117 summary: no conservative summary from its name
+consolidator.py:1228 consolidate: no conservative summary from its name
+consolidator.py:206 recurse: no conservative summary from its name
+consolidator.py:336 visit_Import: no conservative summary from its name
+consolidator.py:340 visit_ImportFrom: no conservative summary from its name
+consolidator.py:354 visit_Call: no conservative summary from its name
+consolidator.py:575 analyze: no conservative summary from its name
+consolidator.py:631 warn: no conservative summary from its name
+consolidator.py:636 embed_module: no conservative summary from its name
+consolidator.py:648 embed_tree: no conservative summary from its name
+consolidator.py:651 dir_excluded: no conservative summary from its name
+consolidator.py:683 embed_thirdparty: no conservative summary from its name
+consolidator.py:692 embed_located: no conservative summary from its name
+consolidator.py:84 archive_path: no conservative summary from its name
+consolidator.py:905 excluded: no conservative summary from its name
+consolidator.py:908 add: no conservative summary from its name
+consolidator.py:941 prune_pkg_dir: no conservative summary from its name
+consolidator.py:956 prune_dir: no conservative summary from its name
+cron_explain.py:23 class CronSpec: role is not clear from its declaration
+cron_explain.py:278 matches_spec: no conservative summary from its name
+cron_explain.py:381 analyze_overlaps: no conservative summary from its name
+cron_explain.py:40 class RunInstance: role is not clear from its declaration
+cron_explain.py:47 class CronAnalysis: role is not clear from its declaration
+cronwhy.py:175 month_wildcard: no conservative summary from its name
+cronwhy.py:179 dom_wildcard: no conservative summary from its name
+cronwhy.py:183 dow_wildcard: no conservative summary from its name
+cronwhy.py:207 matches: no conservative summary from its name
+cronwhy.py:291 dump_cron_file: no conservative summary from its name
+cronwhy.py:42 humanize_list: no conservative summary from its name
+cronwhy.py:52 field_summary: no conservative summary from its name
+csshtmlpret.py:102 condense_semicolons: no conservative summary from its name
+csshtmlpret.py:135 justify_right: no conservative summary from its name
+csshtmlpret.py:175 simple_replace: no conservative summary from its name
+csshtmlpret.py:179 css_prettify: no conservative summary from its name
+csshtmlpret.py:198 prettify: no conservative summary from its name
+csshtmlpret.py:204 html_prettify: no conservative summary from its name
+csshtmlpret.py:212 html_prettify: no conservative summary from its name
+csshtmlpret.py:219 walk2list: no conservative summary from its name
+csshtmlpret.py:261 prefixer_extensioner: no conservative summary from its name
+csshtmlpret.py:94 condense_zero_units: no conservative summary from its name
+dedupe-py.py:141 analyze_files: no conservative summary from its name
+dedupe-py.py:174 class ASTStripper: role is not clear from its declaration
+dedupe-py.py:180 visit_FunctionDef: no conservative summary from its name
+dedupe-py.py:186 visit_AsyncFunctionDef: no conservative summary from its name
+dedupe-py.py:192 visit_ClassDef: no conservative summary from its name
+dedupe-py.py:198 visit_Assign: no conservative summary from its name
+dedupe-py.py:206 refactor_single_file: no conservative summary from its name
+dupfx.py:46 file_stat_key: no conservative summary from its name
+dupfx.py:54 quick_hash: no conservative summary from its name
+dupfx.py:74 full_hash: no conservative summary from its name
+env_audit.py:102 visit_Subscript: no conservative summary from its name
+env_audit.py:110 visit_Call: no conservative summary from its name
+env_audit.py:297 reconcile: no conservative summary from its name
+env_audit.py:87 replace_var: no conservative summary from its name
+env_audit.py:97 class UsageVisitor: role is not clear from its declaration
+env_stamp.py:1729 report: no conservative summary from its name
+env_stamp.py:1770 channel: no conservative summary from its name
+furl_cli.py:1037 remove: no conservative summary from its name
+furl_cli.py:104 utf8: no conservative summary from its name
+furl_cli.py:1058 copy: no conservative summary from its name
+furl_cli.py:1061 tostr: no conservative summary from its name
+furl_cli.py:115 non_string_iterable: no conservative summary from its name
+furl_cli.py:119 idna_encode: no conservative summary from its name
+furl_cli.py:125 idna_decode: no conservative summary from its name
+furl_cli.py:137 static_vars: no conservative summary from its name
+furl_cli.py:138 decorator: no conservative summary from its name
+furl_cli.py:147 quote_fn: no conservative summary from its name
+furl_cli.py:15 ic: no conservative summary from its name
+furl_cli.py:226 urlsplit: no conservative summary from its name
+furl_cli.py:240 urljoin: no conservative summary from its name
+furl_cli.py:293 quacks_like_a_path_with_segments: no conservative summary from its name
+furl_cli.py:297 class Path: role is not clear from its declaration
+furl_cli.py:312 load: no conservative summary from its name
+furl_cli.py:330 add: no conservative summary from its name
+furl_cli.py:345 set: no conservative summary from its name
+furl_cli.py:349 remove: no conservative summary from its name
+furl_cli.py:369 asdict: no conservative summary from its name
+furl_cli.py:379 isabsolute: no conservative summary from its name
+furl_cli.py:385 isabsolute: no conservative summary from its name
+furl_cli.py:396 isdir: no conservative summary from its name
+furl_cli.py:400 isfile: no conservative summary from its name
+furl_cli.py:449 class PathCompositionInterface: role is not clear from its declaration
+furl_cli.py:454 path: no conservative summary from its name
+furl_cli.py:458 pathstr: no conservative summary from its name
+furl_cli.py:481 class URLPathCompositionInterface: role is not clear from its declaration
+furl_cli.py:489 class FragmentPathCompositionInterface: role is not clear from its declaration
+furl_cli.py:497 class Query: role is not clear from its declaration
+furl_cli.py:506 load: no conservative summary from its name
+furl_cli.py:511 add: no conservative summary from its name
+furl_cli.py:516 set: no conservative summary from its name
+furl_cli.py:520 remove: no conservative summary from its name
+furl_cli.py:539 params: no conservative summary from its name
+furl_cli.py:543 params: no conservative summary from its name
+furl_cli.py:549 encode: no conservative summary from its name
+furl_cli.py:575 asdict: no conservative summary from its name
+furl_cli.py:636 class QueryCompositionInterface: role is not clear from its declaration
+furl_cli.py:641 query: no conservative summary from its name
+furl_cli.py:645 querystr: no conservative summary from its name
+furl_cli.py:655 args: no conservative summary from its name
+furl_cli.py:665 class Fragment: role is not clear from its declaration
+furl_cli.py:673 load: no conservative summary from its name
+furl_cli.py:693 add: no conservative summary from its name
+furl_cli.py:700 set: no conservative summary from its name
+furl_cli.py:709 remove: no conservative summary from its name
+furl_cli.py:718 asdict: no conservative summary from its name
+furl_cli.py:752 class FragmentCompositionInterface: role is not clear from its declaration
+furl_cli.py:757 fragment: no conservative summary from its name
+furl_cli.py:761 fragmentstr: no conservative summary from its name
+furl_cli.py:777 class furl: role is not clear from its declaration
+furl_cli.py:82 callable_attr: no conservative summary from its name
+furl_cli.py:821 load: no conservative summary from its name
+furl_cli.py:839 scheme: no conservative summary from its name
+furl_cli.py:843 scheme: no conservative summary from its name
+furl_cli.py:849 host: no conservative summary from its name
+furl_cli.py:853 host: no conservative summary from its name
+furl_cli.py:870 port: no conservative summary from its name
+furl_cli.py:874 port: no conservative summary from its name
+furl_cli.py:884 netloc: no conservative summary from its name
+furl_cli.py:898 netloc: no conservative summary from its name
+furl_cli.py:90 lget: no conservative summary from its name
+furl_cli.py:927 origin: no conservative summary from its name
+furl_cli.py:936 origin: no conservative summary from its name
+furl_cli.py:951 url: no conservative summary from its name
+furl_cli.py:955 url: no conservative summary from its name
+furl_cli.py:958 add: no conservative summary from its name
+furl_cli.py:97 attemptstr: no conservative summary from its name
+furl_cli.py:984 set: no conservative summary from its name
+fuzzycmp.py:101 class EditDistanceMetric: role is not clear from its declaration
+fuzzycmp.py:103 edit_distance: no conservative summary from its name
+fuzzycmp.py:1036 diff_lines: no conservative summary from its name
+fuzzycmp.py:104 similarity: no conservative summary from its name
+fuzzycmp.py:1046 fuzzy_grep: no conservative summary from its name
+fuzzycmp.py:113 class Levenshtein: role is not clear from its declaration
+fuzzycmp.py:116 edit_distance: no conservative summary from its name
+fuzzycmp.py:135 class DamerauLevenshtein: role is not clear from its declaration
+fuzzycmp.py:138 edit_distance: no conservative summary from its name
+fuzzycmp.py:160 class Hamming: role is not clear from its declaration
+fuzzycmp.py:166 edit_distance: no conservative summary from its name
+fuzzycmp.py:174 class Jaro: role is not clear from its declaration
+fuzzycmp.py:177 similarity: no conservative summary from its name
+fuzzycmp.py:213 class JaroWinkler: role is not clear from its declaration
+fuzzycmp.py:220 similarity: no conservative summary from its name
+fuzzycmp.py:235 class Jaccard: role is not clear from its declaration
+fuzzycmp.py:241 similarity: no conservative summary from its name
+fuzzycmp.py:249 class Dice: role is not clear from its declaration
+fuzzycmp.py:255 similarity: no conservative summary from its name
+fuzzycmp.py:264 class Cosine: role is not clear from its declaration
+fuzzycmp.py:281 similarity: no conservative summary from its name
+fuzzycmp.py:294 class LCSSimilarity: role is not clear from its declaration
+fuzzycmp.py:297 lcs_length: no conservative summary from its name
+fuzzycmp.py:313 similarity: no conservative summary from its name
+fuzzycmp.py:322 class NGram: role is not clear from its declaration
+fuzzycmp.py:330 similarity: no conservative summary from its name
+fuzzycmp.py:369 soundex: no conservative summary from its name
+fuzzycmp.py:389 nysiis: no conservative summary from its name
+fuzzycmp.py:446 metaphone: no conservative summary from its name
+fuzzycmp.py:55 default_tokenize: no conservative summary from its name
+fuzzycmp.py:558 code: no conservative summary from its name
+fuzzycmp.py:561 similarity: no conservative summary from its name
+fuzzycmp.py:570 class SoundexMetric: role is not clear from its declaration
+fuzzycmp.py:575 class NYSIISMetric: role is not clear from its declaration
+fuzzycmp.py:580 class MetaphoneMetric: role is not clear from its declaration
+fuzzycmp.py:593 class MinHash: role is not clear from its declaration
+fuzzycmp.py:623 signature: no conservative summary from its name
+fuzzycmp.py:633 similarity: no conservative summary from its name
+fuzzycmp.py:642 class SimHash: role is not clear from its declaration
+fuzzycmp.py:655 fingerprint: no conservative summary from its name
+fuzzycmp.py:672 similarity: no conservative summary from its name
+fuzzycmp.py:682 class TokenSort: role is not clear from its declaration
+fuzzycmp.py:693 similarity: no conservative summary from its name
+fuzzycmp.py:701 class TokenSet: role is not clear from its declaration
+fuzzycmp.py:712 similarity: no conservative summary from its name
+fuzzycmp.py:729 class PartialRatio: role is not clear from its declaration
+fuzzycmp.py:735 similarity: no conservative summary from its name
+fuzzycmp.py:772 class FuzzyComparator: role is not clear from its declaration
+fuzzycmp.py:78 ngrams: no conservative summary from its name
+fuzzycmp.py:796 similarity: no conservative summary from its name
+fuzzycmp.py:799 distance: no conservative summary from its name
+fuzzycmp.py:816 best_match: no conservative summary from its name
+fuzzycmp.py:828 matches_above: no conservative summary from its name
+fuzzycmp.py:841 rank: no conservative summary from its name
+fuzzycmp.py:86 class SimilarityMetric: role is not clear from its declaration
+fuzzycmp.py:892 identical: no conservative summary from its name
+fuzzycmp.py:895 report: no conservative summary from its name
+fuzzycmp.py:90 similarity: no conservative summary from its name
+fuzzycmp.py:91 distance: no conservative summary from its name
+fuzzycmp.py:917 align_lines: no conservative summary from its name
+fuzzycmp.py:975 similarity: no conservative summary from its name
+fuzzycmp.py:979 class FileComparator: role is not clear from its declaration
+fuzzycmp.py:999 compare: no conservative summary from its name
+get_sub.py:250 guess_subtitle: no conservative summary from its name
+get_sub.py:306 class P7ZIP: role is not clear from its declaration
+get_sub.py:325 namelist: no conservative summary from its name
+get_sub.py:337 read: no conservative summary from its name
+get_sub.py:353 class Video: role is not clear from its declaration
+get_sub.py:355 sub_exists: no conservative summary from its name
+get_sub.py:380 class Downloader: role is not clear from its declaration
+get_sub.py:426 class ZimukuDownloader: role is not clear from its declaration
+get_sub.py:614 class ZimuzuDownloader: role is not clear from its declaration
+get_sub.py:721 class DownloaderManager: role is not clear from its declaration
+get_sub.py:73 class ProgressBar: role is not clear from its declaration
+get_sub.py:740 class GetSubtitles: role is not clear from its declaration
+get_sub.py:79 refresh: no conservative summary from its name
+get_sub.py:967 start: no conservative summary from its name
+get_sub.py:97 num_to_cn: no conservative summary from its name
+git-prune-merged.py:102 fail: no conservative summary from its name
+git-prune-merged.py:106 class Git: role is not clear from its declaration
+git-prune-merged.py:111 exec: no conservative summary from its name
+git-prune-merged.py:126 run: no conservative summary from its name
+git-prune-merged.py:132 ok: no conservative summary from its name
+git-prune-merged.py:135 text: no conservative summary from its name
+git-prune-merged.py:140 ref_exists: no conservative summary from its name
+git-prune-merged.py:162 worktree_branches: no conservative summary from its name
+git-prune-merged.py:170 list_branches: no conservative summary from its name
+git-prune-merged.py:186 merged_refs: no conservative summary from its name
+git-prune-merged.py:191 matches: no conservative summary from its name
+git-prune-merged.py:195 protect_reason: no conservative summary from its name
+git-prune-merged.py:203 passes: no conservative summary from its name
+git-prune-merged.py:217 squash_merged: no conservative summary from its name
+git-prune-merged.py:224 scan: no conservative summary from its name
+git-prune-merged.py:253 age: no conservative summary from its name
+git-prune-merged.py:264 status: no conservative summary from its name
+git-prune-merged.py:269 clip: no conservative summary from its name
+git-prune-merged.py:273 render: no conservative summary from its name
+git-prune-merged.py:280 line: no conservative summary from its name
+git-prune-merged.py:291 command: no conservative summary from its name
+git-prune-merged.py:304 remove: no conservative summary from its name
+git-prune-merged.py:314 pick: no conservative summary from its name
+git-prune-merged.py:332 choose: no conservative summary from its name
+git-prune-merged.py:345 execute: no conservative summary from its name
+git-prune-merged.py:378 run: no conservative summary from its name
+git-prune-merged.py:88 paint: no conservative summary from its name
+git-prune-merged.py:96 say: no conservative summary from its name
+git-prune-merged.py:99 warn: no conservative summary from its name
+git_trim.py:1120 cmd_demo: no conservative summary from its name
+git_trim.py:1127 banner: no conservative summary from its name
+git_trim.py:1130 note: no conservative summary from its name
+git_trim.py:139 details_of: no conservative summary from its name
+git_trim.py:215 upstream_gone: no conservative summary from its name
+git_trim.py:219 age_days: no conservative summary from its name
+git_trim.py:223 last_commit_iso: no conservative summary from its name
+git_trim.py:247 list_branches: no conservative summary from its name
+git_trim.py:251 current_branch: no conservative summary from its name
+git_trim.py:268 git_dir: no conservative summary from its name
+git_trim.py:280 ref_exists: no conservative summary from its name
+git_trim.py:284 rev_sha: no conservative summary from its name
+git_trim.py:288 merge_base: no conservative summary from its name
+git_trim.py:351 mainline_ids: no conservative summary from its name
+git_trim.py:358 branch_ids: no conservative summary from its name
+git_trim.py:364 combined_id: no conservative summary from its name
+git_trim.py:478 candidates: no conservative summary from its name
+git_trim.py:482 analyze: no conservative summary from its name
+git_trim.py:500 trim_log_path: no conservative summary from its name
+git_trim.py:570 humanize_age: no conservative summary from its name
+git_trim.py:585 why_text: no conservative summary from its name
+git_trim.py:611 fmt: no conservative summary from its name
+git_trim.py:643 summary_line: no conservative summary from its name
+git_trim.py:654 branch_json: no conservative summary from its name
+git_trim.py:725 common: no conservative summary from its name
+git_trim.py:827 cmd_scan: no conservative summary from its name
+git_trim.py:922 cmd_delete: no conservative summary from its name
+git_trim.py:934 cmd_prune_remote: no conservative summary from its name
+git_trim.py:965 cmd_undo: no conservative summary from its name
+glow.py:1078 segments_to_ansi: no conservative summary from its name
+glow.py:1103 class BuiltinRenderer: role is not clear from its declaration
+glow.py:1117 render: no conservative summary from its name
+glow.py:1246 cell_text: no conservative summary from its name
+glow.py:1249 cell_ansi: no conservative summary from its name
+glow.py:1265 border: no conservative summary from its name
+glow.py:1269 pad: no conservative summary from its name
+glow.py:1278 row_line: no conservative summary from its name
+glow.py:1322 safe_href: no conservative summary from its name
+glow.py:1339 inline_to_html: no conservative summary from its name
+glow.py:1376 blocks_to_html: no conservative summary from its name
+glow.py:1419 th: no conservative summary from its name
+glow.py:1423 td: no conservative summary from its name
+glow.py:1440 markdown_to_html_builtin: no conservative summary from its name
+glow.py:1467 markdown_to_html: no conservative summary from its name
+glow.py:1585 html_to_markdown_markdownify: no conservative summary from its name
+glow.py:1606 html_to_markdown_bs4: no conservative summary from its name
+glow.py:1611 collapse: no conservative summary from its name
+glow.py:1614 inline: no conservative summary from its name
+glow.py:1617 text_of: no conservative summary from its name
+glow.py:1620 block: no conservative summary from its name
+glow.py:1657 convert: no conservative summary from its name
+glow.py:169 class UsageError: role is not clear from its declaration
+glow.py:1712 html_to_markdown_plain: no conservative summary from its name
+glow.py:173 class InputError: role is not clear from its declaration
+glow.py:177 class DependencyError: role is not clear from its declaration
+glow.py:1791 normalise_markdown: no conservative summary from its name
+glow.py:1800 html_to_markdown: no conservative summary from its name
+glow.py:181 class ConversionError: role is not clear from its declaration
+glow.py:1828 preprocess_for_rich: no conservative summary from its name
+glow.py:1899 separator_line: no conservative summary from its name
+glow.py:1919 expand_sources: no conservative summary from its name
+glow.py:1925 add: no conservative summary from its name
+glow.py:2064 html_body_fragment: no conservative summary from its name
+glow.py:2078 standalone_html: no conservative summary from its name
+glow.py:210 writes_to_file: no conservative summary from its name
+glow.py:214 log_colorize: no conservative summary from its name
+glow.py:2154 class Pager: role is not clear from its declaration
+glow.py:2175 run: no conservative summary from its name
+glow.py:2417 class GlowArgumentParser: role is not clear from its declaration
+glow.py:2418 error: no conservative summary from its name
+glow.py:250 module_version: no conservative summary from its name
+glow.py:2612 run: no conservative summary from its name
+glow.py:266 char_width: no conservative summary from its name
+glow.py:276 visible_len: no conservative summary from its name
+glow.py:280 truncate_ansi: no conservative summary from its name
+glow.py:303 pad_ansi: no conservative summary from its name
+glow.py:313 ansi: no conservative summary from its name
+glow.py:397 clamp_width: no conservative summary from its name
+glow.py:401 bootstrap_logging: no conservative summary from its name
+glow.py:476 class SoftBreak: role is not clear from its declaration
+glow.py:481 class HardBreak: role is not clear from its declaration
+glow.py:600 normalise_label: no conservative summary from its name
+glow.py:974 inline_to_lines: no conservative summary from its name
+hasdoc.py:90 first_stmt_docstring: no conservative summary from its name
+html-minify.py:14 class FileResult: role is not clear from its declaration
+html-minify.py:22 minify_file: no conservative summary from its name
+infer.py:116 class AnnotateTransformer: role is not clear from its declaration
+infer.py:138 leave_FunctionDef: no conservative summary from its name
+infer.py:49 visit_FunctionDef: no conservative summary from its name
+infer.py:52 visit_ClassDef: no conservative summary from its name
+infer.py:55 visit_Lambda: no conservative summary from its name
+infer.py:58 visit_Yield: no conservative summary from its name
+infer.py:61 visit_Return: no conservative summary from its name
+json2md.py:164 cell: no conservative summary from its name
+json_merger.py:104 dedup_value: no conservative summary from its name
+json_merger.py:127 expand_inputs: no conservative summary from its name
+json_merger.py:153 new_output_path: no conservative summary from its name
+json_merger.py:16 schema_of: no conservative summary from its name
+json_merger.py:39 reject_nonstandard_constant: no conservative summary from its name
+json_merger.py:62 merge_values: no conservative summary from its name
+mhtml.py:1288 replace: no conservative summary from its name
+mhtml.py:808 redirect_request: no conservative summary from its name
+mhtml_to_html.py:1197 class CssToken: role is not clear from its declaration
+mhtml_to_html.py:1530 class CssNode: role is not clear from its declaration
+mhtml_to_html.py:1534 class CssTok: role is not clear from its declaration
+mhtml_to_html.py:1542 class CssStr: role is not clear from its declaration
+mhtml_to_html.py:1549 class CssUrl: role is not clear from its declaration
+mhtml_to_html.py:1556 class CssFunc: role is not clear from its declaration
+mhtml_to_html.py:1564 class CssParen: role is not clear from its declaration
+mhtml_to_html.py:1571 class CssBracket: role is not clear from its declaration
+mhtml_to_html.py:1596 class CssRaw: role is not clear from its declaration
+mhtml_to_html.py:1603 class CssDecl: role is not clear from its declaration
+mhtml_to_html.py:1612 class CssAtrule: role is not clear from its declaration
+mhtml_to_html.py:1621 class CssRule: role is not clear from its declaration
+mhtml_to_html.py:1650 skip_ws: no conservative summary from its name
+mhtml_to_html.py:1655 text: no conservative summary from its name
+mhtml_to_html.py:2193 token: no conservative summary from its name
+mhtml_to_html.py:2210 ws: no conservative summary from its name
+mhtml_to_html.py:2213 result: no conservative summary from its name
+mhtml_to_html.py:2420 document_element: no conservative summary from its name
+mhtml_to_html.py:2427 doctype: no conservative summary from its name
+mhtml_to_html.py:2434 head: no conservative summary from its name
+mhtml_to_html.py:2454 serialize: no conservative summary from its name
+mhtml_to_html.py:2489 serialize_html_node: no conservative summary from its name
+mhtml_to_html.py:2579 element_get_attribute: no conservative summary from its name
+mhtml_to_html.py:2592 element_get_attribute_names: no conservative summary from its name
+mhtml_to_html.py:2597 element_set_attribute: no conservative summary from its name
+mhtml_to_html.py:2601 element_remove_attribute: no conservative summary from its name
+mhtml_to_html.py:2613 element_append_child: no conservative summary from its name
+mhtml_to_html.py:2618 element_remove: no conservative summary from its name
+mhtml_to_html.py:2628 element_replace_with: no conservative summary from its name
+mhtml_to_html.py:2642 element_prepend: no conservative summary from its name
+mhtml_to_html.py:2648 element_after: no conservative summary from its name
+mhtml_to_html.py:2718 to_dict: no conservative summary from its name
+mhtml_to_html.py:2965 truncate_data: no conservative summary from its name
+mhtml_to_html.py:2980 truncate_data_line_terminator: no conservative summary from its name
+mhtml_to_html.py:2988 flatten_data: no conservative summary from its name
+mhtml_to_html.py:3229 release_resource_dom: no conservative summary from its name
+mhtml_to_html.py:3343 visit: no conservative summary from its name
+mhtml_to_html.py:3349 found: no conservative summary from its name
+mhtml_to_html.py:3365 not_found: no conservative summary from its name
+mhtml_to_html.py:3388 descend: no conservative summary from its name
+mhtml_to_html.py:3399 found: no conservative summary from its name
+mhtml_to_html.py:3409 not_found: no conservative summary from its name
+mhtml_to_html.py:3581 descend: no conservative summary from its name
+mhtml_to_html.py:3600 found: no conservative summary from its name
+mhtml_to_html.py:3623 not_found: no conservative summary from its name
+mhtml_to_html.py:3643 found_icon: no conservative summary from its name
+mhtml_to_html.py:3656 not_found_icon: no conservative summary from its name
+mhtml_to_html.py:3708 found_src: no conservative summary from its name
+mhtml_to_html.py:3717 not_found_src: no conservative summary from its name
+mhtml_to_html.py:3739 found_srcset: no conservative summary from its name
+mhtml_to_html.py:3744 not_found_srcset: no conservative summary from its name
+mhtml_to_html.py:3772 found_background: no conservative summary from its name
+mhtml_to_html.py:3781 not_found_background: no conservative summary from its name
+mhtml_to_html.py:3800 found_input: no conservative summary from its name
+mhtml_to_html.py:3809 not_found_input: no conservative summary from its name
+mhtml_to_html.py:3873 found_frame: no conservative summary from its name
+mhtml_to_html.py:3882 not_found_frame: no conservative summary from its name
+mhtml_to_html.py:390 replace_charset: no conservative summary from its name
+mhtml_to_html.py:4044 redirect_request: no conservative summary from its name
+mhtml_to_html.py:4186 work: no conservative summary from its name
+mhtml_to_html.py:4333 add: no conservative summary from its name
+mhtml_to_html.py:500 flush: no conservative summary from its name
+mhtml_to_html.py:931 tokenize: no conservative summary from its name
+mhtml_to_html.py:995 serialize_srcset: no conservative summary from its name
+mmdc.py:1228 transformed_size: no conservative summary from its name
+mmdc.py:1489 X: no conservative summary from its name
+mmdc.py:1492 Y: no conservative summary from its name
+mmdc.py:1823 font_for: no conservative summary from its name
+mmdc.py:1829 pt: no conservative summary from its name
+mmdc.py:1832 fade: no conservative summary from its name
+mmdc.py:1838 draw_prim: no conservative summary from its name
+mmdc.py:1844 fill_c: no conservative summary from its name
+mmdc.py:1847 stroke_c: no conservative summary from its name
+mmdc.py:2643 positions: no conservative summary from its name
+mmdc.py:2665 key: no conservative summary from its name
+mmdc.py:2673 key: no conservative summary from its name
+mmdc.py:2755 box_of: no conservative summary from its name
+mmdc.py:2937 depth_of: no conservative summary from its name
+mmdc.py:3160 cur: no conservative summary from its name
+mmdc.py:3737 edge_x: no conservative summary from its name
+mmdc.py:4339 perp: no conservative summary from its name
+mmdc.py:4527 ensure: no conservative summary from its name
+mmdc.py:4668 depth_of: no conservative summary from its name
+mmdc.py:5198 repl: no conservative summary from its name
+mmdc.py:5221 limiter: no conservative summary from its name
+mmdc.py:5290 error: no conservative summary from its name
+mmdc.py:935 rect: no conservative summary from its name
+monolith.py:582 no_css: no conservative summary from its name
+monolith.py:586 no_images: no conservative summary from its name
+monolith.py:590 no_js: no conservative summary from its name
+monolith.py:594 no_frames: no conservative summary from its name
+monolith.py:598 no_links: no conservative summary from its name
+monolith.py:602 no_metadata: no conservative summary from its name
+monolith.py:606 no_audio: no conservative summary from its name
+monolith.py:610 no_video: no conservative summary from its name
+monolith.py:614 no_fonts: no conservative summary from its name
+monolith.py:618 timeout: no conservative summary from its name
+monolith.py:622 user_agent: no conservative summary from its name
+monolith.py:626 base_url: no conservative summary from its name
+monolith.py:630 isolate: no conservative summary from its name
+monolith.py:634 encoding: no conservative summary from its name
+monolith.py:638 ignore_network_errors: no conservative summary from its name
+monolith.py:642 insecure: no conservative summary from its name
+monolith.py:801 import_repl: no conservative summary from its name
+monolith.py:820 url_repl: no conservative summary from its name
+pipdown.py:101 filename: no conservative summary from its name
+pipdown.py:117 file_path: no conservative summary from its name
+pipdown.py:133 parsed_version: no conservative summary from its name
+pipdown.py:136 as_dict: no conservative summary from its name
+pipdown.py:156 supported_tags: no conservative summary from its name
+pipdown.py:161 version_str: no conservative summary from its name
+pipdown.py:179 class HTMLIndexParser: role is not clear from its declaration
+pipdown.py:245 python_matches: no conservative summary from its name
+pipdown.py:253 tag_priority: no conservative summary from its name
+pipdown.py:308 source_rank: no conservative summary from its name
+pipdown.py:321 class Finder: role is not clear from its declaration
+pipdown.py:340 client: no conservative summary from its name
+pipdown.py:348 close: no conservative summary from its name
+pipdown.py:359 find: no conservative summary from its name
+pipdown.py:426 pick_hash: no conservative summary from its name
+pipdown.py:433 file_hash: no conservative summary from its name
+pipdown.py:480 remote_size: no conservative summary from its name
+pipdown.py:490 supports_ranges: no conservative summary from its name
+pipdown.py:612 download: no conservative summary from its name
+pipdown.py:97 parsed: no conservative summary from its name
+pycleaner.py:40 bold: no conservative summary from its name
+pycleaner.py:44 cyan: no conservative summary from its name
+pycleaner.py:48 yellow: no conservative summary from its name
+pycleaner.py:52 red: no conservative summary from its name
+pycleaner.py:56 green: no conservative summary from its name
+pycleaner.py:598 visit_FunctionDef: no conservative summary from its name
+pycleaner.py:60 dim: no conservative summary from its name
+pycleaner.py:603 visit_ClassDef: no conservative summary from its name
+pycleaner.py:606 visit_Assign: no conservative summary from its name
+pycleaner.py:612 visit_AnnAssign: no conservative summary from its name
+pycleaner.py:622 visit_Name: no conservative summary from its name
+pycleaner.py:626 visit_Attribute: no conservative summary from its name
+pycleaner.py:703 visit_Module: no conservative summary from its name
+pycleaner.py:707 visit_ClassDef: no conservative summary from its name
+pydocgen.py:415 unique_path: no conservative summary from its name
+pydocgen.py:433 module_display_name: no conservative summary from its name
+pydocgen.py:446 markdown_parts: no conservative summary from its name
+pydocgen.py:476 expand_files: no conservative summary from its name
+pydocgen.py:491 classify_targets: no conservative summary from its name
+pydup.py:1895 path_key: no conservative summary from its name
+pydup.py:1899 variants: no conservative summary from its name
+pydup.py:2330 emit: no conservative summary from its name
+pydup.py:283 class SourceNormalizer: role is not clear from its declaration
+pydup.py:2848 schedule: no conservative summary from its name
+pydup.py:2857 on_any_event: no conservative summary from its name
+pydup.py:303 visit_Module: no conservative summary from its name
+pydup.py:310 visit_FunctionDef: no conservative summary from its name
+pydup.py:320 visit_AsyncFunctionDef: no conservative summary from its name
+pydup.py:330 visit_ClassDef: no conservative summary from its name
+pydup.py:336 visit_arg: no conservative summary from its name
+pydup.py:343 visit_Assign: no conservative summary from its name
+pydup.py:349 visit_AnnAssign: no conservative summary from its name
+pydup.py:363 visit_For: no conservative summary from its name
+pydup.py:369 visit_AsyncFor: no conservative summary from its name
+pydup.py:375 visit_With: no conservative summary from its name
+pydup.py:381 visit_AsyncWith: no conservative summary from its name
+pydup.py:387 visit_TypeAlias: no conservative summary from its name
+pydup.py:440 matches: no conservative summary from its name
+pydup.py:467 matches: no conservative summary from its name
+pydup.py:521 ignored: no conservative summary from its name
+pydup.py:692 significant_tokens: no conservative summary from its name
+pyocr.py:1124 raw_init: no conservative summary from its name
+pyocr.py:1143 raw_cleanup: no conservative summary from its name
+pyocr.py:1148 raw_is_available: no conservative summary from its name
+pyocr.py:1152 raw_get_version: no conservative summary from its name
+pyocr.py:1157 raw_get_available_languages: no conservative summary from its name
+pyocr.py:1168 raw_set_is_numeric: no conservative summary from its name
+pyocr.py:1174 raw_set_debug_file: no conservative summary from its name
+pyocr.py:1181 raw_set_page_seg_mode: no conservative summary from its name
+pyocr.py:1186 raw_init_for_analyse_page: no conservative summary from its name
+pyocr.py:1191 raw_set_image: no conservative summary from its name
+pyocr.py:1208 raw_recognize: no conservative summary from its name
+pyocr.py:1213 raw_analyse_layout: no conservative summary from its name
+pyocr.py:1218 raw_get_utf8_text: no conservative summary from its name
+pyocr.py:1226 raw_page_iterator_delete: no conservative summary from its name
+pyocr.py:1231 raw_page_iterator_next: no conservative summary from its name
+pyocr.py:1236 raw_page_iterator_is_at_beginning_of: no conservative summary from its name
+pyocr.py:1241 raw_page_iterator_is_at_final_element: no conservative summary from its name
+pyocr.py:1246 raw_page_iterator_block_type: no conservative summary from its name
+pyocr.py:1251 raw_page_iterator_bounding_box: no conservative summary from its name
+pyocr.py:1270 raw_page_iterator_orientation: no conservative summary from its name
+pyocr.py:1291 raw_get_iterator: no conservative summary from its name
+pyocr.py:1296 raw_result_iterator_get_page_iterator: no conservative summary from its name
+pyocr.py:1301 raw_result_iterator_get_utf8_text: no conservative summary from its name
+pyocr.py:1311 raw_result_iterator_get_confidence: no conservative summary from its name
+pyocr.py:1319 raw_detect_os: no conservative summary from its name
+pyocr.py:1353 raw_set_input_name: no conservative summary from its name
+pyocr.py:1358 raw_init_pdf_renderer: no conservative summary from its name
+pyocr.py:1364 raw_begin_document: no conservative summary from its name
+pyocr.py:1369 raw_add_renderer_image: no conservative summary from its name
+pyocr.py:1374 raw_end_document: no conservative summary from its name
+pyocr.py:1379 libtess_can_detect_orientation: no conservative summary from its name
+pyocr.py:1383 libtess_detect_orientation: no conservative summary from its name
+pyocr.py:139 class LineBox: role is not clear from its declaration
+pyocr.py:1403 libtess_get_name: no conservative summary from its name
+pyocr.py:1407 libtess_get_available_builders: no conservative summary from its name
+pyocr.py:1421 libtess_image_to_string: no conservative summary from its name
+pyocr.py:145 content: no conservative summary from its name
+pyocr.py:1465 libtess_image_to_pdf: no conservative summary from its name
+pyocr.py:1471 class LibtesseractPdfBuilder: role is not clear from its declaration
+pyocr.py:1502 build: no conservative summary from its name
+pyocr.py:1522 libtess_is_available: no conservative summary from its name
+pyocr.py:1532 libtess_get_available_languages: no conservative summary from its name
+pyocr.py:1540 libtess_get_version: no conservative summary from its name
+pyocr.py:1561 cun_can_detect_orientation: no conservative summary from its name
+pyocr.py:1565 cun_get_name: no conservative summary from its name
+pyocr.py:1569 cun_get_available_builders: no conservative summary from its name
+pyocr.py:1577 cun_image_to_string: no conservative summary from its name
+pyocr.py:1605 cun_is_available: no conservative summary from its name
+pyocr.py:1609 cun_get_available_languages: no conservative summary from its name
+pyocr.py:1625 cun_get_version: no conservative summary from its name
+pyocr.py:239 class BaseBuilder: role is not clear from its declaration
+pyocr.py:254 start_line: no conservative summary from its name
+pyocr.py:262 end_line: no conservative summary from its name
+pyocr.py:271 class TextBuilder: role is not clear from its declaration
+pyocr.py:301 start_line: no conservative summary from its name
+pyocr.py:309 end_line: no conservative summary from its name
+pyocr.py:319 class DigitBuilder: role is not clear from its declaration
+pyocr.py:40 class TesseractError: role is not clear from its declaration
+pyocr.py:48 class CuneiformError: role is not clear from its declaration
+pyocr.py:483 class WordBoxBuilder: role is not clear from its declaration
+pyocr.py:511 start_line: no conservative summary from its name
+pyocr.py:517 end_line: no conservative summary from its name
+pyocr.py:527 class LineBoxBuilder: role is not clear from its declaration
+pyocr.py:56 digits_only: no conservative summary from its name
+pyocr.py:561 start_line: no conservative summary from its name
+pyocr.py:569 end_line: no conservative summary from its name
+pyocr.py:579 class DigitLineBoxBuilder: role is not clear from its declaration
+pyocr.py:588 class CharBoxBuilder: role is not clear from its declaration
+pyocr.py:63 class Box: role is not clear from its declaration
+pyocr.py:655 psm_parameter: no conservative summary from its name
+pyocr.py:666 tess_can_detect_orientation: no conservative summary from its name
+pyocr.py:672 tess_detect_orientation: no conservative summary from its name
+pyocr.py:716 tess_get_name: no conservative summary from its name
+pyocr.py:720 tess_get_available_builders: no conservative summary from its name
+pyocr.py:731 tess_run_tesseract: no conservative summary from its name
+pyocr.py:754 tess_cleanup: no conservative summary from its name
+pyocr.py:759 class ReOpenableTempfile: role is not clear from its declaration
+pyocr.py:771 close: no conservative summary from its name
+pyocr.py:777 tess_image_to_string: no conservative summary from its name
+pyocr.py:811 tess_is_available: no conservative summary from its name
+pyocr.py:816 tess_get_available_languages: no conservative summary from its name
+pyocr.py:833 tess_get_version: no conservative summary from its name
+pyocr.py:918 class PageSegMode: role is not clear from its declaration
+pyocr.py:936 class Orientation: role is not clear from its declaration
+pyocr.py:943 class PageIteratorLevel: role is not clear from its declaration
+pyocr.py:951 class PolyBlockType: role is not clear from its declaration
+pyocr.py:968 class OSResults: role is not clear from its declaration
+pyproj.py:220 run: no conservative summary from its name
+pyproj.py:226 git_quiet: no conservative summary from its name
+pyproj.py:236 github_request: no conservative summary from its name
+pyproj.py:842 scaffold_project: no conservative summary from its name
+pyproj.py:872 git_init_and_push: no conservative summary from its name
+pyproj.py:897 scrub_remote_token: no conservative summary from its name
+pyproj.py:923 replace_content: no conservative summary from its name
+pyproj.py:944 do_rename: no conservative summary from its name
+pyproj.py:991 prompt_missing: no conservative summary from its name
+reformat_python.py:1029 bind: no conservative summary from its name
+reformat_python.py:1032 knows: no conservative summary from its name
+reformat_python.py:1112 run: no conservative summary from its name
+remove_pages_of_pdf.py:44 remove: no conservative summary from its name
+remove_pages_of_pdf.py:65 remove: no conservative summary from its name
+remove_pages_of_pdf.py:81 remove: no conservative summary from its name
+rlater.py:1025 repl: no conservative summary from its name
+rlater.py:1033 wrap: no conservative summary from its name
+rlater.py:109 color_enabled: no conservative summary from its name
+rlater.py:113 terminal_width: no conservative summary from its name
+rlater.py:1165 dedupe_ints: no conservative summary from its name
+rlater.py:1212 work: no conservative summary from its name
+rlater.py:1252 cmd_add: no conservative summary from its name
+rlater.py:1278 cmd_import: no conservative summary from its name
+rlater.py:1293 cmd_list: no conservative summary from its name
+rlater.py:1364 do_read: no conservative summary from its name
+rlater.py:1387 cmd_read: no conservative summary from its name
+rlater.py:1400 cmd_search: no conservative summary from its name
+rlater.py:1422 cmd_flag: no conservative summary from its name
+rlater.py:1423 run: no conservative summary from its name
+rlater.py:1435 cmd_tag: no conservative summary from its name
+rlater.py:1447 cmd_tags: no conservative summary from its name
+rlater.py:1453 cmd_rm: no conservative summary from its name
+rlater.py:1470 cmd_refetch: no conservative summary from its name
+rlater.py:1482 cmd_open: no conservative summary from its name
+rlater.py:1490 slugify: no conservative summary from its name
+rlater.py:1494 front_matter: no conservative summary from its name
+rlater.py:1502 cmd_export: no conservative summary from its name
+rlater.py:1532 cmd_backup: no conservative summary from its name
+rlater.py:1545 cmd_stats: no conservative summary from its name
+rlater.py:1587 command: no conservative summary from its name
+rlater.py:197 dedupe: no conservative summary from its name
+rlater.py:256 fetch: no conservative summary from its name
+rlater.py:311 attr: no conservative summary from its name
+rlater.py:315 class TreeBuilder: role is not clear from its declaration
+rlater.py:352 text_of: no conservative summary from its name
+rlater.py:355 walk: no conservative summary from its name
+rlater.py:370 walk: no conservative summary from its name
+rlater.py:407 class_tokens: no conservative summary from its name
+rlater.py:425 prune: no conservative summary from its name
+rlater.py:452 link_density: no conservative summary from its name
+rlater.py:457 direct_text_len: no conservative summary from its name
+rlater.py:466 initial: no conservative summary from its name
+rlater.py:534 flush: no conservative summary from its name
+rlater.py:547 flat_text: no conservative summary from its name
+rlater.py:553 markdown: no conservative summary from its name
+rlater.py:566 walk: no conservative summary from its name
+rlater.py:573 element: no conservative summary from its name
+rlater.py:635 link: no conservative summary from its name
+rlater.py:648 table_row: no conservative summary from its name
+rlater.py:68 now_iso: no conservative summary from its name
+rlater.py:698 first_meta: no conservative summary from its name
+rlater.py:702 extract: no conservative summary from its name
+rlater.py:72 die: no conservative summary from its name
+rlater.py:77 warn: no conservative summary from its name
+rlater.py:783 reading_minutes: no conservative summary from its name
+rlater.py:81 truncate: no conservative summary from its name
+rlater.py:89 default_db_path: no conservative summary from its name
+rlater.py:896 close: no conservative summary from its name
+rlater.py:900 find: no conservative summary from its name
+rlater.py:905 get: no conservative summary from its name
+rlater.py:916 tags_of: no conservative summary from its name
+rlater.py:920 all_tags: no conservative summary from its name
+rlater.py:924 pick: no conservative summary from its name
+rlater.py:932 save: no conservative summary from its name
+rlater.py:973 mark_read: no conservative summary from its name
+rlater.py:976 delete: no conservative summary from its name
+rlater.py:981 search: no conservative summary from its name
+rmc.py:114 write: no conservative summary from its name
+rmc.py:119 class Summary: role is not clear from its declaration
+rmc.py:152 class Stripper: role is not clear from its declaration
+rmc.py:161 on_leave: no conservative summary from its name
+rmc.py:230 leave_TrailingWhitespace: no conservative summary from its name
+rmc.py:247 leave_Param: no conservative summary from its name
+rmc.py:255 leave_FunctionDef: no conservative summary from its name
+rmc.py:263 visit_FunctionDef: no conservative summary from its name
+rmc.py:267 visit_ClassDef: no conservative summary from its name
+rmc.py:340 leave_IndentedBlock: no conservative summary from its name
+rmc.py:352 leave_SimpleStatementSuite: no conservative summary from its name
+rmc.py:363 leave_Module: no conservative summary from its name
+rmc.py:568 discover: no conservative summary from its name
+rmc.py:57 class Mode: role is not clear from its declaration
+rmc.py:601 summarize: no conservative summary from its name
+rmc.py:617 log_results: no conservative summary from its name
+rmc.py:64 class Counts: role is not clear from its declaration
+rmc.py:699 exit_code: no conservative summary from its name
+rmc.py:71 class FileResult: role is not clear from its declaration
+rmc.py:82 bytes_saved: no conservative summary from its name
+rmc.py:87 class Job: role is not clear from its declaration
+rmc.py:97 class Options: role is not clear from its declaration
+rmc2.py:112 leave_TrailingWhitespace: no conservative summary from its name
+rmc2.py:125 leave_EmptyLine: no conservative summary from its name
+rmc2.py:135 leave_Module: no conservative summary from its name
+rmc2.py:147 leave_ClassDef: no conservative summary from its name
+rmc2.py:159 leave_FunctionDef: no conservative summary from its name
+rmc2.py:472 report: no conservative summary from its name
+rmcfull.py:170 strip: no conservative summary from its name
+rmcfull.py:359 leave_EmptyLine: no conservative summary from its name
+rmcfull.py:366 leave_TrailingWhitespace: no conservative summary from its name
+rmcfull.py:418 leave_Module: no conservative summary from its name
+rmcfull.py:446 leave_FunctionDef: no conservative summary from its name
+rmcfull.py:450 leave_ClassDef: no conservative summary from its name
+rmcfull.py:467 strip: no conservative summary from its name
+rmcfull.py:534 class WalkFiles: role is not clear from its declaration
+rmcfull.py:724 colorize_diff: no conservative summary from its name
+rmcfull.py:848 rich_log: no conservative summary from its name
+rmcfull.py:901 green: no conservative summary from its name
+scraper.py:100 fmt_bytes: no conservative summary from its name
+scraper.py:1037 allowed: no conservative summary from its name
+scraper.py:1045 same_domain: no conservative summary from its name
+scraper.py:1106 cmd_link_crawl: no conservative summary from its name
+scraper.py:1166 cmd_video_info: no conservative summary from its name
+scraper.py:1185 cmd_google_search: no conservative summary from its name
+scraper.py:1228 cmd_web_size: no conservative summary from its name
+scraper.py:143 cmd_pkg_updates: no conservative summary from its name
+scraper.py:213 cmd_import_check: no conservative summary from its name
+scraper.py:39 cprint: no conservative summary from its name
+scraper.py:390 cmd_coc_links: no conservative summary from its name
+scraper.py:488 cmd_coc_youtube: no conservative summary from its name
+scraper.py:603 crawl: no conservative summary from its name
+scraper.py:61 http_get: no conservative summary from its name
+scraper.py:658 extract: no conservative summary from its name
+scraper.py:801 append: no conservative summary from its name
+scraper.py:844 cmd_movie_crawl: no conservative summary from its name
+scraper.py:96 same_site: no conservative summary from its name
+scraper.py:976 cmd_image_hunt: no conservative summary from its name
+scraper.py:992 cmd_image_save: no conservative summary from its name
+shorten_names.py:225 visit_Name: no conservative summary from its name
+shorten_names.py:230 collect: no conservative summary from its name
+shorten_names.py:271 visit_FunctionDef: no conservative summary from its name
+shorten_names.py:275 leave_FunctionDef: no conservative summary from its name
+shorten_names.py:278 visit_ClassDef: no conservative summary from its name
+shorten_names.py:282 leave_ClassDef: no conservative summary from its name
+shorten_names.py:285 visit_Import: no conservative summary from its name
+shorten_names.py:289 leave_Import: no conservative summary from its name
+shorten_names.py:292 visit_ImportFrom: no conservative summary from its name
+shorten_names.py:296 leave_ImportFrom: no conservative summary from its name
+shorten_names.py:299 visit_Name: no conservative summary from its name
+shorten_names.py:310 visit_Assign: no conservative summary from its name
+shorten_names.py:329 visit_AnnAssign: no conservative summary from its name
+shorten_names.py:343 visit_AugAssign: no conservative summary from its name
+shorten_names.py:357 visit_Del: no conservative summary from its name
+shorten_names.py:362 visit_Call: no conservative summary from its name
+shorten_names.py:428 visit_Import: no conservative summary from its name
+shorten_names.py:460 leave_Import: no conservative summary from its name
+shorten_names.py:463 visit_ImportFrom: no conservative summary from its name
+shorten_names.py:515 leave_ImportFrom: no conservative summary from its name
+shorten_names.py:520 visit_Attribute: no conservative summary from its name
+shorten_names.py:525 visit_MatchClass: no conservative summary from its name
+shorten_names.py:532 visit_Arg: no conservative summary from its name
+shorten_names.py:537 visit_Call: no conservative summary from its name
+shorten_names.py:542 visit_Annotation: no conservative summary from its name
+shorten_names.py:548 visit_FunctionDef: no conservative summary from its name
+shorten_names.py:552 visit_ClassDef: no conservative summary from its name
+shorten_names.py:556 visit_TypeAlias: no conservative summary from its name
+shorten_names.py:573 visit_Name: no conservative summary from its name
+shorten_names.py:738 finalize_module: no conservative summary from its name
+shorten_names.py:800 visit_Import: no conservative summary from its name
+shorten_names.py:804 leave_Import: no conservative summary from its name
+shorten_names.py:808 visit_ImportFrom: no conservative summary from its name
+shorten_names.py:812 leave_ImportFrom: no conservative summary from its name
+shorten_names.py:829 leave_Name: no conservative summary from its name
+shorten_names.py:884 leave_Global: no conservative summary from its name
+shorten_names.py:887 leave_Nonlocal: no conservative summary from its name
+similarity_check.py:1065 frame: no conservative summary from its name
+similarity_check.py:134 normalise_stem: no conservative summary from its name
+similarity_check.py:222 extract: no conservative summary from its name
+similarity_check.py:250 add: no conservative summary from its name
+similarity_check.py:376 cosine_pairs: no conservative summary from its name
+similarity_check.py:405 name_candidates: no conservative summary from its name
+similarity_check.py:429 name_similarity: no conservative summary from its name
+similarity_check.py:447 containment: no conservative summary from its name
+similarity_check.py:454 approx_containment_pairs: no conservative summary from its name
+similarity_check.py:476 final_score: no conservative summary from its name
+similarity_check.py:488 cluster: no conservative summary from its name
+similarity_check.py:657 comp_avg: no conservative summary from its name
+similarity_check.py:948 rect: no conservative summary from its name
+similarity_check.py:953 text: no conservative summary from its name
+similarity_check.py:960 score_color: no conservative summary from its name
+similarity_check.py:978 squarify: no conservative summary from its name
+sonic.py:1236 class FileAnalyzer: role is not clear from its declaration
+sonic.py:1241 analyze_file: no conservative summary from its name
+sonic.py:129 class SortKeyFactory: role is not clear from its declaration
+sonic.py:212 class LineProcessor: role is not clear from its declaration
+sonic.py:216 log: no conservative summary from its name
+sonic.py:225 class LineReader: role is not clear from its declaration
+sonic.py:278 read: no conservative summary from its name
+sonic.py:285 class LineFilter: role is not clear from its declaration
+sonic.py:30 fsz: no conservative summary from its name
+sonic.py:313 apply: no conservative summary from its name
+sonic.py:339 class LineRangeFilter: role is not clear from its declaration
+sonic.py:345 apply: no conservative summary from its name
+sonic.py:354 class LineSorter: role is not clear from its declaration
+sonic.py:418 merge_sorted_files: no conservative summary from its name
+sonic.py:438 cleanup_temp_files: no conservative summary from its name
+sonic.py:473 coalesce: no conservative summary from its name
+sonic.py:494 class LineDeduplicator: role is not clear from its declaration
+sonic.py:507 unsorted: no conservative summary from its name
+sonic.py:520 class LineTransformer: role is not clear from its declaration
+sonic.py:538 apply: no conservative summary from its name
+sonic.py:553 class LineFormatter: role is not clear from its declaration
+sonic.py:578 serialize: no conservative summary from its name
+sonic.py:613 class OutputWriter: role is not clear from its declaration
+sonic.py:631 write: no conservative summary from its name
+sonic.py:684 class FileSorter: role is not clear from its declaration
+sortplan.py:1030 state_arg: no conservative summary from its name
+sortplan.py:532 visit: no conservative summary from its name
+sortplan.py:996 started: no conservative summary from its name
+sr.py:155 relpath: no conservative summary from its name
+sr.py:162 isbackup: no conservative summary from its name
+sr.py:166 line_matches: no conservative summary from its name
+sr.py:173 matches_glob: no conservative summary from its name
+sr.py:185 highlight_matches: no conservative summary from its name
+sr.py:231 should_process_file: no conservative summary from its name
+sr.py:250 should_enter_dir: no conservative summary from its name
+sr.py:401 replace_file: no conservative summary from its name
+svgo.py:102 js_number_string: no conservative summary from its name
+svgo.py:139 js_parse_float: no conservative summary from its name
+svgo.py:149 js_parse_int: no conservative summary from its name
+svgo.py:2089 stringify_path_data: no conservative summary from its name
+svgo.py:2125 cleanup_out_data: no conservative summary from its name
+svgo.py:2154 path2js: no conservative summary from its name
+svgo.py:2165 js2path: no conservative summary from its name
+svgo.py:2183 a2c: no conservative summary from its name
+svgo.py:2394 to_absolute: no conservative summary from its name
+svgo.py:2591 paths_intersect: no conservative summary from its name
+svgo.py:2597 separated: no conservative summary from its name
+svgo.py:2650 transform2js: no conservative summary from its name
+svgo.py:2733 transforms_multiply: no conservative summary from its name
+svgo.py:28 class SvgoParserError: role is not clear from its declaration
+svgo.py:2836 round_transform: no conservative summary from its name
+svgo.py:2989 matrix_to_transform: no conservative summary from its name
+svgo.py:3011 js2transform: no conservative summary from its name
+svgo.py:3137 class Node: role is not clear from its declaration
+svgo.py:3141 class Document: role is not clear from its declaration
+svgo.py:3151 class Element: role is not clear from its declaration
+svgo.py:3163 class TextNode: role is not clear from its declaration
+svgo.py:3173 class CdataNode: role is not clear from its declaration
+svgo.py:3180 class CommentNode: role is not clear from its declaration
+svgo.py:3187 class DoctypeNode: role is not clear from its declaration
+svgo.py:3194 class InstructionNode: role is not clear from its declaration
+svgo.py:3257 flush_text: no conservative summary from its name
+svgo.py:3272 on_start: no conservative summary from its name
+svgo.py:3282 on_end: no conservative summary from its name
+svgo.py:3323 on_text: no conservative summary from its name
+svgo.py:3328 on_comment: no conservative summary from its name
+svgo.py:3332 on_pi: no conservative summary from its name
+svgo.py:3336 on_cdata_start: no conservative summary from its name
+svgo.py:3342 on_cdata_end: no conservative summary from its name
+svgo.py:3348 on_start_doctype: no conservative summary from its name
+svgo.py:3352 on_end_doctype: no conservative summary from its name
+svgo.py:3356 on_default: no conservative summary from its name
+svgo.py:3444 stringify_svg: no conservative summary from its name
+svgo.py:3574 visit: no conservative summary from its name
+svgo.py:3594 detach_node_from_parent: no conservative summary from its name
+svgo.py:3725 unmatchable: no conservative summary from its name
+svgo.py:3981 matches: no conservative summary from its name
+svgo.py:3990 query_selector_all: no conservative summary from its name
+svgo.py:4025 query_selector: no conservative summary from its name
+svgo.py:4030 includes_attr_selector: no conservative summary from its name
+svgo.py:4209 includes_url_reference: no conservative summary from its name
+svgo.py:4213 includes_css_var_reference: no conservative summary from its name
+svgo.py:4363 enter: no conservative summary from its name
+svgo.py:4372 enter: no conservative summary from its name
+svgo.py:4382 enter: no conservative summary from its name
+svgo.py:4438 enter: no conservative summary from its name
+svgo.py:4462 enter: no conservative summary from its name
+svgo.py:4476 enter: no conservative summary from its name
+svgo.py:4508 enter: no conservative summary from its name
+svgo.py:4529 enter: no conservative summary from its name
+svgo.py:4580 enter: no conservative summary from its name
+svgo.py:4595 exit_root: no conservative summary from its name
+svgo.py:4793 minify_css: no conservative summary from its name
+svgo.py:4831 minify_css_block: no conservative summary from its name
+svgo.py:4856 enter: no conservative summary from its name
+svgo.py:4874 exit_root: no conservative summary from its name
+svgo.py:4957 enter: no conservative summary from its name
+svgo.py:4983 exit_root: no conservative summary from its name
+svgo.py:5029 enter: no conservative summary from its name
+svgo.py:5083 enter: no conservative summary from its name
+svgo.py:5132 enter: no conservative summary from its name
+svgo.py:5197 exit: no conservative summary from its name
+svgo.py:5213 enter: no conservative summary from its name
+svgo.py:5440 round_fn: no conservative summary from its name
+svgo.py:5462 stringify: no conservative summary from its name
+svgo.py:6053 enter: no conservative summary from its name
+svgo.py:6179 attribute_used_in_stylesheet: no conservative summary from its name
+svgo.py:6182 enter: no conservative summary from its name
+svgo.py:6249 enter: no conservative summary from its name
+svgo.py:6272 detect: no conservative summary from its name
+svgo.py:6282 enter: no conservative summary from its name
+svgo.py:6350 detect: no conservative summary from its name
+svgo.py:6357 cleanup_value: no conservative summary from its name
+svgo.py:6363 enter: no conservative summary from its name
+svgo.py:6454 pre_pass: no conservative summary from its name
+svgo.py:6472 enter: no conservative summary from its name
+svgo.py:6567 exit_root: no conservative summary from its name
+svgo.py:6590 enter: no conservative summary from its name
+svgo.py:6611 enter: no conservative summary from its name
+svgo.py:6721 enter: no conservative summary from its name
+svgo.py:6739 detect: no conservative summary from its name
+svgo.py:6746 exit: no conservative summary from its name
+svgo.py:6794 enter: no conservative summary from its name
+svgo.py:6837 exit: no conservative summary from its name
+svgo.py:7016 convert: no conservative summary from its name
+svgo.py:7033 enter: no conservative summary from its name
+svgo.py:7046 enter: no conservative summary from its name
+svgo.py:7061 enter: no conservative summary from its name
+svgo.py:7069 exit: no conservative summary from its name
+svgo.py:7093 exit_root: no conservative summary from its name
+svgo.py:7110 element_has_url: no conservative summary from its name
+svgo.py:7116 enter: no conservative summary from its name
+svgo.py:7200 enter: no conservative summary from its name
+svgo.py:7215 exit: no conservative summary from its name
+svgo.py:7260 compare: no conservative summary from its name
+svgo.py:7279 enter: no conservative summary from its name
+svgo.py:7290 compare: no conservative summary from its name
+svgo.py:7306 enter: no conservative summary from its name
+svgo.py:7324 enter: no conservative summary from its name
+svgo.py:7339 enter: no conservative summary from its name
+svgo.py:7348 enter: no conservative summary from its name
+svgo.py:7357 enter: no conservative summary from its name
+svgo.py:7384 enter: no conservative summary from its name
+svgo.py:7411 exit: no conservative summary from its name
+svgo.py:7440 enter: no conservative summary from its name
+svgo.py:7468 enter: no conservative summary from its name
+svgo.py:7488 enter: no conservative summary from its name
+svgo.py:7546 enter: no conservative summary from its name
+svgo.py:7596 enter: no conservative summary from its name
+svgo.py:7620 round_values: no conservative summary from its name
+svgo.py:7647 enter: no conservative summary from its name
+svgo.py:7664 enter: no conservative summary from its name
+svgo.py:7712 exit: no conservative summary from its name
+svgo.py:7735 enter: no conservative summary from its name
+svgo.py:7794 prefix_id: no conservative summary from its name
+svgo.py:7803 prefix_reference: no conservative summary from its name
+svgo.py:7808 enter: no conservative summary from its name
+svgo.py:7905 enter: no conservative summary from its name
+svgo.py:7945 enter: no conservative summary from its name
+svgo.py:7964 enter: no conservative summary from its name
+svgo.py:8041 enter: no conservative summary from its name
+svgo.py:8095 exit: no conservative summary from its name
+svgo.py:8132 enter: no conservative summary from its name
+svgo.py:8151 exit: no conservative summary from its name
+svgo.py:8234 preset_fn: no conservative summary from its name
+svgo.py:85 js_to_fixed_str: no conservative summary from its name
+svgo.py:8607 optimize: no conservative summary from its name
+svgo.py:8748 finalnewline: no conservative summary from its name
+svgo.py:8862 consume_variadic: no conservative summary from its name
+svgo.py:8873 assign_value: no conservative summary from its name
+svgo.py:9161 flush: no conservative summary from its name
+svgo.py:93 js_to_fixed: no conservative summary from its name
+svgo.py:97 tools_to_fixed: no conservative summary from its name
+tcg.py:47 replace_shebang: no conservative summary from its name
+tcg.py:56 archive_existing_file: no conservative summary from its name
+tcleaner.py:46 expand_and_resolve: no conservative summary from its name
+tcleaner.py:79 purge_system: no conservative summary from its name
+tcs.py:153 class CompressTransformer: role is not clear from its declaration
+tcs.py:189 leave_Module: no conservative summary from its name
+tcs.py:200 leave_FunctionDef: no conservative summary from its name
+tcs.py:203 leave_AsyncFunctionDef: no conservative summary from its name
+tcs.py:208 leave_ClassDef: no conservative summary from its name
+tcs.py:211 leave_Param: no conservative summary from its name
+tcs.py:216 leave_AnnAssign: no conservative summary from its name
+tcs.py:226 leave_ImportFrom: no conservative summary from its name
+tcs.py:234 leave_SimpleStatementLine: no conservative summary from its name
+tcs.py:241 leave_SimpleStatementSuite: no conservative summary from its name
+tcs.py:248 leave_IndentedBlock: no conservative summary from its name
+tcs.py:255 leave_Name: no conservative summary from its name
+tcs.py:282 compress_source: no conservative summary from its name
+tcs.py:36 die: no conservative summary from its name
+tcs.py:360 class XStripper: role is not clear from its declaration
+tcs.py:361 leave_TrailingWhitespace: no conservative summary from its name
+tcs.py:371 leave_EmptyLine: no conservative summary from its name
+tcs.py:374 leave_Module: no conservative summary from its name
+tcs.py:385 leave_ClassDef: no conservative summary from its name
+tcs.py:388 leave_FunctionDef: no conservative summary from its name
+tcs.py:391 leave_AsyncFunctionDef: no conservative summary from its name
+termux_cleaner.py:47 purge_system: no conservative summary from its name
+tmc.py:1021 entrypoint: no conservative summary from its name
+tmc.py:107 class Stripper: role is not clear from its declaration
+tmc.py:114 on_leave: no conservative summary from its name
+tmc.py:178 leave_TrailingWhitespace: no conservative summary from its name
+tmc.py:192 visit_FunctionDef: no conservative summary from its name
+tmc.py:197 visit_AsyncFunctionDef: no conservative summary from its name
+tmc.py:202 visit_ClassDef: no conservative summary from its name
+tmc.py:253 leave_IndentedBlock: no conservative summary from its name
+tmc.py:264 leave_SimpleStatementSuite: no conservative summary from its name
+tmc.py:276 strip: no conservative summary from its name
+tmc.py:442 class WalkFiles: role is not clear from its declaration
+tmc.py:452 record_discovery_error: no conservative summary from its name
+tmc.py:511 pathlib_walk_files: no conservative summary from its name
+tmc.py:644 colorize_diff: no conservative summary from its name
+tmc.py:681 emit: no conservative summary from its name
+tmc.py:893 green: no conservative summary from its name
+tokei.py:1039 gather: no conservative summary from its name
+tokei.py:1107 row: no conservative summary from its name
+tokei.py:180 parse: no conservative summary from its name
+tokei.py:73 add: no conservative summary from its name
+tokei.py:80 as_dict: no conservative summary from its name
+tokei.py:887 load: no conservative summary from its name
+tokei.py:915 excluded: no conservative summary from its name
+tokei.py:992 keep: no conservative summary from its name
+vsvg.py:1047 class Warnings: role is not clear from its declaration
+vsvg.py:1052 add: no conservative summary from its name
+vsvg.py:1056 empty: no conservative summary from its name
+vsvg.py:1059 text: no conservative summary from its name
+vsvg.py:130 cu: no conservative summary from its name
+vsvg.py:1372 span: no conservative summary from its name
+vsvg.py:1483 span: no conservative summary from its name
+vsvg.py:1590 chunk: no conservative summary from its name
+vsvg.py:1709 class TermInfo: role is not clear from its declaration
+vsvg.py:2045 cairosvg_png: no conservative summary from its name
+vsvg.py:2250 note: no conservative summary from its name
+vsvg.py:268 apply: no conservative summary from its name
+vsvg.py:271 scale: no conservative summary from its name
+vsvg.py:322 class PathError: role is not clear from its declaration
+vsvg.py:343 cmd: no conservative summary from its name
+vsvg.py:365 num: no conservative summary from its name
+vsvg.py:373 flag: no conservative summary from its name
+vsvg.py:474 angle: no conservative summary from its name
+vsvg.py:516 newsub: no conservative summary from its name
+vsvg.py:524 ensure: no conservative summary from its name
+vsvg.py:712 cubic: no conservative summary from its name
+wget2.py:1004 header: no conservative summary from its name
+wget2.py:1007 int_header: no conservative summary from its name
+wget2.py:101 class UsageError: role is not clear from its declaration
+wget2.py:1029 header: no conservative summary from its name
+wget2.py:1033 last_modified_ts: no conservative summary from its name
+wget2.py:1037 class CookieJar: role is not clear from its declaration
+wget2.py:1042 update: no conservative summary from its name
+wget2.py:1058 header_for: no conservative summary from its name
+wget2.py:106 class ConfigError: role is not clear from its declaration
+wget2.py:1085 save: no conservative summary from its name
+wget2.py:111 class PolicyError: role is not clear from its declaration
+wget2.py:1122 with_credentials: no conservative summary from its name
+wget2.py:1131 credentials_for: no conservative summary from its name
+wget2.py:116 class NetworkError: role is not clear from its declaration
+wget2.py:1163 class HttpClient: role is not clear from its declaration
+wget2.py:1193 request: no conservative summary from its name
+wget2.py:1209 on_header: no conservative summary from its name
+wget2.py:122 class TransportError: role is not clear from its declaration
+wget2.py:1225 on_write: no conservative summary from its name
+wget2.py:126 class RequestTimeout: role is not clear from its declaration
+wget2.py:130 class HTTPStatusError: role is not clear from its declaration
+wget2.py:1326 probe: no conservative summary from its name
+wget2.py:1373 class DiskSink: role is not clear from its declaration
+wget2.py:1396 feed: no conservative summary from its name
+wget2.py:1417 checkpoint: no conservative summary from its name
+wget2.py:1424 class MemorySink: role is not clear from its declaration
+wget2.py:1440 feed: no conservative summary from its name
+wget2.py:1450 reset: no conservative summary from its name
+wget2.py:1455 class ProgressReporter: role is not clear from its declaration
+wget2.py:148 class IntegrityError: role is not clear from its declaration
+wget2.py:1496 update: no conservative summary from its name
+wget2.py:1528 finish: no conservative summary from its name
+wget2.py:153 class ChecksumError: role is not clear from its declaration
+wget2.py:1551 log: no conservative summary from its name
+wget2.py:1555 close: no conservative summary from its name
+wget2.py:157 class FilesystemError: role is not clear from its declaration
+wget2.py:1616 retry_policy: no conservative summary from its name
+wget2.py:162 class Interrupted: role is not clear from its declaration
+wget2.py:1626 effective_connections: no conservative summary from its name
+wget2.py:1632 global_limiter: no conservative summary from its name
+wget2.py:1635 connection_limiter: no conservative summary from its name
+wget2.py:1638 specs_for: no conservative summary from its name
+wget2.py:1651 skipped: no conservative summary from its name
+wget2.py:167 class RangeNotSupportedError: role is not clear from its declaration
+wget2.py:1678 template_values: no conservative summary from its name
+wget2.py:176 exit_code_for: no conservative summary from its name
+wget2.py:1769 class HostLimiter: role is not clear from its declaration
+wget2.py:1785 slot: no conservative summary from its name
+wget2.py:1794 class PathLocks: role is not clear from its declaration
+wget2.py:1812 hold: no conservative summary from its name
+wget2.py:184 class InterruptFlag: role is not clear from its declaration
+wget2.py:1840 ok: no conservative summary from its name
+wget2.py:1843 to_dict: no conservative summary from its name
+wget2.py:1863 class Downloader: role is not clear from its declaration
+wget2.py:1898 run: no conservative summary from its name
+wget2.py:190 set: no conservative summary from its name
+wget2.py:197 clear: no conservative summary from its name
+wget2.py:205 check: no conservative summary from its name
+wget2.py:210 redact_url: no conservative summary from its name
+wget2.py:217 redact_text: no conservative summary from its name
+wget2.py:2208 worker: no conservative summary from its name
+wget2.py:228 class Logger: role is not clear from its declaration
+wget2.py:2439 class Crawler: role is not clear from its declaration
+wget2.py:2467 discover: no conservative summary from its name
+wget2.py:2488 collect: no conservative summary from its name
+wget2.py:250 close: no conservative summary from its name
+wget2.py:2519 class Runner: role is not clear from its declaration
+wget2.py:2536 run: no conservative summary from its name
+wget2.py:2557 work: no conservative summary from its name
+wget2.py:2568 worker: no conservative summary from its name
+wget2.py:2652 handler: no conservative summary from its name
+wget2.py:2664 restore: no conservative summary from its name
+wget2.py:272 emit: no conservative summary from its name
+wget2.py:285 debug: no conservative summary from its name
+wget2.py:288 info: no conservative summary from its name
+wget2.py:291 warning: no conservative summary from its name
+wget2.py:294 error: no conservative summary from its name
+wget2.py:298 human_size: no conservative summary from its name
+wget2.py:372 url_host: no conservative summary from its name
+wget2.py:379 url_basename: no conservative summary from its name
+wget2.py:384 sanitize_filename: no conservative summary from its name
+wget2.py:407 filename_from_url: no conservative summary from its name
+wget2.py:417 content_disposition_filename: no conservative summary from its name
+wget2.py:459 safe_unlink: no conservative summary from its name
+wget2.py:471 fsync_dir: no conservative summary from its name
+wget2.py:484 preallocate: no conservative summary from its name
+wget2.py:493 atomic_finalize: no conservative summary from its name
+wget2.py:509 unique_path: no conservative summary from its name
+wget2.py:568 plan_ranges: no conservative summary from its name
+wget2.py:584 merge_intervals: no conservative summary from its name
+wget2.py:595 covered_bytes: no conservative summary from its name
+wget2.py:599 subtract_interval: no conservative summary from its name
+wget2.py:649 state_path: no conservative summary from its name
+wget2.py:653 load: no conservative summary from its name
+wget2.py:680 to_dict: no conservative summary from its name
+wget2.py:693 save: no conservative summary from its name
+wget2.py:712 maybe_save: no conservative summary from its name
+wget2.py:718 discard: no conservative summary from its name
+wget2.py:722 mark: no conservative summary from its name
+wget2.py:730 resume_offset: no conservative summary from its name
+wget2.py:742 missing: no conservative summary from its name
+wget2.py:753 done_bytes: no conservative summary from its name
+wget2.py:757 matches_remote: no conservative summary from its name
+wget2.py:832 class TokenBucket: role is not clear from its declaration
+wget2.py:850 consume: no conservative summary from its name
+wget2.py:869 class MultiLimiter: role is not clear from its declaration
+wget2.py:874 enabled: no conservative summary from its name
+wget2.py:877 consume: no conservative summary from its name
+wget2.py:892 attempts: no conservative summary from its name
+wget2.py:895 delay_for: no conservative summary from its name
+wget2.py:902 should_retry: no conservative summary from its name
+wget2.py:977 digest_file: no conservative summary from its name
+whoiser.py:100 valid_date: no conservative summary from its name
+whoiser.py:114 purge_empty_fields: no conservative summary from its name
+whoiser.py:164 del_dotted: no conservative summary from its name
+whoiser.py:192 flatten: no conservative summary from its name
+whoiser.py:246 default_cache_dir: no conservative summary from its name
+whoiser.py:371 fetch: no conservative summary from its name
+whoiser.py:399 postprocess_record: no conservative summary from its name
+whoiser.py:464 query_one: no conservative summary from its name
+whoiser.py:512 diff_records: no conservative summary from its name
+whoiser.py:714 execute_targets: no conservative summary from its name
+whoiser.py:731 run: no conservative summary from its name
+whoiser.py:79 class RateLimiter: role is not clear from its declaration
+whoiser.py:827 version_full: no conservative summary from its name
+whoiser.py:85 wait: no conservative summary from its name
+whoiser.py:96 redact_key: no conservative summary from its name
+xreport.py:117 analyze_archive: no conservative summary from its name
+xreport.py:273 cmd_scan: no conservative summary from its name
+xreport.py:43 fsz: no conservative summary from its name
+xreport.py:456 cmd_sizes: no conservative summary from its name
+xtar.py:106 read: no conservative summary from its name
+xtar.py:120 zstd_reader: no conservative summary from its name
+xtar.py:129 decompression_stream: no conservative summary from its name
+xtar.py:195 nested_candidates: no conservative summary from its name
+xtar.py:94 readable: no conservative summary from its name
+xztool.py:716 result: no conservative summary from its name
+xztool.py:815 result: no conservative summary from its name
+xztools.py:163 dir_size: no conservative summary from its name
+xztools.py:226 compress_bytes: no conservative summary from its name
+xztools.py:242 decompress_bytes: no conservative summary from its name
+xztools.py:41 info: no conservative summary from its name
+xztools.py:44 warning: no conservative summary from its name
+xztools.py:47 error: no conservative summary from its name
+xztools.py:50 success: no conservative summary from its name
+xztools.py:53 debug: no conservative summary from its name
+xztools.py:56 remove: no conservative summary from its name
+xztools.py:59 add: no conservative summary from its name
+xztools.py:672 cmd_compress: no conservative summary from its name
+xztools.py:723 cmd_decompress: no conservative summary from its name
+xztools.py:755 cmd_tar_dirs: no conservative summary from its name
+xztools.py:796 cmd_archive_cwd: no conservative summary from its name
+xztools.py:912 cmd_7z: no conservative summary from its name
+xztools.py:937 cmd_lzma_chunk: no conservative summary from its name
+zip_crack.py:30 elapsed: no conservative summary from its name
+zip_crack.py:35 pps: no conservative summary from its name
+zip_crack.py:84 brute_force_zip: no conservative summary from its name

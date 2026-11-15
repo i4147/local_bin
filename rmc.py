@@ -1,7 +1,7 @@
 #!/data/data/com.termux/files/usr/bin/env python
 
+from __future__ import annotations
 
-import argparse
 import ast
 import codecs
 import dataclasses
@@ -19,16 +19,24 @@ import tempfile
 import textwrap
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Final, cast
+from typing import TYPE_CHECKING, Any, Final, TypeVar, cast
 
-from atomicio import atomic_write
+from atomicio import atomic_write as _atomic_write
 from dh import MAX_WORKERS, SKIP_DIRS
 import libcst as cst
 from loguru import logger
+import typer
+from rich.console import Console
+from rich.table import Table
+from rich.text import Text
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, Sequence
 
+
+# PEP 695 generic syntax (``def on_leave[N: cst.CSTNode]``) needs Python 3.12+;
+# a TypeVar bound is equivalent and works on 3.11 too.
+N = TypeVar("N", bound=cst.CSTNode)
 
 VERSION: Final = "2.0.0"
 FEATURE_VERSION: Final = (3, 12)
@@ -150,7 +158,7 @@ class Stripper(cst.CSTTransformer):
 
     # ---- comment filtering (own-line comments) -------------------------
 
-    def on_leave[N: cst.CSTNode](
+    def on_leave(
         self, original_node: N, updated_node: N
     ) -> N | cst.RemovalSentinel | cst.FlattenSentinel[N]:
         result = super().on_leave(original_node, updated_node)
@@ -390,8 +398,8 @@ def _build_diff(path: Path, before: str, after: str) -> str:
         difflib.unified_diff(
             before.splitlines(keepends=True),
             after.splitlines(keepends=True),
-            fromfile=f"a/{path.as_posix()}",
-            tofile=f"b/{path.as_posix()}",
+            fromfile=f"a/{path.name}",
+            tofile=f"b/{path.name}",
         )
     )
 
@@ -544,7 +552,7 @@ def _walk(directory: Path, recursive: bool) -> Iterator[Path]:
     try:
         entries = sorted(directory.iterdir(), key=lambda entry: entry.name)
     except OSError as exc:
-        logger.warning("cannot list {}: {}", directory, exc)
+        logger.warning("cannot list {}: {}", directory.name or ".", exc)
         return
     for entry in entries:
         if entry.is_symlink():
@@ -569,7 +577,7 @@ def discover(options: Options) -> tuple[list[Path], bool]:
             candidates = iter((root,))
             explicit = True
         else:
-            logger.error("path not found: {}", root)
+            logger.error("path not found: {}", root.name or ".")
             missing = True
             continue
         for candidate in candidates:
@@ -610,15 +618,15 @@ def log_results(results: Sequence[FileResult]) -> None:
     for result in results:
         match result.status:
             case Status.FAILED:
-                logger.error("failed {}: {}", result.path, result.reason)
+                logger.error("failed {}: {}", result.path.name, result.reason)
             case Status.SKIPPED:
-                logger.warning("skipped {}: {}", result.path, result.reason)
+                logger.warning("skipped {}: {}", result.path.name, result.reason)
             case Status.UNCHANGED:
-                logger.debug("unchanged {}", result.path)
+                logger.debug("unchanged {}", result.path.name)
             case Status.MODIFIED:
                 logger.debug(
                     "modified {} (comments={} docstrings={} annotations={})",
-                    result.path,
+                    result.path.name,
                     result.counts.comments,
                     result.counts.docstrings,
                     result.counts.annotations,
@@ -626,33 +634,47 @@ def log_results(results: Sequence[FileResult]) -> None:
 
 
 def render_text(results: Sequence[FileResult], summary: Summary, options: Options) -> None:
-    verb = "" if options.write else "would save"
-    for result in results:
-        if result.status is not Status.MODIFIED:
-            continue
-        line = f"{result.path.as_posix()}: {verb} {result.bytes_saved:,}"
-        if options.stats:
-            counts = result.counts
-            line += f" [comments={counts.comments} docstrings={counts.docstrings} annotations={counts.annotations}]"
-        print(line)
-        if result.diff:
-            sys.stdout.write(result.diff)
-            if not result.diff.endswith("\n"):
-                sys.stdout.write("\n")
-    suffix = "" if options.write else " (no files written)"
-    print(
-        f"scanned {summary.scanned} | modified {summary.modified} | "
-        f"unchanged {summary.unchanged} | skipped {summary.skipped} | "
-        f"failed {summary.failed}"
-    )
-    print(f"total space {verb}: {summary.saved:,} bytes{suffix}")
+    """Render basename-only per-file byte savings and a total with Rich."""
+    console = Console()
+    total = len(results)
+    digits = max(1, len(str(total)))
+    index_width = digits * 2 + 3  # brackets, slash, and room for the counter
+    byte_width = max(5, len(f"{max((abs(result.bytes_saved) for result in results), default=0):,}"))
+    filename_width = max(1, console.width - index_width - byte_width - 6)
+    table = Table.grid(padding=(0, 1), expand=True)
+    table.add_column(width=index_width, no_wrap=True)
+    table.add_column(ratio=1, max_width=filename_width, no_wrap=True, overflow="ellipsis")
+    table.add_column(justify="right", width=byte_width, no_wrap=True)
+
+    for index, result in enumerate(results, start=1):
+        counter = Text(f"[{index}/{total}]", style="dim")
+        filename = Text(result.path.name, no_wrap=True, overflow="ellipsis")
+        saved = result.bytes_saved if result.status is Status.MODIFIED else 0
+        amount = Text(f"{saved:,}", style="dim" if saved == 0 else "green")
+        table.add_row(counter, filename, amount)
+
+    if not options.quiet:
+        console.print(table)
+    if options.stats:
+        console.print(
+            f"Scanned {summary.scanned}: {summary.modified} modified, "
+            f"{summary.unchanged} unchanged, {summary.skipped} skipped, {summary.failed} failed"
+        )
+    if options.diff:
+        for result in results:
+            if result.diff:
+                console.print(result.diff, markup=False, highlight=False, end="")
+    if not options.write:
+        console.print("[dim](dry run; no files written)[/dim]")
+    qualifier = "freed" if options.write else "that would be freed"
+    console.print(f"Total space {qualifier}: {summary.saved:,} bytes")
 
 
 def render_json(results: Sequence[FileResult], summary: Summary, options: Options) -> None:
     entries: list[dict[str, object]] = []
     for result in results:
         entry: dict[str, object] = {
-            "path": result.path.as_posix(),
+            "path": result.path.name,
             "status": result.status.value,
             "original_size": result.original_size,
             "new_size": result.new_size,
@@ -685,132 +707,81 @@ def exit_code(summary: Summary, options: Options, missing: bool) -> int:
 # ---- CLI ---------------------------------------------------------------
 
 
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        prog="rmc",
-        description=(
-            "Strip comments, docstrings and type annotations from Python files. "
-            "Shebangs, coding cookies, module docstrings, type/fmt directives, "
-            "and commented-out code are always preserved."
-        ),
-    )
-    parser.add_argument(
-        "paths",
-        nargs="+",
-        type=Path,
-        help="files or directories",
-    )
-    parser.add_argument(
-        "-c",
-        "--comments",
-        action="store_true",
-        help="remove comments (default when no mode flag is given)",
-    )
-    parser.add_argument(
-        "-d",
-        "--docstrings",
-        action="store_true",
-        help="remove function and class docstrings",
-    )
-    parser.add_argument(
-        "-t",
-        "--annotations",
-        action="store_true",
-        help="remove type annotations",
-    )
-    parser.add_argument(
-        "-a",
-        "--all",
-        action="store_true",
-        help="remove comments, docstrings, and annotations",
-    )
-    parser.add_argument("-n", "--stats", action="store_true", help="per-file removal counts")
-    parser.add_argument("--dry-run", action="store_true", help="do not write files")
-    parser.add_argument(
-        "--diff",
-        action="store_true",
-        help="print unified diffs (implies --dry-run)",
-    )
-    parser.add_argument(
-        "--check",
-        action="store_true",
-        help="CI mode: never write, exit 1 if any file would change",
-    )
-    parser.add_argument("--backup", action="store_true", help="write FILE.bak before modifying")
-    parser.add_argument(
-        "--backup-dir",
-        type=Path,
-        default=None,
-        help="copy originals into this directory before modifying",
-    )
-    parser.add_argument(
-        "--include",
-        action="append",
-        default=[],
-        metavar="GLOB",
-        help="repeatable include glob",
-    )
-    parser.add_argument(
-        "--exclude",
-        action="append",
-        default=[],
-        metavar="GLOB",
-        help="repeatable exclude glob",
-    )
-    parser.add_argument(
-        "--no-recursive",
-        action="store_true",
-        help="do not descend into directories",
-    )
-    parser.add_argument("--json", action="store_true", help="machine-readable output")
-    verbosity = parser.add_mutually_exclusive_group()
-    verbosity.add_argument("-q", "--quiet", action="store_true")
-    verbosity.add_argument("-v", "--verbose", action="store_true")
-    parser.add_argument("--version", action="version", version=f"%(prog)s {VERSION}")
-    return parser
-
-
-def parse_args(argv: Sequence[str] | None) -> Options:
-    args = build_parser().parse_args(argv)
-    any_mode_flag = bool(args.comments or args.docstrings or args.annotations or args.all)
-    # Default behaviour (no mode flag): remove comments only.
-    comments = bool(args.comments or args.all or not any_mode_flag)
-    docstrings = bool(args.docstrings or args.all)
-    annotations = bool(args.annotations or args.all)
-    mode = Mode(
-        comments=comments,
-        docstrings=docstrings,
-        annotations=annotations,
-    )
-    return Options(
-        paths=tuple(args.paths),
-        mode=mode,
-        stats=args.stats,
-        dry_run=args.dry_run,
-        diff=args.diff,
-        check=args.check,
-        backup=args.backup or args.backup_dir is not None,
-        backup_dir=args.backup_dir,
-        quiet=args.quiet,
-        verbose=args.verbose,
-        includes=tuple(args.include),
-        excludes=tuple(args.exclude),
-        recursive=not args.no_recursive,
-        json_output=args.json,
-    )
-
-
 def configure_logging(options: Options) -> None:
+    """Configure Loguru verbosity for CLI status and error messages."""
     logger.remove()
     level = "ERROR" if options.quiet else "DEBUG" if options.verbose else "INFO"
     logger.add(sys.stderr, level=level, format="<level>{level: <8}</level> {message}")
 
 
-def main(argv: Sequence[str] | None = None) -> int:
-    options = parse_args(argv)
+app = typer.Typer(
+    add_completion=False,
+    no_args_is_help=False,
+    help=(
+        "Strip comments, docstrings, and annotations from Python files. "
+        "With no paths, process Python files under the current directory recursively."
+    ),
+)
+
+
+def _version_callback(value: bool) -> None:
+    """Print the program version and stop when --version is provided."""
+    if value:
+        typer.echo(f"rmc {VERSION}")
+        raise typer.Exit()
+
+
+@app.command()
+def main(
+    paths: list[Path] = typer.Argument(None, help="Files or directories; defaults to the current directory recursively."),
+    comments: bool = typer.Option(False, "-c", "--comments", help="Remove comments (default if no mode flag is given)."),
+    docstrings: bool = typer.Option(False, "-d", "--docstrings", help="Remove function and class docstrings."),
+    annotations: bool = typer.Option(False, "-t", "--annotations", help="Remove type annotations."),
+    all_content: bool = typer.Option(False, "-a", "--all", help="Remove comments, docstrings, and annotations."),
+    stats: bool = typer.Option(False, "-n", "--stats", help="Show scan status counts."),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Do not write files."),
+    diff: bool = typer.Option(False, "--diff", help="Print unified diffs; implies --dry-run."),
+    check: bool = typer.Option(False, "--check", help="Never write; exit 1 if any file would change."),
+    backup: bool = typer.Option(False, "--backup", help="Write FILE.bak before modifying."),
+    backup_dir: Path | None = typer.Option(None, "--backup-dir", help="Copy originals into this directory before modifying."),
+    includes: list[str] = typer.Option(None, "--include", help="Repeatable include glob."),
+    excludes: list[str] = typer.Option(None, "--exclude", help="Repeatable exclude glob."),
+    recursive: bool = typer.Option(True, "--recursive/--no-recursive", help="Descend into directories (enabled by default)."),
+    json_output: bool = typer.Option(False, "--json", help="Write machine-readable JSON instead of the Rich table."),
+    quiet: bool = typer.Option(False, "-q", "--quiet", help="Suppress the per-file Rich table."),
+    verbose: bool = typer.Option(False, "-v", "--verbose", help="Enable debug logging."),
+    version: bool = typer.Option(False, "--version", callback=_version_callback, is_eager=True, help="Show the version and exit."),
+) -> None:
+    """Process Python files and report per-file and total bytes removed."""
+    del version  # The eager callback handles this option before command execution.
+    if quiet and verbose:
+        raise typer.BadParameter("--quiet and --verbose cannot be used together")
+    input_paths = tuple(paths or [Path.cwd()])
+    any_mode_flag = bool(comments or docstrings or annotations or all_content)
+    mode = Mode(
+        comments=bool(comments or all_content or not any_mode_flag),
+        docstrings=bool(docstrings or all_content),
+        annotations=bool(annotations or all_content),
+    )
+    options = Options(
+        paths=input_paths,
+        mode=mode,
+        stats=stats,
+        dry_run=dry_run,
+        diff=diff,
+        check=check,
+        backup=backup or backup_dir is not None,
+        backup_dir=backup_dir,
+        quiet=quiet,
+        verbose=verbose,
+        includes=tuple(includes or ()),
+        excludes=tuple(excludes or ()),
+        recursive=recursive,
+        json_output=json_output,
+    )
     configure_logging(options)
-    paths, missing = discover(options)
-    if not paths and not missing:
+    discovered, missing = discover(options)
+    if not discovered and not missing:
         logger.warning("no Python files found")
     jobs = [
         Job(
@@ -821,22 +792,24 @@ def main(argv: Sequence[str] | None = None) -> int:
             backup=options.backup,
             backup_dir=options.backup_dir,
         )
-        for path in paths
+        for path in discovered
     ]
     try:
         results = run_jobs(jobs, MAX_WORKERS)
     except KeyboardInterrupt:
         logger.error("interrupted")
-        return 2
+        raise typer.Exit(code=2) from None
     results.sort(key=lambda item: item.path.as_posix())
     summary = summarize(results)
     log_results(results)
     if options.json_output:
         render_json(results, summary, options)
-    elif not options.quiet:
+    else:
         render_text(results, summary, options)
-    return exit_code(summary, options, missing)
+    code = exit_code(summary, options, missing)
+    if code:
+        raise typer.Exit(code=code)
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    app()

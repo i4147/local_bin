@@ -26,7 +26,7 @@ from contextlib import nullcontext
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from time import perf_counter
-from typing import TYPE_CHECKING, Any, Final, Protocol, cast
+from typing import TYPE_CHECKING, Any, Final, Protocol, TypeVar, cast
 
 import libcst as cst
 from atomicio import atomic_write
@@ -38,6 +38,10 @@ if TYPE_CHECKING:
 
     _CSTTypes = tuple[type[cst.CSTTransformer], type[cst.CSTTransformer]]
 
+
+# PEP 695 generic syntax (``def on_leave[N: cst.CSTNode]``) needs Python 3.12+;
+# a TypeVar bound is equivalent and works on 3.11 too.
+N = TypeVar("N", bound=cst.CSTNode)
 
 _Edit = tuple[int, int, bytes]
 _FEATURE_VERSION: Final = (3, 12)
@@ -107,7 +111,7 @@ class Stripper(cst.CSTTransformer):
         self._remove_blank_lines = remove_blank_lines
         self._doc_suites: set[int] = set()
 
-    def on_leave[N: cst.CSTNode](
+    def on_leave(
         self, original_node: N, updated_node: N
     ) -> N | cst.RemovalSentinel | cst.FlattenSentinel[N]:
         result = super().on_leave(original_node, updated_node)

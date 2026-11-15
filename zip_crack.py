@@ -1,5 +1,7 @@
 #!/data/data/com.termux/files/usr/bin/env python
 
+from __future__ import annotations
+
 import argparse
 import multiprocessing
 import sys
@@ -125,8 +127,7 @@ def brute_force_zip(
                     elapsed = current_time - result.start_time
                     pps = result.tested_count / elapsed if elapsed > 0 else 0
                     print(
-                        f"Progress: {progress:6.2f}% | Tested: {result.tested_count:10,} | Speed: {
-                            pps:8.1f} p/s | Elapsed: {format_duration(elapsed)}",
+                        f"Progress: {progress:6.2f}% | Tested: {result.tested_count:10,} | Speed: {pps:8.1f} p/s | Elapsed: {format_duration(elapsed)}",
                         end="\r",
                     )
                     last_update = current_time
@@ -153,7 +154,7 @@ def brute_force_zip(
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Optimized Zip Brute-Forcer for Python 3.12",
+        description="Optimized Zip Brute-Forcer for Python 3.11+",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument("zip_file", type=Path, help="Path to the protected zip file")

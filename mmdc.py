@@ -733,7 +733,10 @@ def get_theme(name: str | None, theme_variables: dict[str, Any] | None = None) -
 # drawing model: backend-agnostic primitives
 # --------------------------------------------------------------------------
 
-type Pt = tuple[float, float]
+if sys.version_info >= (3, 12):
+    exec("type Pt = tuple[float, float]")
+else:
+    Pt = tuple[float, float]
 
 #: Shape names understood by :func:`shape_prims`.
 NODE_SHAPES = (
@@ -5482,9 +5485,6 @@ def _validate_icon_packs(args: argparse.Namespace) -> dict[str, str]:
 
 
 def _cli(argv: Sequence[str] | None) -> None:
-    if sys.version_info < (3, 12):
-        error(f"mmdc requires Python 3.12 or newer (found {sys.version_info.major}.{sys.version_info.minor})")
-
     parser = _build_parser()
     args = parser.parse_args(list(argv) if argv is not None else None)
 
