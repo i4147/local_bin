@@ -102,7 +102,7 @@
 - `reformatter.py` — 0 public symbols documented; 0 module docstring(s); 0 annotations; 0 inline comments.
 - `remove_pages_of_pdf.py` — 1 public symbols documented; 1 module docstring(s); 0 annotations; 0 inline comments.
 - `rlater.py` — 25 public symbols documented; 0 module docstring(s); 0 annotations; 0 inline comments.
-- `rmc.py` — 9 public symbols documented; 1 module docstring(s); 0 annotations; 0 inline comments.
+- `rmc.py` — 4 public symbols documented; 1 module docstring(s); 0 annotations; 0 inline comments.
 
 - Inline comments: 0. No case was documented inline without a targeted, confidently supported rationale; inline-comment opportunities were not exhaustively audited.
 - Diff review: all outputs parsed, and AST comparison after removing docstrings and annotations is identical to the original for every file.

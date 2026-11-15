@@ -896,28 +896,28 @@ rlater.py:932 save: no conservative summary from its name
 rlater.py:973 mark_read: no conservative summary from its name
 rlater.py:976 delete: no conservative summary from its name
 rlater.py:981 search: no conservative summary from its name
-rmc.py:110 write: no conservative summary from its name
-rmc.py:115 class Summary: role is not clear from its declaration
-rmc.py:148 class Stripper: role is not clear from its declaration
-rmc.py:157 on_leave: no conservative summary from its name
-rmc.py:226 leave_TrailingWhitespace: no conservative summary from its name
-rmc.py:243 leave_Param: no conservative summary from its name
-rmc.py:251 leave_FunctionDef: no conservative summary from its name
-rmc.py:259 visit_FunctionDef: no conservative summary from its name
-rmc.py:263 visit_ClassDef: no conservative summary from its name
-rmc.py:336 leave_IndentedBlock: no conservative summary from its name
-rmc.py:348 leave_SimpleStatementSuite: no conservative summary from its name
-rmc.py:359 leave_Module: no conservative summary from its name
-rmc.py:53 class Mode: role is not clear from its declaration
-rmc.py:564 discover: no conservative summary from its name
-rmc.py:597 summarize: no conservative summary from its name
-rmc.py:60 class Counts: role is not clear from its declaration
-rmc.py:613 log_results: no conservative summary from its name
-rmc.py:67 class FileResult: role is not clear from its declaration
-rmc.py:681 exit_code: no conservative summary from its name
-rmc.py:78 bytes_saved: no conservative summary from its name
-rmc.py:83 class Job: role is not clear from its declaration
-rmc.py:93 class Options: role is not clear from its declaration
+rmc.py:114 write: no conservative summary from its name
+rmc.py:119 class Summary: role is not clear from its declaration
+rmc.py:152 class Stripper: role is not clear from its declaration
+rmc.py:161 on_leave: no conservative summary from its name
+rmc.py:230 leave_TrailingWhitespace: no conservative summary from its name
+rmc.py:247 leave_Param: no conservative summary from its name
+rmc.py:255 leave_FunctionDef: no conservative summary from its name
+rmc.py:263 visit_FunctionDef: no conservative summary from its name
+rmc.py:267 visit_ClassDef: no conservative summary from its name
+rmc.py:340 leave_IndentedBlock: no conservative summary from its name
+rmc.py:352 leave_SimpleStatementSuite: no conservative summary from its name
+rmc.py:363 leave_Module: no conservative summary from its name
+rmc.py:568 discover: no conservative summary from its name
+rmc.py:57 class Mode: role is not clear from its declaration
+rmc.py:601 summarize: no conservative summary from its name
+rmc.py:617 log_results: no conservative summary from its name
+rmc.py:64 class Counts: role is not clear from its declaration
+rmc.py:699 exit_code: no conservative summary from its name
+rmc.py:71 class FileResult: role is not clear from its declaration
+rmc.py:82 bytes_saved: no conservative summary from its name
+rmc.py:87 class Job: role is not clear from its declaration
+rmc.py:97 class Options: role is not clear from its declaration
 rmc2.py:112 leave_TrailingWhitespace: no conservative summary from its name
 rmc2.py:125 leave_EmptyLine: no conservative summary from its name
 rmc2.py:135 leave_Module: no conservative summary from its name
