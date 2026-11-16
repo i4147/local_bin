@@ -1,92 +1,136 @@
 #!/data/data/com.termux/files/usr/bin/env python
-"Utilities for strep."
+"""
+Recursively strip all shared libraries (.so, .so.N, .so.N.N.N, ...) in the
+current directory, in parallel, using `rich` for nicely aligned output.
 
-from pathlib import Path
+Requires:
+    - binutils `strip` on PATH
+    - rich   (pip install rich)
+"""
+
+import multiprocessing as mp
 import re
-import sys
-import tempfile
-from zipfile import ZipFile
+import subprocess
+from pathlib import Path
 
-from dh import fsz, gsz, runcmd
 from rich.console import Console
-
-SO_RE = re.compile(r"\.so(\.\d+)*$", re.IGNORECASE)
-WHL_SUFFIX = ".whl"
-console = Console()
+from rich.text import Text
 
 
-def process_file(path: Path) -> int:
-    "Process file."
-    before = path.stat().st_size
-    runcmd(["strip", str(path)], show_output=True)
-    return before - path.stat().st_size
+SO_PATTERN = re.compile(r"\.so(\.\d+)*$")
+NUM_WORKERS = 4
 
 
-def process_whl(whl_path: Path) -> int:
-    "Process whl."
-    before = whl_path.stat().st_size
-    with tempfile.TemporaryDirectory() as tmpdir:
-        tmpdir_path = Path(tmpdir)
-        with ZipFile(whl_path, "r") as zf:
-            zf.extractall(tmpdir_path)
-        so_files = [p for p in tmpdir_path.rglob("*") if SO_RE.search(p.name) and p.is_file()]
-        for so_file in so_files:
-            process_file(so_file)
-        with ZipFile(whl_path, "w") as zf:
-            for path in tmpdir_path.rglob("*"):
-                if path.is_file():
-                    zf.write(path, path.relative_to(tmpdir_path))
-    return before - whl_path.stat().st_size
+def walk_so_files(root: Path):
+    """Generator: yield every .so* regular file, skipping symlinks."""
+    for p in root.rglob("*"):
+        if p.is_symlink():
+            continue
+        if p.is_file() and SO_PATTERN.search(p.name):
+            yield p
 
 
-def collect_files(cwd: Path, args: list[str]) -> list[Path]:
-    "Collect files."
-    if args:
-        return [Path(p) for p in args]
-    so_files = [p for p in cwd.rglob("*") if SO_RE.search(p.name) and p.is_file()]
-    whl_files = [p for p in cwd.rglob("*") if p.is_file() and p.suffix == WHL_SUFFIX]
-    return so_files + whl_files
+def strip_one(path_str: str):
+    """Strip a single file.  Returns (path, orig, new, ok, err)."""
+    p = Path(path_str)
+    try:
+        orig = p.stat().st_size
+        proc = subprocess.run(
+            ["strip", "--strip-unneeded", str(p)],
+            capture_output=True,
+            text=True,
+        )
+        if proc.returncode != 0:
+            msg = (proc.stderr or proc.stdout or "").strip() or "strip failed"
+            return (path_str, orig, orig, False, msg)
+        new = p.stat().st_size
+        return (path_str, orig, new, True, None)
+    except FileNotFoundError:
+        return (path_str, 0, 0, False, "'strip' not found in PATH")
+    except Exception as e:
+        return (path_str, 0, 0, False, f"{type(e).__name__}: {e}")
 
 
-def has_so(path: str | Path) -> bool:
-    "Return whether so."
-    path = Path(path)
-    with ZipFile(path, "r") as zf:
-        return any(SO_RE.search(name) for name in zf.namelist())
+def fmt_bytes(n: int) -> str:
+    if n == 0:
+        return "0 B"
+    sign = "-" if n < 0 else ""
+    n = abs(n)
+    if n < 1024:
+        return f"{sign}{n} B"
+    for unit in ("KiB", "MiB", "GiB", "TiB", "PiB"):
+        n /= 1024
+        if n < 1024:
+            return f"{sign}{n:.2f} {unit}"
+    return f"{sign}{n:.2f} EiB"
 
 
-def print_row(idx: int, total: int, name: str, saved: int) -> None:
-    "Print row."
-    idx_str = f"[{idx}/{total}]"
-    saved_str = str(saved)
-    name_width = max(console.width - len(idx_str) - len(saved_str) - 4, 10)
-    if len(name) > name_width:
-        name = name[: name_width - 1] + "…"
-    style = "green" if saved > 0 else "dim"
-    console.print(f"{idx_str}  {name:<{name_width}}  [{style}]{saved_str}[/]")
+def main() -> None:
+    console = Console()
+    term_width = console.size.width
+    root = Path(".")
+
+    files = list(walk_so_files(root))
+    total = len(files)
+    if total == 0:
+        console.print("[yellow]No .so files found.[/yellow]")
+        return
+
+    # Bound the 3rd column width by the largest original size.
+    try:
+        max_size = max(p.stat().st_size for p in files)
+    except OSError:
+        max_size = 1 << 40  # fallback: 1 TiB
+    bytes_w = max(len(str(max_size)), 4)
+
+    ndigits = len(str(total))
+    counter_w = 2 * ndigits + 3  # "[NN/NN]"
+    sep = 2  # spaces between columns
+    fixed = counter_w + 2 * sep + bytes_w
+    fname_w = max(term_width - fixed, 10)
+
+    max_fname = max(len(p.name) for p in files)
+    pad_fname = min(fname_w, max_fname)  # truncate only if necessary
+
+    total_saved = 0
+    with mp.Pool(NUM_WORKERS) as pool:
+        iterator = pool.imap_unordered(strip_one, (str(p) for p in files))
+        for i, (path_str, orig, new, ok, err) in enumerate(iterator, 1):
+            name = Path(path_str).name
+            if len(name) > pad_fname:
+                name_disp = name[: max(pad_fname - 1, 1)] + "…"
+            else:
+                name_disp = name.ljust(pad_fname)
+
+            saved = (orig - new) if ok else 0
+            counter = f"[{i:>{ndigits}}/{total}]"
+
+            line = Text()
+            line.append(counter, style="bold")
+            line.append(" " * sep)
+            line.append(name_disp)
+            line.append(" " * sep)
+
+            if not ok:
+                line.append(str(saved).rjust(bytes_w), style="red")
+                line.append(f"  ({err})", style="red dim")
+            elif saved > 0:
+                line.append(str(saved).rjust(bytes_w), style="green")
+                total_saved += saved
+            elif saved == 0:
+                line.append(str(saved).rjust(bytes_w), style="dim")
+            else:  # grew (very unusual)
+                line.append(str(saved).rjust(bytes_w), style="yellow")
+
+            console.print(line, soft_wrap=True)
+
+    console.print()
+    console.print(
+        f"[bold]Total space freed:[/bold] "
+        f"[green]{total_saved}[/green] B "
+        f"([bold green]{fmt_bytes(total_saved)}[/bold green])"
+    )
 
 
 if __name__ == "__main__":
-    cwd = Path.cwd()
-    args = sys.argv[1:]
-    files = collect_files(cwd, args)
-    so_files = [f for f in files if SO_RE.search(f.name) and f.is_file() and f.suffix != WHL_SUFFIX]
-    whl_files = [f for f in files if f.is_file() and f.suffix == WHL_SUFFIX and has_so(f)]
-    files_to_process = so_files + whl_files
-    total = len(files_to_process)
-    before = gsz(files_to_process)
-    saved_total = 0
-    idx = 0
-    for so_file in so_files:
-        idx += 1
-        saved = process_file(so_file)
-        saved_total += saved
-        print_row(idx, total, so_file.name, saved)
-    for whl_file in whl_files:
-        idx += 1
-        saved = process_whl(whl_file)
-        saved_total += saved
-        print_row(idx, total, whl_file.name, saved)
-    after = gsz(files_to_process)
-    console.print(f"[bold cyan]Num:[/] [bold yellow]{total}[/]")
-    console.print(f"[bold cyan]Size:[/] [bold yellow]{fsz(before - after)}[/]")
+    main()

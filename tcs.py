@@ -1,6 +1,5 @@
 #!/data/data/com.termux/files/usr/bin/env python
 
-"Utilities for tcs."
 
 import ast
 import builtins
@@ -18,7 +17,7 @@ try:
 except ImportError:
     cst = None
 
-TEXT1 = "Return full type-annotated code in one markdown block, no docstrings & no comments"
+TEXT1 = "Return full refactored & type-annotated code in one markdown block"
 USAGE = """\
 Usage: {prog} <path> [start [end]] [-m|--mangle | -x]
        {prog} <path> -s <line> [<line> ...] [-m|--mangle | -x]

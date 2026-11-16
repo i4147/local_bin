@@ -1,6 +1,5 @@
 #!/data/data/com.termux/files/usr/bin/env python
 
-"Utilities for svgo."
 
 import base64
 from concurrent.futures import ProcessPoolExecutor
@@ -9221,7 +9220,6 @@ def _process_file_descriptions(
     config_json = json.dumps(pool_config)
 
     def run_task(input_path: Path, output_path: Path) -> None:
-        "Run task."
         _handle_task_result(
             _optimize_file_task((str(input_path), str(output_path), config_json)),
             config,
@@ -9458,7 +9456,6 @@ def _flush_stdout_safe() -> None:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    "Run the command-line interface."
     if argv is None:
         argv = sys.argv[1:]
     try:
