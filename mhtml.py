@@ -672,24 +672,22 @@ class MHTMLParser:
             "resource_count": len({id(resource) for resource in resources.values()}),
         }
         if self.config.metadata_extraction:
-            metadata.update(
-                {
-                    "subject": self._decode_header_value(message.get("Subject", "")),
-                    "from": self._decode_header_value(message.get("From", "")),
-                    "to": self._decode_header_value(message.get("To", "")),
-                    "date": self._decode_header_value(message.get("Date", "")),
-                    "content_location": main_resource.url,
-                    "resources": [
-                        {
-                            "url": resource.url,
-                            "content_type": resource.content_type,
-                            "resource_type": resource.resource_type.value,
-                            "size": resource.size,
-                        }
-                        for resource in self._unique_resources(resources.values())
-                    ],
-                }
-            )
+            metadata.update({
+                "subject": self._decode_header_value(message.get("Subject", "")),
+                "from": self._decode_header_value(message.get("From", "")),
+                "to": self._decode_header_value(message.get("To", "")),
+                "date": self._decode_header_value(message.get("Date", "")),
+                "content_location": main_resource.url,
+                "resources": [
+                    {
+                        "url": resource.url,
+                        "content_type": resource.content_type,
+                        "resource_type": resource.resource_type.value,
+                        "size": resource.size,
+                    }
+                    for resource in self._unique_resources(resources.values())
+                ],
+            })
         return metadata
 
     @staticmethod
@@ -1368,71 +1366,67 @@ class CSSProcessor:
 
 # ===== Consolidated from converter/html_processor.py =====
 
-_VOID_TAGS = frozenset(
-    {
-        "area",
-        "base",
-        "br",
-        "col",
-        "embed",
-        "hr",
-        "img",
-        "input",
-        "link",
-        "meta",
-        "param",
-        "source",
-        "track",
-        "wbr",
-    }
-)
-_SAFE_EXTRA_ATTRIBUTES = frozenset(
-    {
-        "style",
-        "srcset",
-        "sizes",
-        "loading",
-        "decoding",
-        "fetchpriority",
-        "crossorigin",
-        "integrity",
-        "referrerpolicy",
-        "download",
-        "poster",
-        "background",
-        "data",
-        "form",
-        "formaction",
-        "formenctype",
-        "formmethod",
-        "formnovalidate",
-        "formtarget",
-        "placeholder",
-        "pattern",
-        "minlength",
-        "maxlength",
-        "autocomplete",
-        "autofocus",
-        "required",
-        "multiple",
-        "novalidate",
-        "step",
-        "min",
-        "max",
-        "controls",
-        "loop",
-        "muted",
-        "autoplay",
-        "preload",
-        "sandbox",
-        "allowfullscreen",
-        "frameborder",
-        "scrolling",
-        "marginwidth",
-        "marginheight",
-        "xlink:href",
-    }
-)
+_VOID_TAGS = frozenset({
+    "area",
+    "base",
+    "br",
+    "col",
+    "embed",
+    "hr",
+    "img",
+    "input",
+    "link",
+    "meta",
+    "param",
+    "source",
+    "track",
+    "wbr",
+})
+_SAFE_EXTRA_ATTRIBUTES = frozenset({
+    "style",
+    "srcset",
+    "sizes",
+    "loading",
+    "decoding",
+    "fetchpriority",
+    "crossorigin",
+    "integrity",
+    "referrerpolicy",
+    "download",
+    "poster",
+    "background",
+    "data",
+    "form",
+    "formaction",
+    "formenctype",
+    "formmethod",
+    "formnovalidate",
+    "formtarget",
+    "placeholder",
+    "pattern",
+    "minlength",
+    "maxlength",
+    "autocomplete",
+    "autofocus",
+    "required",
+    "multiple",
+    "novalidate",
+    "step",
+    "min",
+    "max",
+    "controls",
+    "loop",
+    "muted",
+    "autoplay",
+    "preload",
+    "sandbox",
+    "allowfullscreen",
+    "frameborder",
+    "scrolling",
+    "marginwidth",
+    "marginheight",
+    "xlink:href",
+})
 
 
 # This compatibility model mirrors the legacy public node constructor.

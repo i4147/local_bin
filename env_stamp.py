@@ -276,27 +276,25 @@ TOKEN_PREFIX_RE = re.compile(r"(?i)^(?:ghp_|gho_|ghu_|ghs_|ghr_|github_pat_|sk-|
 #: Packages that ship binary/C-extension wheels; presence/absence changes are
 #: ranked above pure-python ones because they interact with the interpreter
 #: and system libraries.  Extend as needed for your domain.
-BINARY_PACKAGES: frozenset[str] = frozenset(
-    {
-        "numpy",
-        "scipy",
-        "pandas",
-        "cryptography",
-        "pydantic-core",
-        "lxml",
-        "pillow",
-        "brotli",
-        "zstandard",
-        "cffi",
-        "regex",
-        "psycopg2",
-        "pyyaml-lib",
-        "orjson",
-        "ujson",
-        "markupsafe",
-        "argon2-cffi",
-    }
-)
+BINARY_PACKAGES: frozenset[str] = frozenset({
+    "numpy",
+    "scipy",
+    "pandas",
+    "cryptography",
+    "pydantic-core",
+    "lxml",
+    "pillow",
+    "brotli",
+    "zstandard",
+    "cffi",
+    "regex",
+    "psycopg2",
+    "pyyaml-lib",
+    "orjson",
+    "ujson",
+    "markupsafe",
+    "argon2-cffi",
+})
 
 #: Entropy threshold (bits per character) above which a value is presumed to
 #: be a secret/token and dropped.
@@ -319,24 +317,22 @@ DEFAULT_TEST_TIMEOUT: float = 900.0
 
 #: Env vars always kept when reconstructing the baseline env surface -- the
 #: minimum needed to actually *run* a child process.
-INFRA_ENV_KEYS: frozenset[str] = frozenset(
-    {
-        "PATH",
-        "HOME",
-        "USER",
-        "LOGNAME",
-        "TERM",
-        "SHELL",
-        "TEMP",
-        "TMP",
-        "SYSTEMROOT",
-        "COMSPEC",
-        "PATHEXT",
-        "SYSTEMDRIVE",
-        "WINDIR",
-        "NUMBER_OF_PROCESSORS",
-    }
-)
+INFRA_ENV_KEYS: frozenset[str] = frozenset({
+    "PATH",
+    "HOME",
+    "USER",
+    "LOGNAME",
+    "TERM",
+    "SHELL",
+    "TEMP",
+    "TMP",
+    "SYSTEMROOT",
+    "COMSPEC",
+    "PATHEXT",
+    "SYSTEMDRIVE",
+    "WINDIR",
+    "NUMBER_OF_PROCESSORS",
+})
 
 _T = TypeVar("_T")
 

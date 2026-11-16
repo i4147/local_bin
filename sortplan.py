@@ -697,13 +697,11 @@ def build_plan(
         else:
             key = lambda x: (len(Path(x["path"]).relative_to(root).parts), x["path"])
         ordered = sorted(members, key=key)
-        duplicates.append(
-            {
-                "keep": ordered[0]["path"],
-                "copies": [x["path"] for x in ordered[1:]],
-                "reclaimable_bytes": sum(x["size"] for x in ordered[1:]),
-            }
-        )
+        duplicates.append({
+            "keep": ordered[0]["path"],
+            "copies": [x["path"] for x in ordered[1:]],
+            "reclaimable_bytes": sum(x["size"] for x in ordered[1:]),
+        })
         dupe_paths.update(x["path"] for x in ordered[1:])
     reserved: set[str] = set()
     moves: list[dict[str, Any]] = []
@@ -730,16 +728,14 @@ def build_plan(
             if chosen is None:
                 unsorted.append({"path": str(path), "reason": "destination collision (skip)"})
                 continue
-            moves.append(
-                {
-                    "src": str(path),
-                    "dst": str(chosen),
-                    **{k: f[k] for k in ("sha256", "size", "mtime_ns", "kind")},
-                    "rule": reason["rule"],
-                    "details": reason,
-                    "conflict": str(chosen) != str(target),
-                }
-            )
+            moves.append({
+                "src": str(path),
+                "dst": str(chosen),
+                **{k: f[k] for k in ("sha256", "size", "mtime_ns", "kind")},
+                "rule": reason["rule"],
+                "details": reason,
+                "conflict": str(chosen) != str(target),
+            })
         except (OSError, ValueError, RuntimeError) as exc:
             unsorted.append({"path": str(path), "reason": str(exc)})
     result: dict[str, Any] = {
@@ -1217,22 +1213,18 @@ def cmd_undo(
     json: Annotated[bool, typer.Option("--json")] = False,
 ) -> None:
     if (
-        sum(
-            (
-                bool(last),
-                plan_id is not None,
-            )
-        )
+        sum((
+            bool(last),
+            plan_id is not None,
+        ))
         > 1
     ):
         msg = "--last, --plan-id are mutually exclusive"
         raise typer.BadParameter(msg)
-    if not any(
-        (
-            bool(last),
-            plan_id is not None,
-        )
-    ):
+    if not any((
+        bool(last),
+        plan_id is not None,
+    )):
         msg = "one of --last, --plan-id is required"
         raise typer.BadParameter(msg)
     _STATE.update(last=last, plan_id=plan_id, json=json, command="undo")

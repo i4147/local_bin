@@ -518,17 +518,15 @@ def main(
     if args.json:
         output_data = []
         for a in all_analyses:
-            output_data.append(
-                {
-                    "source": a.source,
-                    "line": a.line,
-                    "user": a.user,
-                    "schedule": a.schedule,
-                    "explanation": a.explanation,
-                    "runs": [{"at": r.at.isoformat(), "kind": r.kind, "note": r.note} for r in a.runs],
-                    "warnings": a.warnings,
-                }
-            )
+            output_data.append({
+                "source": a.source,
+                "line": a.line,
+                "user": a.user,
+                "schedule": a.schedule,
+                "explanation": a.explanation,
+                "runs": [{"at": r.at.isoformat(), "kind": r.kind, "note": r.note} for r in a.runs],
+                "warnings": a.warnings,
+            })
         print(json.dumps(output_data, indent=2))
     else:
         for a in all_analyses:

@@ -515,37 +515,35 @@ def process_file(task: Task) -> StripFileResult:
     return result
 
 
-SKIP_DIRS: frozenset[str] = frozenset(
-    {
-        ".git",
-        ".hg",
-        ".svn",
-        ".bzr",
-        ".venv",
-        "venv",
-        "env",
-        ".env",
-        "node_modules",
-        "__pycache__",
-        ".mypy_cache",
-        ".pytest_cache",
-        ".ruff_cache",
-        ".cache",
-        ".tox",
-        ".nox",
-        ".ipynb_checkpoints",
-        "build",
-        "dist",
-        "out",
-        "target",
-        ".eggs",
-        "site-packages",
-        ".idea",
-        ".vscode",
-        "htmlcov",
-        "coverage",
-    }
-)
+SKIP_DIRS: frozenset[str] = frozenset({
+    ".git",
+    ".hg",
+    ".svn",
+    ".bzr",
+    ".venv",
+    "venv",
+    "env",
+    ".env",
+    "node_modules",
+    "__pycache__",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".cache",
+    ".tox",
+    ".nox",
+    ".ipynb_checkpoints",
+    "build",
+    "dist",
+    "out",
+    "target",
+    ".eggs",
+    "site-packages",
+    ".idea",
+    ".vscode",
+    "htmlcov",
+    "coverage",
+})
 
 
 class WalkFiles(Protocol):
@@ -758,7 +756,11 @@ def colorize_diff(diff: str, color: bool) -> str:
             else (
                 "32"
                 if line.startswith("+")
-                else "31" if line.startswith("-") else "36" if line.startswith("@@") else ""
+                else "31"
+                if line.startswith("-")
+                else "36"
+                if line.startswith("@@")
+                else ""
             )
         )
         output.append(f"\033[{code}m{line}\033[0m" if code else line)
@@ -967,7 +969,9 @@ def main() -> int:
     label = (
         "Potential source bytes reduced"
         if args.dryrun
-        else "Total source bytes reduced" if args.backup else "Total space freed"
+        else "Total source bytes reduced"
+        if args.backup
+        else "Total space freed"
     )
     print(f"\n{label}: {green(total)} bytes")
     if args.dryrun:

@@ -40,28 +40,26 @@ Task = tuple[Path, list[str]]
 
 console = Console()
 
-IGNORED_CONSTANT_BASE_NAMES: Final[frozenset[str]] = frozenset(
-    {
-        "LOG",
-        "HIDE_CURSOR",
-        "SHOW_CURSOR",
-        "RESET",
-        "CWD",
-        "GREEN",
-        "CHUNK_SIZE",
-        "LOGGER",
-        "CLEAR",
-        "ENTER_ALT",
-        "LEAVE_ALT",
-        "TRANSLATOR",
-        "BACKEND",
-        "BACKEND_ERROR",
-        "HALF_BLOCK",
-        "ROOT",
-        "REVERSE",
-        "__VERSION__",
-    }
-)
+IGNORED_CONSTANT_BASE_NAMES: Final[frozenset[str]] = frozenset({
+    "LOG",
+    "HIDE_CURSOR",
+    "SHOW_CURSOR",
+    "RESET",
+    "CWD",
+    "GREEN",
+    "CHUNK_SIZE",
+    "LOGGER",
+    "CLEAR",
+    "ENTER_ALT",
+    "LEAVE_ALT",
+    "TRANSLATOR",
+    "BACKEND",
+    "BACKEND_ERROR",
+    "HALF_BLOCK",
+    "ROOT",
+    "REVERSE",
+    "__VERSION__",
+})
 
 
 def _constant_name_variants(name: str) -> set[str]:
@@ -161,15 +159,13 @@ def analyze_files(root: Path, min_files: int, exclude: list[str]) -> list[dict[s
     for key, paths in definitions.items():
         unique_paths: list[str] = list(set(paths))
         if len(unique_paths) >= min_files:
-            repeated.append(
-                {
-                    "type": key[0],
-                    "name": key[1],
-                    "source": source_map[key],
-                    "count": len(unique_paths),
-                    "files": unique_paths,
-                }
-            )
+            repeated.append({
+                "type": key[0],
+                "name": key[1],
+                "source": source_map[key],
+                "count": len(unique_paths),
+                "files": unique_paths,
+            })
     repeated.sort(key=lambda item: item["count"], reverse=True)
     return repeated
 

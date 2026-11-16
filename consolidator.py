@@ -1249,7 +1249,8 @@ def render(
         chunks = '    ""'
 
     body = (
-        _BOOTSTRAP_TEMPLATE.replace("@@BUNDLE@@", chunks)
+        _BOOTSTRAP_TEMPLATE
+        .replace("@@BUNDLE@@", chunks)
         .replace("@@ENTRY_PATH@@", repr(plan.entry_archive))
         .replace("@@ENTRY_MODULE@@", repr(plan.entry_module))
         .replace("@@DEBUG@@", "True" if runtime_debug else "False")
@@ -1274,21 +1275,19 @@ def write_output(text: str, output: str | Path | None) -> Path | None:
     return path
 
 
-_ANALYZE_KEYS: frozenset[str] = frozenset(
-    {
-        "add_python_path",
-        "module_mode",
-        "include_packages",
-        "site_paths",
-        "exclude_modules",
-        "include_data",
-        "include_package_data",
-        "exclude_data",
-        "whole_package",
-        "strict",
-        "main_module",
-    }
-)
+_ANALYZE_KEYS: frozenset[str] = frozenset({
+    "add_python_path",
+    "module_mode",
+    "include_packages",
+    "site_paths",
+    "exclude_modules",
+    "include_data",
+    "include_package_data",
+    "exclude_data",
+    "whole_package",
+    "strict",
+    "main_module",
+})
 _RENDER_KEYS: frozenset[str] = frozenset({"python", "compression", "runtime_debug", "keep_tmpdir", "deterministic"})
 
 

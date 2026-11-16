@@ -964,24 +964,20 @@ def _stroke_run(pts, closed, hw, cap, join, miter):
         elif cap == "square":
             ux, uy = d0
             nx, ny = -uy * hw, ux * hw
-            polys.append(
-                [
-                    (p0[0] + nx, p0[1] + ny),
-                    (p0[0] + nx - ux * hw, p0[1] + ny - uy * hw),
-                    (p0[0] - nx - ux * hw, p0[1] - ny - uy * hw),
-                    (p0[0] - nx, p0[1] - ny),
-                ]
-            )
+            polys.append([
+                (p0[0] + nx, p0[1] + ny),
+                (p0[0] + nx - ux * hw, p0[1] + ny - uy * hw),
+                (p0[0] - nx - ux * hw, p0[1] - ny - uy * hw),
+                (p0[0] - nx, p0[1] - ny),
+            ])
             ux, uy = d1
             nx, ny = -uy * hw, ux * hw
-            polys.append(
-                [
-                    (p1[0] + nx, p1[1] + ny),
-                    (p1[0] + nx + ux * hw, p1[1] + ny + uy * hw),
-                    (p1[0] - nx + ux * hw, p1[1] - ny + uy * hw),
-                    (p1[0] - nx, p1[1] - ny),
-                ]
-            )
+            polys.append([
+                (p1[0] + nx, p1[1] + ny),
+                (p1[0] + nx + ux * hw, p1[1] + ny + uy * hw),
+                (p1[0] - nx + ux * hw, p1[1] - ny + uy * hw),
+                (p1[0] - nx, p1[1] - ny),
+            ])
     return polys
 
 

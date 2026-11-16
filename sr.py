@@ -34,29 +34,27 @@ __version__ = "2.0.0"
 
 # ---------------------------------------------------------------- constants
 
-IGNORE_DIRS = frozenset(
-    {
-        "autom4te.cache",
-        "blib",
-        "_build",
-        ".bzr",
-        ".cdv",
-        "cover_db",
-        "CVS",
-        "_darcs",
-        "~.dep",
-        "~.dot",
-        ".git",
-        ".hg",
-        "~.nib",
-        ".pc",
-        "~.plst",
-        "RCS",
-        "SCCS",
-        "_sgbak",
-        ".svn",
-    }
-)
+IGNORE_DIRS = frozenset({
+    "autom4te.cache",
+    "blib",
+    "_build",
+    ".bzr",
+    ".cdv",
+    "cover_db",
+    "CVS",
+    "_darcs",
+    "~.dep",
+    "~.dot",
+    ".git",
+    ".hg",
+    "~.nib",
+    ".pc",
+    "~.plst",
+    "RCS",
+    "SCCS",
+    "_sgbak",
+    ".svn",
+})
 
 IGNORE_FILE_PATTERNS = tuple(
     re.compile(p)
@@ -686,15 +684,13 @@ def main(
     if cfg.stats:
         if cfg.json_output:
             print(
-                json.dumps(
-                    {
-                        "summary": {
-                            "files_scanned": total_files,
-                            "files_matched": matched_files,
-                            "total_matches": total_matches,
-                        }
+                json.dumps({
+                    "summary": {
+                        "files_scanned": total_files,
+                        "files_matched": matched_files,
+                        "total_matches": total_matches,
                     }
-                ),
+                }),
                 file=sys.stderr,
             )
         else:

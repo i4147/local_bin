@@ -572,16 +572,14 @@ def append_trim_log(repo: Path, branches: list[BranchRef], source: str) -> Path:
     with path.open("a", encoding="utf-8") as fh:
         for br in branches:
             fh.write(
-                json.dumps(
-                    {
-                        "ts": now,
-                        "action": "delete",
-                        "source": source,
-                        "name": br.name,
-                        "sha": br.sha,
-                        "upstream": br.upstream or None,
-                    }
-                )
+                json.dumps({
+                    "ts": now,
+                    "action": "delete",
+                    "source": source,
+                    "name": br.name,
+                    "sha": br.sha,
+                    "upstream": br.upstream or None,
+                })
                 + "\n"
             )
     return path
@@ -698,16 +696,14 @@ def render_scan_table(analysis: Analysis, use_color: bool = False) -> str:
         method = br.method.value if br.method else "-"
         safe = "yes" if br.safe else "no"
         rows.append([br.name, humanize_age(br.age_days), merged, method, safe, why_text(br)])
-        colors.append(
-            [
-                None,
-                None,
-                "32" if br.merged is True else ("31" if br.merged is False else "33"),
-                None,
-                "32" if br.safe else "31",
-                None,
-            ]
-        )
+        colors.append([
+            None,
+            None,
+            "32" if br.merged is True else ("31" if br.merged is False else "33"),
+            None,
+            "32" if br.safe else "31",
+            None,
+        ])
     return render_table(headers, rows, caps, colors, use_color)
 
 

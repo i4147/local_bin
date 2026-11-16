@@ -1314,15 +1314,13 @@ def main(argv: list[str] | None = None) -> int:
     apply_config(args, config)
 
     if args.interactive and not args.rename and not args.check_auth:
-        updated = prompt_missing(
-            {
-                "author": args.author,
-                "email": args.email,
-                "description": args.description,
-                "license": args.license,
-                "backend": args.backend,
-            }
-        )
+        updated = prompt_missing({
+            "author": args.author,
+            "email": args.email,
+            "description": args.description,
+            "license": args.license,
+            "backend": args.backend,
+        })
         args.author = updated.get("author") or args.author
         args.email = updated.get("email") or args.email
         args.description = updated.get("description") or args.description
@@ -1491,46 +1489,38 @@ def cli(
     profile: Annotated[str | None, typer.Option("--profile")] = None,
 ) -> None:
     if (
-        sum(
-            (
-                bool(single_file),
-                bool(cython),
-                bool(cython_package),
-            )
-        )
+        sum((
+            bool(single_file),
+            bool(cython),
+            bool(cython_package),
+        ))
         > 1
     ):
         msg = "-s, -c, --cython-package are mutually exclusive"
         raise typer.BadParameter(msg)
     if (
-        sum(
-            (
-                bool(cli),
-                bool(no_cli),
-            )
-        )
+        sum((
+            bool(cli),
+            bool(no_cli),
+        ))
         > 1
     ):
         msg = "--cli, --no-cli are mutually exclusive"
         raise typer.BadParameter(msg)
     if (
-        sum(
-            (
-                bool(tests),
-                bool(no_tests),
-            )
-        )
+        sum((
+            bool(tests),
+            bool(no_tests),
+        ))
         > 1
     ):
         msg = "--tests, --no-tests are mutually exclusive"
         raise typer.BadParameter(msg)
     if (
-        sum(
-            (
-                bool(pre_commit),
-                bool(no_pre_commit),
-            )
-        )
+        sum((
+            bool(pre_commit),
+            bool(no_pre_commit),
+        ))
         > 1
     ):
         msg = "--pre-commit, --no-pre-commit are mutually exclusive"

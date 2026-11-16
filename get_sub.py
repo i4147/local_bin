@@ -1057,14 +1057,12 @@ class GetSubtitles:
             if self.s_error and not self.debug:
                 self.s_error += "add --debug to get more info of the error"
             if self.s_error:
-                self.failed_list.append(
-                    {
-                        "name": video.name,
-                        "path": video.path,
-                        "error": self.s_error,
-                        "trace_back": self.f_error,
-                    }
-                )
+                self.failed_list.append({
+                    "name": video.name,
+                    "path": video.path,
+                    "error": self.s_error,
+                    "trace_back": self.f_error,
+                })
                 print("ERROR:" + self.s_error)
             if i == len(videos) - 1:
                 break

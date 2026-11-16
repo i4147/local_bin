@@ -414,17 +414,15 @@ def build_url_for_target(target: str, mode: str, api_key: str, args: argparse.Na
         params = {"apiKey": api_key, "domainName": target, "type": "_all", "outputFormat": "JSON"}
         return f"{DNS_BASE}?{urlencode(params)}", False
 
-    history = args.history or any(
-        (
-            args.since_date,
-            args.created_date_from,
-            args.created_date_to,
-            args.updated_date_from,
-            args.updated_date_to,
-            args.expired_date_from,
-            args.expired_date_to,
-        )
-    )
+    history = args.history or any((
+        args.since_date,
+        args.created_date_from,
+        args.created_date_to,
+        args.updated_date_from,
+        args.updated_date_to,
+        args.expired_date_from,
+        args.expired_date_to,
+    ))
     domain = encode_domain(target)
     if history:
         params = {"apiKey": api_key, "outputformat": "JSON", "mode": "purchase", "domainName": domain}
@@ -1383,13 +1381,11 @@ def cli(
     manpage: Annotated[bool, typer.Option("--manpage", help="Print a manpage and exit.")] = False,
 ) -> None:
     if (
-        sum(
-            (
-                rawtext is not None,
-                bool(fullrawtext),
-                bool(strippedrawtext),
-            )
-        )
+        sum((
+            rawtext is not None,
+            bool(fullrawtext),
+            bool(strippedrawtext),
+        ))
         > 1
     ):
         msg = "--rawtext, --fullrawtext, --strippedrawtext are mutually exclusive"

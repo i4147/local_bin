@@ -275,7 +275,8 @@ def check_issn(entry: dict, try_fix: bool) -> bool:
             return True
         sparql = SPARQLWrapper("http://dbpedia.org/sparql")
         sparql.setReturnFormat(JSON)
-        sparql.setQuery("""
+        sparql.setQuery(
+            """
             PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
             PREFIX type: <http://dbpedia.org/ontology/>
             SELECT ?journal ?issn
@@ -284,7 +285,8 @@ def check_issn(entry: dict, try_fix: bool) -> bool:
                      rdfs:label ?journal_name ;
                      dbo:issn ?issn .
                      FILTER(str(?journal_name)="{}")
-        }}""".format(journal))
+        }}""".format(journal)
+        )
         try:
             results = sparql.query().convert()
         except Exception:
