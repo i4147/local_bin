@@ -1,21 +1,16 @@
 #!/data/data/com.termux/files/usr/bin/env python
-"Utilities for pydf."
-
-from math import log
 import os
-from pathlib import Path
 import re
 import struct
 import sys
-from typing import Any, Optional
 import unicodedata
-
+from math import log
+from typing import Any, Dict, List, Optional, Tuple, Union
 import typer
-
 
 app = typer.Typer(add_completion=False)
 
-colours: dict[str, str] = {
+colours: Dict[str, str] = {
     "none": "",
     "default": "\033[0m",
     "bold": "\033[1m",
@@ -45,23 +40,20 @@ colours: dict[str, str] = {
 
 class Bar:
     def __init__(self, percentage: float = 0.0, width: int = 2, header: bool = False) -> None:
-        "Initialize the instance state from the supplied arguments."
         self.percentage = percentage
         self.width = width
         self.header = header
 
     def __len__(self) -> int:
-        "Return the number of items represented by the object."
         return self.width
 
     def __str__(self) -> str:
-        "Return the object's display string."
         return self.format("l")
 
     def format(self, pos: str) -> str:
         if self.header:
             return " " * self.width
-        size = round(self.percentage * (self.width - 2))
+        size = int(round(self.percentage * (self.width - 2)))
         return "[" + manglestring(size * barchar, self.width - 2, pos, bar_fillchar) + "]"
 
 
@@ -70,10 +62,8 @@ class DumbStatus:
 
 
 def get_terminal_width_termios() -> Optional[int]:
-    "Return terminal width termios."
     try:
-        import fcntl
-        import termios
+        import fcntl, termios
     except ImportError:
         return None
     s = struct.pack("HHHH", 0, 0, 0, 0)
@@ -85,7 +75,6 @@ def get_terminal_width_termios() -> Optional[int]:
 
 
 def get_terminal_width_resize() -> Optional[int]:
-    "Return terminal width resize."
     import subprocess
 
     status, output = subprocess.getstatusoutput("resize")
@@ -104,12 +93,10 @@ def get_terminal_width_resize() -> Optional[int]:
 
 
 def get_terminal_width_dumb() -> int:
-    "Return terminal width dumb."
     return 80
 
 
 def get_terminal_width() -> int:
-    "Return terminal width."
     for handler in [get_terminal_width_termios, get_terminal_width_resize, get_terminal_width_dumb]:
         width = handler()
         if width:
@@ -118,12 +105,11 @@ def get_terminal_width() -> int:
 
 
 def find_mountpoint(path: str) -> Optional[str]:
-    "Find mountpoint."
-    if not Path(path).exists():
-        sys.stderr.write(f"pydf: {path!r}: No such file or directory\n")
+    if not os.path.exists(path):
+        sys.stderr.write(f"pydf: {repr(path)}: No such file or directory\n")
         return None
-    while not Path(path).is_mount():
-        path = str(Path(path).parent)
+    while not os.path.ismount(path):
+        path = os.path.dirname(path)
     return path
 
 
@@ -160,26 +146,27 @@ def hfnum(size: int, base: int) -> str:
     units = [""] if inodes else ["B"]
     units += ["k", "M", "G", "T", "P", "Z", "Y"]
     power = int(log(size) / log(base))
-    power = max(power, 0)
+    if power < 0:
+        power = 0
     if power >= len(units):
         power = len(units) - 1
-    nsize = round(1.0 * size / (base**power))
+    nsize = int(round(1.0 * size / (base**power)))
     if nsize < 10 and power >= 1:
         power -= 1
-        nsize = round(1.0 * size / (base**power))
+        nsize = int(round(1.0 * size / (base**power)))
     return str(nsize) + units[power]
 
 
-def myformat(number: float, sizeformat: str, fs_blocksize: int) -> str:
+def myformat(number: Union[int, float], sizeformat: str, fs_blocksize: int) -> str:
     size = int(number) * fs_blocksize
     if blocksize:
-        return str(round(1.0 * size / blocksize))
+        return str(int(round(1.0 * size / blocksize)))
     if sizeformat == "-k":
-        return str(round(size / 1024.0))
+        return str(int(round(size / 1024.0)))
     elif sizeformat == "-m":
-        return str(round(size / (1024.0 * 1024)))
+        return str(int(round(size / (1024.0 * 1024))))
     elif sizeformat == "-g":
-        return str(round(size / (1024.0 * 1024 * 1024)))
+        return str(int(round(size / (1024.0 * 1024 * 1024))))
     elif sizeformat == "-h":
         return hfnum(size, 1024)
     elif sizeformat == "-H":
@@ -187,8 +174,7 @@ def myformat(number: float, sizeformat: str, fs_blocksize: int) -> str:
     elif sizeformat == "--blocks":
         return str(number)
     else:
-        msg = f"Impossible error, sizeformat={sizeformat!r}"
-        raise ValueError(msg)
+        raise ValueError(f"Impossible error, sizeformat={repr(sizeformat)}")
 
 
 def manglestring(s: str, l: int, pos: str, fillchar: str = " ") -> str:
@@ -199,14 +185,13 @@ def manglestring(s: str, l: int, pos: str, fillchar: str = " ") -> str:
     elif pos == "c":
         ns = s.center(l, fillchar)
     else:
-        msg = "Error in manglestring"
-        raise ValueError(msg)
+        raise ValueError("Error in manglestring")
     if len(ns) > l:
         ns = ns[: int(l / 2)] + "~" + ns[-int(l / 2) + 1 :]
     return ns
 
 
-def makecolour(clist: str | list[str]) -> str:
+def makecolour(clist: Union[str, List[str]]) -> str:
     s = ""
     lclist = [clist] if isinstance(clist, str) else clist
     for i in lclist:
@@ -214,16 +199,15 @@ def makecolour(clist: str | list[str]) -> str:
     return s
 
 
-def get_all_mountpoints() -> dict[str, tuple[str, str, list[str]]]:
-    "Return all mountpoints."
+def get_all_mountpoints() -> Dict[str, Tuple[str, str, List[str]]]:
     dummy_result = {"/": ("/", "", [])}
     f = None
     if isinstance(mountfile, str):
-        if Path(mountfile).exists():
+        if os.path.exists(mountfile):
             f = open(mountfile, "rb")
     else:
         for i in mountfile:
-            if Path(i).exists():
+            if os.path.exists(i):
                 f = open(i, "rb")
                 break
 
@@ -244,7 +228,7 @@ def get_all_mountpoints() -> dict[str, tuple[str, str, list[str]]]:
             on = onparts[0]
             opts = onparts[-1][1:-1].split(",")
             r[on] = (device, "", opts)
-        return r or dummy_result
+        return r if r else dummy_result
 
     mountlines = f.readlines()
     f.close()
@@ -268,17 +252,14 @@ def niceprint_fs(fs: Any) -> Any:
 
 
 def is_remote_fs(fs: str) -> bool:
-    "Return whether remote fs."
     return fs.lower() in ["nfs", "smbfs", "cifs", "ncpfs", "afs", "coda", "ftpfs", "mfs", "sshfs", "fuse.sshfs", "nfs4"]
 
 
 def is_special_fs(fs: str) -> bool:
-    "Return whether special fs."
     return fs.lower() in ["tmpfs", "devpts", "devtmpfs", "proc", "sysfs", "usbfs", "devfs", "fdescfs", "linprocfs"]
 
 
-def get_row_mp(mp: Optional[str]) -> Optional[list[tuple[str, Any]]]:
-    "Return row mp."
+def get_row_mp(mp: Optional[str]) -> Optional[List[Tuple[str, Any]]]:
     global \
         local_fs_colour, \
         remote_fs_colour, \
@@ -389,8 +370,7 @@ def get_row_mp(mp: Optional[str]) -> Optional[list[tuple[str, Any]]]:
     return row
 
 
-def get_table(mps: list[str]) -> list[list[tuple[str, Any]]]:
-    "Return table."
+def get_table(mps: List[str]) -> List[List[Tuple[str, Any]]]:
     rows = [get_row_mp(None)]
     for mp in mps:
         row = get_row_mp(mp)
@@ -399,7 +379,7 @@ def get_table(mps: list[str]) -> list[list[tuple[str, Any]]]:
     return rows
 
 
-def squeeze_table(table: list[list[tuple[str, Any]]], desired_width: int) -> None:
+def squeeze_table(table: List[List[Tuple[str, Any]]], desired_width: int) -> None:
     cols = len(table[0])
     minrow = []
     for j in format_spec:
@@ -427,8 +407,9 @@ def squeeze_table(table: list[list[tuple[str, Any]]], desired_width: int) -> Non
             new_maxrow[i] -= to_reduce
             to_reduce = 0
             break
-        new_maxrow[i] -= delta
-        to_reduce -= delta
+        else:
+            new_maxrow[i] -= delta
+            to_reduce -= delta
 
     if to_reduce > 0:
         new_maxrow = maxrow
@@ -444,7 +425,7 @@ def squeeze_table(table: list[list[tuple[str, Any]]], desired_width: int) -> Non
             row[col][1] = formatted
 
 
-def display_table(table: list[list[tuple[str, Any]]], term_width: int) -> None:
+def display_table(table: List[List[Tuple[str, Any]]], term_width: int) -> None:
     squeeze_table(table, term_width - 1)
     colsepcol = makecolour(column_separator_colour)
     for row in table:
@@ -462,7 +443,7 @@ def display_table(table: list[list[tuple[str, Any]]], term_width: int) -> None:
         out("\n")
 
 
-def display_termux_list(table: list[list[tuple[str, Any]]]) -> None:
+def display_termux_list(table: List[List[Tuple[str, Any]]]) -> None:
     data_rows = table[1:]
     sys.stdout.write("Filesystems (Termux Environment):\n")
     for row in data_rows:
@@ -506,7 +487,7 @@ format_spec = [
 
 barchar = "#"
 bar_fillchar = "."
-mountfile: str | list[str] = ["/etc/mtab", "/etc/mnttab", "/proc/mounts"]
+mountfile: Union[str, List[str]] = ["/etc/mtab", "/etc/mnttab", "/proc/mounts"]
 
 header = {
     "fs": "Filesystem",
@@ -524,10 +505,10 @@ allfss = False
 localonly = False
 inodes = False
 terminal_width = 80
-mountpoints: dict[str, tuple[str, str, list[str]]] = {}
+mountpoints: Dict[str, Tuple[str, str, List[str]]] = {}
 
-for conffile in ["/etc/pydfrc", str(Path("~/.pydfrc").expanduser())]:
-    if Path(conffile).is_file():
+for conffile in ["/etc/pydfrc", os.path.expanduser("~/.pydfrc")]:
+    if os.path.isfile(conffile):
         with open(conffile, "rb") as cf:
             exec(compile(cf.read(), conffile, "exec"))
 
@@ -535,7 +516,7 @@ for conffile in ["/etc/pydfrc", str(Path("~/.pydfrc").expanduser())]:
 @app.callback(invoke_without_command=True)
 def main(
     ctx: typer.Context,
-    args: Optional[list[str]] = typer.Argument(None, help="Files or mountpoints"),
+    args: Optional[List[str]] = typer.Argument(None, help="Files or mountpoints"),
     show_all: bool = typer.Option(False, "-a", "--all", help="include filesystems having 0 blocks"),
     human_readable: bool = typer.Option(False, "-h", "--human-readable", help="print sizes in human readable format"),
     si: bool = typer.Option(False, "-H", "--si", help="use powers of 1000 not 1024"),
@@ -550,7 +531,6 @@ def main(
     show_binds: bool = typer.Option(True, "-B", "--show-binds", help="show 'mount --bind' mounts"),
     inodes_opt: bool = typer.Option(False, "-i", "--inodes", help="show inode instead of block usage"),
 ):
-    "Run the command-line interface."
     global \
         blocksize, \
         allfss, \
@@ -603,7 +583,7 @@ def main(
     mountpoints = get_all_mountpoints()
 
     if args:
-        mp_to_display = [find_mountpoint(str(Path(x).resolve())) for x in args]
+        mp_to_display = [find_mountpoint(os.path.realpath(x)) for x in args]
         mp_to_display = [x for x in mp_to_display if x is not None]
     else:
         mp_to_display = list(mountpoints.keys())

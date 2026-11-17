@@ -28,27 +28,41 @@ Usage
     python strip_comments.py             # rewrite every .py file under "."
     python strip_comments.py src/ -t     # also drop type annotations
     python strip_comments.py -j 8        # 8 worker processes (default: 4)
-    python strip_comments.py --dry-run   # report only, write nothing
+    python strip_comments.py -d          # print a colored diff per changed file
+    python strip_comments.py -n          # dry run: diff only, write nothing
+
+Cache and resume
+----------------
+Both live beside the files being rewritten and are safe to delete or commit
+ignored:
+
+* ``.strip-comments-cache.json`` -- ``path -> (size, mtime_ns)`` for files that
+  were inspected, so a re-run skips unchanged files without parsing them.
+  Disable with ``--no-cache``.
+* ``.strip-comments-progress.json`` -- written on Ctrl+C (and every
+  ``CHECKPOINT_EVERY`` files) with the work that is still pending. The next run
+  picks it up automatically: ``--resume`` is the default, ``--no-resume`` starts
+  over. A finished run deletes the file.
 """
 
 from __future__ import annotations
+
 import ast
-from difflib import unified_diff
 import io
 import json
 import multiprocessing as mp
 import os
-from pathlib import Path
 import re
 import textwrap
 import tokenize
+from difflib import unified_diff
+from pathlib import Path
 from typing import Iterable, Iterator, NamedTuple, Sequence
 
 import libcst as cst
+import typer
 from rich.console import Console
 from rich.text import Text
-import typer
-
 
 # --------------------------------------------------------------------------- #
 # Configuration
@@ -236,7 +250,8 @@ def _looks_like_code(code: str) -> bool:
 
 def _uncomment(tok: tokenize.TokenInfo) -> str:
     body = tok.string[1:]  # drop the leading '#'
-    body = body.removeprefix(" ")
+    if body.startswith(" "):
+        body = body[1:]
     return body.rstrip()
 
 
@@ -847,7 +862,7 @@ app = typer.Typer(
 @app.command()
 def main(
     directory: Path = typer.Argument(
-        Path(),
+        Path("."),
         exists=True,
         help="Directory to rewrite recursively (default: current directory).",
     ),
@@ -882,12 +897,12 @@ def main(
     cache: bool = typer.Option(
         True,
         "--cache/--no-cache",
-        help=f"Skip unchanged files using {CACHE_FILE.name} (stat-based).",
+        help="Skip files that are unchanged since the last run (stat-based cache).",
     ),
     resume: bool = typer.Option(
         True,
         "--resume/--no-resume",
-        help=f"Resume an interrupted run from {PROGRESS_FILE.name}; --no-resume starts over.",
+        help="Resume an interrupted run; --no-resume starts over.",
     ),
 ) -> None:
     """Strip comments and docstrings from Python files in place."""
@@ -915,12 +930,17 @@ def main(
     cache_data: dict[str, list[int]] = dict(known_cache)
 
     # Work out what is left to do: unfinished files minus cache hits.
+    # The journal stores *paths*, not indices, so adding or deleting files
+    # between the interrupted run and the resume cannot silently shift work.
+    positions = {str(path): index for index, path in enumerate(files)}
     skipped_cache = 0
     todo: list[Job] = []
     if journal:
-        wanted = sorted(journal["pending"])
-        skipped_done = max(0, journal.get("total", 0) - len(wanted))
-        candidates = [(i, files[i]) for i in wanted if 0 <= i < len(files)]
+        wanted = set(journal["pending"])
+        pending_paths = [path for path in wanted if path in positions]
+        skipped_done = max(0, journal.get("total", 0) - len(pending_paths))
+        candidates = [(positions[path], Path(path)) for path in pending_paths]
+        candidates.sort()
     else:
         skipped_done = 0
         candidates = list(enumerate(files))
@@ -934,24 +954,20 @@ def main(
         todo.append(Job(index, str(path), strip_types, dry_run, show_diff))
 
     total = len(files)
-    pending_ids = [job.index for job in todo]
-    index_map = {job.index: job.path for job in todo}  # for journal bookkeeping
     state = {
         "job": run_id,
         "version": SCHEMA_VERSION,
         "total": total,
-        "index": index_map,
-        "pending": pending_ids,
+        "pending": [job.path for job in todo],
         "written": 0,  # bytes freed so far (journaled so a resume can report a total)
         "changed": 0,
         "errors": [],  # [name, message] pairs
         "cache": {},  # key -> signature, only for files we rewrote
     }
     if journal:
-        state["written"] = journal.get("written", 0)
-        state["changed"] = journal.get("changed", 0)
-        state["errors"] = journal.get("errors", [])
-        state["cache"] = journal.get("cache", {})
+        for key in ("written", "changed", "errors", "cache"):
+            if key in journal:
+                state[key] = journal[key]
 
     banner = Text.assemble(
         (f"{total} file{'s' if total != 1 else ''} ", "bold"),
@@ -976,7 +992,7 @@ def main(
     freed = state["written"]
     changed = state["changed"]
     errors: list[tuple[str, str]] = [tuple(e) for e in state["errors"]]
-    pending = list(pending_ids)
+    pending = [job.path for job in todo]
     processed = 0
 
     pool = None if dry_run or jobs == 1 else mp.Pool(processes=jobs)
@@ -992,8 +1008,8 @@ def main(
 
         for result in results:
             processed += 1
-            if result.index in state["index"]:
-                pending.remove(result.index)
+            if result.path in pending:
+                pending.remove(result.path)
             checkpoint = processed % CHECKPOINT_EVERY == 0 or processed == len(todo)
 
             if result.error:
