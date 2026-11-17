@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Annotated, Any
 
 import click
 import typer
-
+from dh import SKIP_DIRS, MAX_WORKERS
 
 if TYPE_CHECKING:
     import argparse
@@ -68,26 +68,8 @@ except ImportError:
 
 __version__ = "2.1.0"
 PROG = "strip_comments"
-BACKUP_SUFFIX = ".pystripbak"
+BACKUP_SUFFIX = ".bak"
 PY_SUFFIXES = frozenset({".py", ".pyi", ".pyw"})
-SKIP_DIRS = frozenset({
-    ".git",
-    ".hg",
-    ".svn",
-    ".tox",
-    ".nox",
-    ".venv",
-    "venv",
-    "env",
-    "__pycache__",
-    ".mypy_cache",
-    ".pytest_cache",
-    ".ruff_cache",
-    "node_modules",
-    "build",
-    "dist",
-    ".eggs",
-})
 PARALLEL_MIN_FILES = 4
 
 
@@ -461,10 +443,10 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     try:
         if use_parallel:
-            workers = min(args.jobs, total)
+            chunksize = min(500, math.ceil(total / (4 * MAX_WORKERS)))
             task_args = [(str(f), opts, dry_run, backup) for f in files]
-            with mp.Pool(workers) as pool:
-                for r in pool.imap_unordered(_worker, task_args, chunksize=args.chunksize):
+            with mp.Pool(MAX_WORKERS) as pool:
+                for r in pool.imap_unordered(_worker, task_args, chunksize=chunksize):
                     report(r)
         else:
             for f in files:
