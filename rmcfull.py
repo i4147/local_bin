@@ -35,6 +35,7 @@ from typing import Iterable, Iterator, Protocol, cast
 
 from loguru import logger
 
+
 _Edit = tuple[int, int, bytes]
 
 

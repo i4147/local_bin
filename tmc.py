@@ -36,6 +36,7 @@ import libcst as cst
 from loguru import logger
 from rich.progress import Progress
 
+
 if TYPE_CHECKING:
     from rich.progress import TaskID
 

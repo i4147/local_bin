@@ -1,923 +1,1077 @@
 #!/data/data/com.termux/files/usr/bin/env python
-"Utilities for clean-py."
+"""Strip comments and docstrings from Python files, in place.
 
-from __future__ import absolute_import
-import contextlib
-from dataclasses import dataclass, field, replace
-import difflib
-from functools import partial
+Uses ``libcst`` so the rewrite is a real CST transformation (never a regex over
+source text), then re-validates every result with ``ast.parse`` before it is
+allowed to touch the disk.
+
+What is removed
+---------------
+* comments (both whole-line comments and trailing comments)
+* docstrings of modules, classes and functions/methods
+
+What is always kept
+-------------------
+* ``# editor`` comments (and other editor/tool directives below)
+* TODO / FIXME / XXX / HACK / NOTE markers, in any form (``# TODO``,
+  ``# FIXME(john): later``, ``# todo later``, ``# ... (FIXME: keep this?)``)
+* shebangs and encoding cookies
+* commented-out *code*: runs of consecutive ``#`` lines are un-commented and
+  parsed; if the run parses as Python (and is not just prose / a bare name),
+  those lines are left untouched.
+
+``--strip-types`` / ``-t`` additionally removes type annotations, including
+``x: int = 1`` -> ``x = 1`` and ``def f(a: int) -> str`` -> ``def f(a)``.
+
+Usage
+-----
+    python strip_comments.py             # rewrite every .py file under "."
+    python strip_comments.py src/ -t     # also drop type annotations
+    python strip_comments.py -j 8        # 8 worker processes (default: 4)
+    python strip_comments.py --dry-run   # report only, write nothing
+"""
+
+from __future__ import annotations
+import ast
+from difflib import unified_diff
+import io
 import json
-from multiprocessing import cpu_count
-from multiprocessing.dummy import Pool
+import multiprocessing as mp
+import os
 from pathlib import Path
-import shutil
-from subprocess import run
-import sys
-import tempfile
-import time
-from typing import Any, Callable, Optional, Sequence
+import re
+import textwrap
+import tokenize
+from typing import Iterable, Iterator, NamedTuple, Sequence
 
-from autoflake import fix_code
-from black import DEFAULT_LINE_LENGTH, FileMode, NothingChanged, format_file_contents
-from isort import code as isort_code
-from loguru import logger
+import libcst as cst
 from rich.console import Console
-from rich.progress import BarColumn, Progress, SpinnerColumn, TaskProgressColumn, TextColumn
-from rich.table import Table
+from rich.text import Text
 import typer
 
-try:
-    from black import TargetVersion  # type: ignore[attr-defined]
 
-    _HAS_TARGET_VERSION = True
-except ImportError:
-    TargetVersion = None  # type: ignore[assignment,misc]
-    _HAS_TARGET_VERSION = False
+# --------------------------------------------------------------------------- #
+# Configuration
+# --------------------------------------------------------------------------- #
 
-try:
-    import tomllib  # type: ignore[import-not-found]
-except ImportError:
+#: Default number of worker processes (``-j/--workers`` overrides it).
+WORKERS = 4
+
+#: Bump when the transformation itself changes, to invalidate cache + journals.
+SCHEMA_VERSION = 2
+
+#: Cache and resume state live next to the files being rewritten.
+CACHE_FILE = Path(".strip-comments-cache.json")
+PROGRESS_FILE = Path(".strip-comments-progress.json")
+
+#: Journal a checkpoint every N files, so Ctrl+C loses at most this much work.
+CHECKPOINT_EVERY = 20
+
+#: Upper bound on fixpoint iterations per file (2 is the normal case).
+MAX_PASSES = 4
+
+#: Three or more blank lines in a row (the residue a comment removal can leave).
+_BLANK_RUN_RE = re.compile(r"\n[ \t]*\n[ \t]*\n[ \t]*\n")
+
+#: Comments matching this are never removed ("# editor: vim", "# vim: set ts=4",
+#: "# -*- coding: utf-8 -*-", ...).
+EDITOR_COMMENT_RE = re.compile(
+    r"^\#\s*(?:editor\b|editorconfig\b|vim?[:\s]|vi[:\s]|ex[:\s]|emacs|-\*-)",
+    re.IGNORECASE,
+)
+
+#: Task markers. Matched on their own (not folded into the pragma rule) so a
+#: bare ``# TODO``, ``# FIXME(john)`` or ``# todo later`` is never stripped --
+#: those are notes for humans, not redundant prose.
+TASK_MARKER_RE = re.compile(r"^\#\s*(?:TODO|FIXME|XXX|HACK|NOTE)\b", re.IGNORECASE)
+
+#: A TODO/FIXME mentioned mid-comment ("# implicit all (FIXME: keep this?)")
+#: counts too, but only in upper case: lower-case mentions are usually prose or
+#: identifiers ("# don't do todo.remove() in the loop").
+INLINE_MARKER_RE = re.compile(r"\b(?:TODO|FIXME)\b")
+
+#: Tool pragmas that change the meaning of the code around them, so they must
+#: survive too; deleting them silently breaks linters/type-checkers.
+PRAGMA_COMMENT_RE = re.compile(
+    r"^\#\s*(?:noqa|nosec|type:|pyright:|mypy:|pylint:|ruff:|flake8:|fmt:|isort:|yapf:|"
+    r"pragma:|region|endregion)",
+    re.IGNORECASE,
+)
+
+#: Directories that never contain user code worth rewriting.
+SKIP_DIRS = frozenset({
+    ".git",
+    ".hg",
+    ".svn",
+    ".bzr",
+    "__pycache__",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".hypothesis",
+    ".tox",
+    ".nox",
+    ".eggs",
+    ".venv",
+    "venv",
+    "env",
+    "node_modules",
+    ".next",
+    ".nuxt",
+    ".cache",
+    "site-packages",
+    ".idea",
+    ".vscode",
+    ".arena",
+    ".local",
+})
+
+PY_SOURCE_SUFFIXES = frozenset({".py", ".pyw"})
+
+CONSOLE = Console(highlight=False, soft_wrap=False)
+
+# Styles degrade to plain text on terminals without colour support.
+_DIM = "grey35" if CONSOLE.color_system else "dim"
+_GOOD = "green"
+_BAD = "bold red"
+
+# --------------------------------------------------------------------------- #
+# Filesystem walker
+# --------------------------------------------------------------------------- #
+
+
+def _has_python_shebang(path: Path) -> bool:
+    """True when an extension-less file starts with a python shebang."""
     try:
-        import tomli as tomllib  # type: ignore[no-redef,import-not-found]
-    except ImportError:
-        tomllib = None  # type: ignore[assignment]
-
-try:
-    import pathspec as _pathspec  # type: ignore[import-not-found]
-except ImportError:
-    _pathspec = None  # type: ignore[assignment]
-
-try:
-    from watchdog.events import FileSystemEventHandler  # type: ignore[import-not-found]
-    from watchdog.observers import Observer  # type: ignore[import-not-found]
-
-    _HAS_WATCHDOG = True
-except ImportError:
-    Observer = None  # type: ignore[assignment,misc]
-    FileSystemEventHandler = object  # type: ignore[misc,assignment]
-    _HAS_WATCHDOG = False
+        with path.open("rb") as fh:
+            head = fh.read(150)
+    except OSError:
+        return False
+    if not head.startswith(b"#!"):
+        return False
+    first_line = head.split(b"\n", 1)[0].lower()
+    return b"python" in first_line
 
 
-TARGET_VERSIONS: dict[str, Any] = {}
-if _HAS_TARGET_VERSION:
-    for _name in (
-        "PY33",
-        "PY34",
-        "PY35",
-        "PY36",
-        "PY37",
-        "PY38",
-        "PY39",
-        "PY310",
-        "PY311",
-        "PY312",
-        "PY313",
-    ):
-        if hasattr(TargetVersion, _name):
-            TARGET_VERSIONS[_name.lower()] = getattr(TargetVersion, _name)
+def iter_python_files(root: Path) -> Iterator[Path]:
+    """Yield every Python source file under *root*, recursively.
 
-PROFILES: dict[str, dict[str, Any]] = {
-    "default": {},
-    "strict": {
-        "line_length": 88,
-        "string_normalization": True,
-        "autoflake_remove_unused_variables": True,
-        "strip_magics": True,
-        "dedupe_cells": True,
-        "drop_empty_cells": True,
-        "strip_metadata": True,
-        "normalize_outputs": True,
-        "add_trailing_newline": True,
-    },
-    "minimal": {
-        "autoflake": False,
-        "isort": False,
-        "black": True,
-        "strip_magics": False,
-        "dedupe_cells": False,
-        "drop_empty_cells": False,
-        "clear_output": False,
-        "strip_metadata": False,
-        "normalize_outputs": False,
-    },
-    "notebook-only": {
-        "py": False,
-        "ipynb": True,
-    },
-}
+    A file qualifies when it ends with a Python suffix or when it has no suffix
+    at all and starts with a ``#!...python`` shebang (executable scripts).
+    Symlinks and noisy directories (venvs, VCS metadata, caches) are skipped.
+    """
+    if not root.is_dir():
+        # A single file argument is taken literally, not as its directory.
+        if root.suffix.lower() in PY_SOURCE_SUFFIXES or (not root.suffix and _has_python_shebang(root)):
+            yield root
+        return
 
-console: Console = Console()
-log = logger
-
-
-@dataclass
-class Config:
-    "Store py, ipynb, autoflake, isort, black and related state."
-
-    py: bool = True
-    ipynb: bool = True
-    autoflake: bool = True
-    isort: bool = True
-    black: bool = True
-    line_length: int = DEFAULT_LINE_LENGTH
-    string_normalization: bool = True
-    magic_trailing_comma: bool = True
-    target_version: Optional[str] = None
-    isort_profile: str = "black"
-    autoflake_remove_unused_variables: bool = True
-    autoflake_ignore_init_module_imports: bool = False
-    check: bool = False
-    diff: bool = False
-    backup: bool = False
-    backup_suffix: str = ".bak"
-    quiet: bool = False
-    fail_fast: bool = False
-    clear_output: bool = True
-    strip_magics: bool = True
-    dedupe_cells: bool = False
-    drop_empty_cells: bool = False
-    strip_metadata: bool = False
-    normalize_outputs: bool = False
-    strict_cell_errors: bool = False
-    skip_header: bool = False
-    add_trailing_newline: bool = True
-    remove_trailing_newline: bool = False
-    respect_fmt_off: bool = True
-    jobs: int = cpu_count()
-    parallel: bool = True
-    verbose: bool = False
-    cache: bool = False
-    include: Optional[str] = None
-    exclude: tuple[str, ...] = ()
-    respect_gitignore: bool = False
-    follow_symlinks: bool = False
-    max_depth: Optional[int] = None
-    extensions: tuple[str, ...] = (".py", ".pyi", ".ipynb")
-    notebook_version: Optional[int] = None
-
-
-@dataclass
-class Stats:
-    "Store scanned, changed, unchanged, errors, files."
-
-    scanned: int = 0
-    changed: int = 0
-    unchanged: int = 0
-    errors: int = 0
-    files: list[dict[str, Any]] = field(default_factory=list)
-
-
-def setup_logging(verbose: bool, quiet: bool, no_color: bool) -> None:
-    "Set up logging."
-    global console
-    if no_color:
-        console = Console(no_color=True)
-    level = "DEBUG" if verbose else ("ERROR" if quiet else "INFO")
-    logger.remove()
-    logger.add(sys.stderr, level=level, format="{message}", colorize=not no_color)
-
-
-def _has_fmt_off(source: str) -> bool:
-    return "# fmt: off" in source or "# yapf: disable" in source
-
-
-def _build_file_mode(config: Config) -> FileMode:
-    kwargs: dict[str, Any] = {
-        "line_length": config.line_length,
-        "is_pyi": False,
-        "string_normalization": config.string_normalization,
-        "magic_trailing_comma": config.magic_trailing_comma,
-    }
-    if config.target_version:
-        tv = TARGET_VERSIONS.get(config.target_version)
-        if tv is not None:
-            kwargs["target_versions"] = {tv}
-    return FileMode(**kwargs)
-
-
-def remove_duplicate_cells(cells: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    "Remove duplicate cells."
+    stack: list[str] = [str(root)]
     seen: set[str] = set()
-    result: list[dict[str, Any]] = []
-    for cell in cells:
-        src = cell.get("source", "")
-        key = "".join(src) if isinstance(src, list) else str(src)
-        if key in seen:
+
+    while stack:
+        directory = stack.pop()
+        try:
+            real = os.path.realpath(directory)
+        except OSError:
             continue
-        seen.add(key)
-        result.append(cell)
-    return result
-
-
-def remove_empty_cells(cells: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    "Remove empty cells."
-    result: list[dict[str, Any]] = []
-    for cell in cells:
-        src = cell.get("source", "")
-        text = "".join(src) if isinstance(src, list) else str(src)
-        if len(text.strip()) > 2:
-            result.append(cell)
-    return result
-
-
-def remove_magics(source: str) -> str:
-    "Remove magics."
-    invalid = ("%", "?")
-    lines: list[str] = []
-    for line in source.split("\n"):
-        if not line:
+        if real in seen:  # defend against directory loops via symlinks
             continue
-        if line[0] in invalid:
+        seen.add(real)
+
+        try:
+            entries = os.scandir(directory)
+        except OSError:
             continue
-        lines.append(line)
-    return "\n".join(lines)
+
+        with entries:
+            for entry in entries:
+                try:
+                    if entry.is_dir(follow_symlinks=False):
+                        if entry.name not in SKIP_DIRS and not entry.name.startswith("."):
+                            stack.append(entry.path)
+                        continue
+                    if not entry.is_file(follow_symlinks=False):
+                        continue
+                except OSError:
+                    continue
+
+                suffix = os.path.splitext(entry.name)[1].lower()
+                if suffix:
+                    if suffix in PY_SOURCE_SUFFIXES:
+                        yield Path(entry.path)
+                elif _has_python_shebang(Path(entry.path)):
+                    yield Path(entry.path)
 
 
-def clean_python_code(source: str, config: Config, is_notebook_cell: bool = False) -> str:
-    "Clean python code."
-    if config.respect_fmt_off and _has_fmt_off(source):
-        return source
-
-    formatted = source
-
-    if is_notebook_cell:
-        if config.black:
-            mode = _build_file_mode(config)
-            with contextlib.suppress(NothingChanged):
-                formatted = format_file_contents(formatted, fast=True, mode=mode)
-        return formatted
-
-    if config.autoflake:
-        formatted = fix_code(
-            formatted,
-            expand_star_imports=True,
-            remove_all_unused_imports=True,
-            remove_duplicate_keys=True,
-            remove_unused_variables=config.autoflake_remove_unused_variables,
-            ignore_init_module_imports=config.autoflake_ignore_init_module_imports,
-        )
-
-    if config.isort:
-        formatted = isort_code(
-            formatted,
-            profile=config.isort_profile,
-            line_length=config.line_length,
-        )
-
-    if config.black:
-        mode = _build_file_mode(config)
-        with contextlib.suppress(NothingChanged):
-            formatted = format_file_contents(formatted, fast=True, mode=mode)
-
-    return formatted
+# --------------------------------------------------------------------------- #
+# Which comments must be preserved
+# --------------------------------------------------------------------------- #
 
 
-def _print_diff(path: Path, old: str, new: str) -> None:
-    diff = difflib.unified_diff(
-        old.splitlines(keepends=True),
-        new.splitlines(keepends=True),
-        fromfile=str(path),
-        tofile=str(path),
-    )
-    for line in diff:
-        console.print(line.rstrip("\n"), highlight=False, markup=False)
+def _looks_like_code(code: str) -> bool:
+    """Heuristic: does this un-commented text look like real Python code?
 
-
-def _split_header(source: str, config: Config) -> tuple[str, str]:
-    if not config.skip_header:
-        return "", source
-    if source.startswith("#!"):
-        nl = source.find("\n")
-        if nl != -1:
-            return source[: nl + 1], source[nl + 1 :]
-    if source.startswith(("# -*- coding:", "# coding:")):
-        nl = source.find("\n")
-        if nl != -1:
-            return source[: nl + 1], source[nl + 1 :]
-    return "", source
-
-
-def _finalize_newlines(source: str, config: Config) -> str:
-    if config.remove_trailing_newline:
-        return source.rstrip("\n")
-    if config.add_trailing_newline and source:
-        return source.rstrip("\n") + "\n"
-    return source
-
-
-def create_file(file_path: Path, contents: str, config: Config) -> bool:
-    "Create file."
+    Prose like ``# done later`` often parses as a bare Name expression, and a
+    commented-out docstring parses as a string constant, so both are rejected.
+    """
     try:
-        existing: Optional[str] = file_path.read_text(encoding="utf-8")
-    except FileNotFoundError:
-        existing = None
-
-    if existing == contents:
+        tree = ast.parse(code)
+    except (SyntaxError, ValueError):
         return False
 
-    if config.backup and existing is not None:
-        backup_path = file_path.with_suffix(file_path.suffix + config.backup_suffix)
-        shutil.copy2(file_path, backup_path)
+    if not tree.body:
+        return False
 
-    if config.check or config.diff:
-        if config.diff:
-            _print_diff(file_path, existing or "", contents)
+    for node in tree.body:
+        if isinstance(node, ast.Expr):
+            value = node.value
+            if isinstance(value, ast.Name):  # "# todo" / "# done"
+                continue
+            if isinstance(value, ast.Constant) and isinstance(value.value, str):
+                continue  # a commented-out string / docstring
         return True
-
-    file_path.touch(exist_ok=True)
-    file_path.write_text(contents, encoding="utf-8")
-    return True
-
-
-def clean_py(py_file_path: Path, config: Config) -> bool:
-    "Clean py."
-    source = py_file_path.read_text(encoding="utf-8")
-    header, body = _split_header(source, config)
-    cleaned_body = clean_python_code(body, config)
-    result = _finalize_newlines(header + cleaned_body, config)
-    return create_file(py_file_path, result, config)
-
-
-def clear_ipynb_output(ipynb_file_path: Path) -> None:
-    "Clear ipynb output."
-    run(
-        (
-            "jupyter",
-            "nbconvert",
-            "--ClearOutputPreprocessor.enabled=True",
-            "--inplace",
-            str(ipynb_file_path),
-        ),
-        check=True,
-    )
-
-
-def clean_ipynb_cell(cell_dict: dict[str, Any], config: Config) -> dict[str, Any]:
-    "Clean ipynb cell."
-    if cell_dict.get("cell_type") != "code":
-        return cell_dict
-    try:
-        source = cell_dict.get("source", "")
-        if isinstance(source, list):
-            source = "".join(source)
-
-        if config.strip_magics:
-            source = remove_magics(source)
-
-        clean_source = clean_python_code(source, config, is_notebook_cell=True)
-
-        clean_lines = clean_source.split("\n")
-        if clean_lines and clean_lines[-1] == "":
-            clean_lines = clean_lines[:-1]
-        if clean_lines:
-            clean_lines = [line + "\n" for line in clean_lines[:-1]] + [clean_lines[-1]]
-
-        cell_dict["source"] = clean_lines
-
-        if config.normalize_outputs:
-            cell_dict["outputs"] = []
-            cell_dict["execution_count"] = None
-        return cell_dict
-    except Exception as e:
-        if config.strict_cell_errors:
-            raise
-        log.error("Error cleaning cell: %s", e)
-        return cell_dict
-
-
-def clean_ipynb(ipynb_file_path: Path, config: Config) -> bool:
-    "Clean ipynb."
-    if config.clear_output:
-        try:
-            clear_ipynb_output(ipynb_file_path)
-        except Exception as e:
-            log.warning("Unable to clear outputs for %s: %s", ipynb_file_path, e)
-
-    with open(ipynb_file_path, encoding="utf-8") as fh:
-        ipynb_dict: dict[str, Any] = json.load(fh)
-
-    if config.dedupe_cells:
-        ipynb_dict["cells"] = remove_duplicate_cells(ipynb_dict["cells"])
-    if config.drop_empty_cells:
-        ipynb_dict["cells"] = remove_empty_cells(ipynb_dict["cells"])
-
-    cell_fn = partial(clean_ipynb_cell, config=config)
-    if config.parallel and config.jobs > 1:
-        with Pool(config.jobs) as pool:
-            processed = pool.map(cell_fn, ipynb_dict["cells"])
-    else:
-        processed = [cell_fn(c) for c in ipynb_dict["cells"]]
-    ipynb_dict["cells"] = list(processed)
-
-    if config.strip_metadata:
-        metadata = ipynb_dict.get("metadata", {})
-        ipynb_dict["metadata"] = {k: v for k, v in metadata.items() if k in ("kernelspec", "language_info")}
-        for cell in ipynb_dict["cells"]:
-            cell.pop("id", None)
-
-    if config.notebook_version is not None:
-        ipynb_dict["nbformat_minor"] = config.notebook_version
-
-    new_text = json.dumps(ipynb_dict, indent=1) + "\n"
-    return create_file(ipynb_file_path, new_text, config)
-
-
-def _matches_exclude(rel: Path, patterns: Sequence[str]) -> bool:
-    for pat in patterns:
-        if rel.match(pat):
-            return True
-        if pat in rel.parts:
-            return True
     return False
 
 
-def _load_gitignore(root: Path) -> Optional[Any]:
-    if _pathspec is None:
-        return None
-    gi = root / ".gitignore"
-    if not gi.exists():
-        return None
-    lines = gi.read_text(encoding="utf-8", errors="ignore").splitlines()
-    return _pathspec.PathSpec.from_lines("gitwildmatch", lines)
+def _uncomment(tok: tokenize.TokenInfo) -> str:
+    body = tok.string[1:]  # drop the leading '#'
+    body = body.removeprefix(" ")
+    return body.rstrip()
 
 
-def discover_files(paths: Sequence[Path], config: Config) -> list[Path]:
-    "Discover files."
-    result: list[Path] = []
-    for root in paths:
-        if root.is_file():
-            result.append(root)
-            continue
-        spec = _load_gitignore(root) if config.respect_gitignore else None
-        root_depth = len(root.parts)
-        for path in root.rglob("*"):
-            if path.is_symlink() and not config.follow_symlinks:
-                continue
-            if not path.is_file():
-                continue
-            if config.max_depth is not None and len(path.parts) - root_depth > config.max_depth:
-                continue
-            if path.suffix not in config.extensions:
-                continue
-            rel = path.relative_to(root)
-            if config.exclude and _matches_exclude(rel, config.exclude):
-                continue
-            if config.include and not path.match(config.include):
-                continue
-            if spec is not None and spec.match_file(rel.as_posix()):
-                continue
-            result.append(path)
-    return result
+def preserved_comments(src: str) -> set[str]:
+    """Return the literal text of every comment that must survive the rewrite.
 
+    Single pass over the token stream:
 
-def _cache_key(path: Path) -> str:
-    st = path.stat()
-    return f"{path}:{st.st_mtime_ns}:{st.st_size}"
+    * ``#!`` on line 1 is kept, as are ``# editor``-style directives, tool
+      pragmas, and TODO/FIXME/NOTE/XXX/HACK task markers;
+    * runs of consecutive whole-line comments are un-commented and parsed --
+      if the run is valid Python, it is commented-out code and is kept as is.
+    """
+    keep: set[str] = set()
+    lines = src.splitlines()
+    ignored_types = {
+        tokenize.NL,
+        tokenize.NEWLINE,
+        tokenize.INDENT,
+        tokenize.DEDENT,
+        tokenize.ENCODING,
+    }
+    block: list[tokenize.TokenInfo] = []
 
+    def flush() -> None:
+        if not block:
+            return
+        candidates = [_uncomment(tok) for tok in block]
+        if _looks_like_code(textwrap.dedent("\n".join(candidates))) or _looks_like_code(
+            "\n".join(part.lstrip() for part in candidates)
+        ):
+            keep.update(tok.string for tok in block)
+        block.clear()
 
-def _load_cache(cache_file: Path) -> set[str]:
-    if not cache_file.exists():
-        return set()
     try:
-        return set(json.loads(cache_file.read_text(encoding="utf-8")))
-    except Exception:
-        return set()
+        for tok in tokenize.generate_tokens(io.StringIO(src).readline):
+            if tok.type != tokenize.COMMENT:
+                if tok.type not in ignored_types:
+                    flush()
+                continue
+
+            text = tok.string
+            line = lines[tok.start[0] - 1] if tok.start[0] <= len(lines) else ""
+            trailing = bool(line[: tok.start[1]].strip())
+
+            if tok.start[0] == 1 and text.startswith("#!"):
+                keep.add(text)  # shebang
+                continue
+            if (
+                TASK_MARKER_RE.match(text)
+                or INLINE_MARKER_RE.search(text)
+                or EDITOR_COMMENT_RE.match(text)
+                or PRAGMA_COMMENT_RE.match(text)
+            ):
+                keep.add(text)
+                continue
+            if trailing:  # belongs to a statement, never to a block
+                flush()
+                continue
+
+            if block and tok.start[0] != block[-1].end[0] + 1:
+                flush()
+            block.append(tok)
+    except (tokenize.TokenError, SyntaxError, IndentationError):
+        pass
+
+    flush()
+    return keep
 
 
-def _save_cache(cache_file: Path, keys: set[str]) -> None:
-    try:
-        cache_file.write_text(json.dumps(sorted(keys)), encoding="utf-8")
-    except Exception as e:
-        log.warning("Unable to save cache: %s", e)
+# --------------------------------------------------------------------------- #
+# libcst transformer
+# --------------------------------------------------------------------------- #
+
+_DOCSTRING_TYPES = (cst.SimpleString, cst.ConcatenatedString)
 
 
-def load_config_file(path: Path) -> dict[str, Any]:
-    "Load config file."
-    if tomllib is None or not path.exists():
-        return {}
-    try:
-        data = tomllib.loads(path.read_text(encoding="utf-8"))
-    except Exception as e:
-        log.warning("Failed to parse config %s: %s", path, e)
-        return {}
-    for section in ("tool.clean-py", "tool.clean_py", "clean-py"):
-        node: Any = data
-        for part in section.split("."):
-            if not isinstance(node, dict):
-                break
-            node = node.get(part, {})
-        if isinstance(node, dict) and node:
-            return node
-    return data if isinstance(data, dict) else {}
+def _as_docstring_small(stmt: cst.BaseSmallStatement) -> bool:
+    return isinstance(stmt, cst.Expr) and isinstance(stmt.value, _DOCSTRING_TYPES)
 
 
-def find_config_file(start: Path) -> Optional[Path]:
-    "Find config file."
-    for name in ("pyproject.toml", ".clean-py.toml", "clean-py.toml"):
-        for parent in [start] + list(start.parents):
-            candidate = parent / name
-            if candidate.exists():
-                return candidate
-    return None
+def _is_docstring_line(stmt: cst.BaseStatement) -> bool:
+    return isinstance(stmt, cst.SimpleStatementLine) and len(stmt.body) == 1 and _as_docstring_small(stmt.body[0])
 
 
-def _git_changed_files(rev: str, root: Path) -> list[Path]:
-    try:
-        result = run(
-            ["git", "-C", str(root), "diff", "--name-only", "--diff-filter=ACMR", rev],
-            capture_output=True,
-            text=True,
-            check=False,
+def _collapse_blanks(lines: Sequence[cst.EmptyLine], limit: int = 2) -> list[cst.EmptyLine]:
+    """Keep at most *limit* consecutive blank lines (comments reset the counter)."""
+    out: list[cst.EmptyLine] = []
+    blanks = 0
+    for line in lines:
+        if line.comment is None:
+            blanks += 1
+            if blanks > limit:
+                continue
+        else:
+            blanks = 0
+        out.append(line)
+    return out
+
+
+def _collapsed_or_self(lines: Sequence[cst.EmptyLine]) -> list[cst.EmptyLine]:
+    """Collapse blanks, but return the original list when nothing changed."""
+    collapsed = _collapse_blanks(lines)
+    return collapsed if len(collapsed) != len(lines) else list(lines)
+
+
+def _normalize_prefix(prefix, first_stmt):
+    """Fold a suite's *prefix* lines into its first statement's leading lines.
+
+    ``Module.header`` / ``IndentedBlock.header`` hold the lines before the first
+    statement, and that statement keeps its own ``leading_lines``. libcst
+    re-splits those on re-parse, so collapsing them apart would let a second run
+    keep eating blank lines one at a time. Merging them first makes the pass
+    idempotent.
+    """
+    merged = _collapse_blanks([*prefix, *first_stmt.leading_lines])
+    if len(merged) == len(prefix) + len(first_stmt.leading_lines):
+        return list(prefix), first_stmt
+    return [], first_stmt.with_changes(leading_lines=merged)
+
+
+class Stripper(cst.CSTTransformer):
+    """Removes comments, docstrings and (optionally) type annotations."""
+
+    def __init__(self, keep_comments: set[str], strip_types: bool) -> None:
+        super().__init__()
+        self.keep = keep_comments
+        self.strip_types = strip_types
+
+    # -- comments ---------------------------------------------------------- #
+
+    def leave_EmptyLine(
+        self, original_node: cst.EmptyLine, updated_node: cst.EmptyLine
+    ) -> cst.EmptyLine | cst.RemovalSentinel:
+        comment = updated_node.comment
+        if comment is not None and comment.value not in self.keep:
+            return cst.RemoveFromParent()
+        return updated_node
+
+    def leave_TrailingWhitespace(
+        self,
+        original_node: cst.TrailingWhitespace,
+        updated_node: cst.TrailingWhitespace,
+    ) -> cst.TrailingWhitespace:
+        comment = updated_node.comment
+        if comment is None or comment.value in self.keep:
+            return updated_node
+        return updated_node.with_changes(
+            comment=None,
+            whitespace=(
+                updated_node.whitespace.with_changes(value="")
+                if isinstance(updated_node.whitespace, cst.SimpleWhitespace)
+                else cst.SimpleWhitespace("")
+            ),
         )
-    except FileNotFoundError:
-        return []
-    if result.returncode != 0:
-        return []
-    return [(root / line).resolve() for line in result.stdout.splitlines() if line and (root / line).exists()]
+
+    # -- docstrings -------------------------------------------------------- #
+
+    @staticmethod
+    def _clean_indented(block: cst.IndentedBlock) -> cst.IndentedBlock:
+        stmts = list(block.body)
+        if not stmts or not _is_docstring_line(stmts[0]):
+            return block
+        rest = stmts[1:]
+        if not rest:
+            # `pass` keeps the suite syntactically valid.
+            return block.with_changes(body=[stmts[0].with_changes(body=[cst.Pass()])])
+        if stmts[0].leading_lines:
+            # The docstring's own blank/kept-comment lines move to the next
+            # statement; leave_IndentedBlock normalizes the prefix afterwards.
+            rest[0] = rest[0].with_changes(leading_lines=[*stmts[0].leading_lines, *rest[0].leading_lines])
+        return block.with_changes(body=rest)
+
+    @staticmethod
+    def _clean_simple(suite: cst.SimpleStatementSuite) -> cst.SimpleStatementSuite:
+        small = list(suite.body)
+        if len(small) == 1 and _as_docstring_small(small[0]):
+            return suite.with_changes(body=[cst.Pass()])
+        return suite
+
+    def _strip_docstring(self, body):
+        """Dispatch on suite type; `pass` replaces a body that was only a docstring."""
+        if isinstance(body, cst.IndentedBlock):
+            return self._clean_indented(body)
+        if isinstance(body, cst.SimpleStatementSuite):
+            return self._clean_simple(body)
+        return body
+
+    def leave_FunctionDef(self, original_node, updated_node):
+        return updated_node.with_changes(
+            body=self._strip_docstring(updated_node.body),
+            returns=None if self.strip_types else updated_node.returns,
+            type_parameters=None if self.strip_types else updated_node.type_parameters,
+        )
+
+    leave_AsyncFunctionDef = leave_FunctionDef  # libcst exposes only FunctionDef
+
+    def leave_ClassDef(self, original_node, updated_node):
+        return updated_node.with_changes(
+            body=self._strip_docstring(updated_node.body),
+            type_parameters=None if self.strip_types else updated_node.type_parameters,
+        )
+
+    def leave_Module(self, original_node, updated_node):
+        header = list(updated_node.header)
+        stmts = list(updated_node.body)
+
+        if stmts and _is_docstring_line(stmts[0]):
+            doc, stmts = stmts[0], stmts[1:]
+            header = [*header, *doc.leading_lines]
+            if not stmts:
+                # An empty module is valid Python; keep what precedes the docstring.
+                return updated_node.with_changes(header=_collapsed_or_self(header), body=[])
+
+        if stmts:
+            header, stmts[0] = _normalize_prefix(header, stmts[0])
+        return updated_node.with_changes(
+            header=_collapsed_or_self(header),
+            body=stmts,
+            footer=_collapsed_or_self(updated_node.footer),
+        )
+
+    # -- type annotations (-t / --strip-types) ----------------------------- #
+
+    def leave_Param(self, original_node: cst.Param, updated_node: cst.Param):
+        if not self.strip_types or updated_node.annotation is None:
+            return updated_node
+        if updated_node.default is None:
+            return updated_node.with_changes(annotation=None)
+        # Drop the padding the annotation forced on the "=" -> `b = "x"` becomes
+        # `b="x"`, matching PEP 8 defaults without annotations.
+        return updated_node.with_changes(
+            annotation=None,
+            equal=cst.AssignEqual(
+                whitespace_before=cst.SimpleWhitespace(""),
+                whitespace_after=cst.SimpleWhitespace(""),
+            ),
+        )
+
+    def leave_AnnAssign(
+        self, original_node: cst.AnnAssign, updated_node: cst.AnnAssign
+    ) -> cst.BaseSmallStatement | cst.RemovalSentinel:
+        if not self.strip_types:
+            return updated_node
+        if updated_node.value is not None:
+            # `x: int = 1` -> `x = 1`
+            return cst.Assign(
+                targets=[cst.AssignTarget(target=updated_node.target)],
+                value=updated_node.value,
+                semicolon=updated_node.semicolon,
+            )
+        # `x: int` alone has no runtime effect, so drop it. libcst inserts a
+        # `pass` if that would leave a suite empty.
+        return cst.RemoveFromParent()
+
+    def on_leave(self, original_node, updated_node):
+        """Dispatch to ``leave_*`` first, then normalize whatever it produced.
+
+        ``on_leave`` is libcst's dispatch entry point, so ``super()`` must run.
+        Two cleanups happen on every node that owns a ``leading_lines`` sequence:
+
+        * blank-line runs are capped at two (libcst keeps the newlines of the
+          comments we removed);
+        * an ``IndentedBlock`` whose first statement has dropped its leading
+          lines (because they were all removed comments) must move the blank
+          lines from the block header onto that statement -- otherwise they are
+          stranded *outside* the block and the next run would eat one more.
+        """
+        updated_node = super().on_leave(original_node, updated_node)
+        if not isinstance(updated_node, cst.CSTNode):
+            return updated_node
+
+        lines = getattr(updated_node, "leading_lines", None)
+        if isinstance(lines, (list, tuple)) and lines:
+            collapsed = _collapse_blanks(lines)
+            if len(collapsed) != len(lines):
+                updated_node = updated_node.with_changes(leading_lines=collapsed)
+
+        if isinstance(updated_node, cst.IndentedBlock):
+            updated_node = self._settle_block_header(original_node, updated_node)
+        return updated_node
+
+    @staticmethod
+    def _settle_block_header(original_node: cst.IndentedBlock, updated_node: cst.IndentedBlock) -> cst.IndentedBlock:
+        body = updated_node.body
+        if not body:
+            return updated_node
+        if original_node.body and original_node.body[0].leading_lines:
+            return updated_node  # the leading lines survived; nothing moved
+        header = updated_node.header
+        if not isinstance(header, (list, tuple)) or not any(line.comment is None for line in header):
+            return updated_node
+        if not body[0].leading_lines:
+            return updated_node
+        first, header = body[0], _collapse_blanks(header)
+        return updated_node.with_changes(
+            header=[], body=[first.with_changes(leading_lines=[*header, *first.leading_lines]), *body[1:]]
+        )
+
+    def leave_IndentedBlock(self, original_node, updated_node):
+        body = list(updated_node.body)
+        if not body:  # safety net: never emit an empty suite
+            return cst.IndentedBlock(body=[cst.SimpleStatementLine(body=[cst.Pass()])])
+        # `header` is a run of EmptyLine nodes, or (for a suite that starts on
+        # the same line) a lone TrailingWhitespace which cannot be normalized.
+        header = updated_node.header
+        if isinstance(header, (list, tuple)):
+            header, body[0] = _normalize_prefix(header, body[0])
+        footer = _collapsed_or_self(updated_node.footer) if updated_node.footer else None
+        if header or footer is not None or len(body) != len(updated_node.body):
+            return updated_node.with_changes(header=header, body=body, footer=footer or ())
+        return updated_node.with_changes(body=body)
 
 
-def _emit_error_github(path: Path, message: str) -> None:
-    console.print(f"::error file={path}::{message}", highlight=False, markup=False)
+# --------------------------------------------------------------------------- #
+# Per-file worker (runs in a subprocess)
+# --------------------------------------------------------------------------- #
 
 
-def run_doctor() -> None:
-    "Run doctor."
-    import autoflake as _autoflake
-    import black as _black
-    import isort as _isort
+def _needs_work(source: str, strip_types: bool) -> bool:
+    """Cheap pre-filter so already-clean files skip the expensive CST round-trip.
 
-    table = Table(title="clean-py doctor")
-    table.add_column("Component")
-    table.add_column("Version")
-    table.add_row("clean-py", "0.2.0")
-    table.add_row("black", getattr(_black, "__version__", "?"))
-    table.add_row("isort", getattr(_isort, "__version__", "?"))
-    table.add_row("autoflake", getattr(_autoflake, "__version__", "?"))
-    table.add_row("pathspec", getattr(_pathspec, "__version__", "?") if _pathspec else "missing")
-    table.add_row("tomllib", "available" if tomllib else "missing")
-    table.add_row("watchdog", "available" if _HAS_WATCHDOG else "missing")
-    table.add_row("TargetVersion", "available" if _HAS_TARGET_VERSION else "missing")
-    console.print(table)
-
-
-def run_linters(paths: Sequence[Path], linters: Sequence[str]) -> int:
-    "Run linters."
-    rc = 0
-    for path in paths:
-        for linter in linters:
-            result = run([linter, str(path)], capture_output=True, text=True, check=False)
-            if result.returncode != 0:
-                if result.stdout:
-                    console.print(result.stdout.rstrip(), highlight=False, markup=False)
-                if result.stderr:
-                    console.print(result.stderr.rstrip(), highlight=False, markup=False)
-                rc = result.returncode
-    return rc
-
-
-def clean_stdin(config: Config) -> None:
-    "Clean stdin."
-    source = sys.stdin.read()
-    result = clean_python_code(source, config)
-    sys.stdout.write(result)
-
-
-def run_watch(paths: Sequence[Path], runner: Callable[[], None], config: Config) -> None:
-    "Run watch."
-    if not _HAS_WATCHDOG:
-        console.print("[red]watchdog is required for --watch[/red]")
-        raise typer.Exit(1)
-
-    class _Handler(FileSystemEventHandler):  # type: ignore[misc,valid-type]
-        def on_any_event(self, event: Any) -> None:
-            if getattr(event, "is_directory", False):
-                return
-            src = getattr(event, "src_path", "")
-            if not src.endswith(tuple(config.extensions)):
-                return
-            console.print(f"[dim]Change detected: {src}[/dim]")
-            runner()
-
-    runner()
-    observer = Observer()  # type: ignore[operator]
-    for p in paths:
-        target = p if p.is_dir() else p.parent
-        observer.schedule(_Handler(), str(target), recursive=True)
-    observer.start()
-    console.print("[green]Watching for changes (Ctrl+C to stop)...[/green]")
+    A file needs no work when it contains no ``#`` at all, has no docstrings and
+    (unless ``--strip-types``) no annotations. ``ast`` is several times faster
+    than libcst, and anything it cannot parse is handed to libcst for a proper
+    error message.
+    """
+    if "#" in source:
+        return True
     try:
-        while True:
-            time.sleep(1)
-    except KeyboardInterrupt:
-        observer.stop()
-    observer.join()
+        tree = ast.parse(source)
+    except (SyntaxError, ValueError):
+        return True
 
+    if strip_types:
+        for node in ast.walk(tree):
+            if getattr(node, "type_params", None):  # PEP 695 generics
+                return True
+            if isinstance(node, ast.AnnAssign):
+                return True
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                if node.returns is not None:
+                    return True
+                for param in _iter_args(node):
+                    if param.annotation is not None:
+                        return True
+
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+            body = node.body
+            if (
+                body
+                and isinstance(body[0], ast.Expr)
+                and isinstance(body[0].value, ast.Constant)
+                and isinstance(body[0].value.value, str)
+            ):
+                return True
+    return False
+
+
+def _iter_args(node: ast.AST):
+    args = getattr(node, "args", None)
+    if args is None:
+        return ()
+    return [
+        *getattr(args, "posonlyargs", ()),
+        *args.args,
+        *getattr(args, "kwonlyargs", ()),
+        *([args.vararg] if args.vararg else []),
+        *([args.kwarg] if args.kwarg else []),
+    ]
+
+
+class Job(NamedTuple):
+    """Everything a worker needs to handle one file."""
+
+    index: int  # position in the run, so results can be journaled
+    path: str
+    strip_types: bool
+    dry_run: bool
+    diff: bool
+
+
+class Result(NamedTuple):
+    index: int
+    name: str
+    path: str
+    saved: int
+    error: str | None
+    diff: tuple[str, ...] | None = None
+
+
+def process_file(job: Job) -> Result:
+    """Rewrite one file. Returns the file name, bytes freed and an error, if any."""
+    index, path_str, strip_types, dry_run, want_diff = job
+    path = Path(path_str)
+    name = path.name
+
+    def done(saved: int, diff: tuple[str, ...] | None = None) -> Result:
+        return Result(index, name, path_str, saved, None, diff)
+
+    try:
+        raw = path.read_bytes()
+        if not raw.strip():
+            return done(0)
+
+        try:
+            encoding, _ = tokenize.detect_encoding(io.BytesIO(raw).readline)
+        except SyntaxError:  # bad/unknown coding cookie
+            encoding = "utf-8"
+        source = raw.decode(encoding)
+
+        if not _needs_work(source, strip_types):
+            return done(0)
+
+        code = source
+        for _ in range(MAX_PASSES):
+            module = cst.parse_module(code)
+            new_code = module.visit(Stripper(preserved_comments(code), strip_types)).code
+            if new_code == code:
+                break
+            code = new_code
+            # Removing a comment can strand a run of blank lines that only
+            # becomes collapsible once libcst has re-parsed the file. Three or
+            # more blank lines in a row are the only way a pass can still find
+            # work, so that cheap check replaces a blind second transform and
+            # makes a re-run of the tool a guaranteed no-op.
+            if _BLANK_RUN_RE.search(code) is None:
+                break
+
+        if code == source:
+            return done(0)
+        new_code = code
+
+        # Never write anything we cannot prove is valid Python.
+        ast.parse(new_code, filename=str(path))
+
+        new_raw = new_code.encode(encoding)
+        if new_raw == raw:
+            return done(0)
+
+        diff = None
+        if want_diff:
+            diff = tuple(unified_diff(source.splitlines(), new_code.splitlines(), fromfile=path_str, tofile=path_str))
+
+        if not dry_run:
+            path.write_bytes(new_raw)
+        return done(len(raw) - len(new_raw), diff)
+    except Exception as exc:  # noqa: BLE001 - one bad file must not kill the run
+        message = f"{type(exc).__name__}: {exc}".replace("\n", " ")
+        return Result(index, name, path_str, 0, message[:300])
+
+
+# --------------------------------------------------------------------------- #
+# Cache
+# --------------------------------------------------------------------------- #
+
+
+def _cache_key(path: Path, strip_types: bool) -> str:
+    """Absolute path plus the options that change the outcome."""
+    return f"{path.resolve()}|t={int(strip_types)}"
+
+
+def load_cache(cache_file: Path) -> dict[str, list[int]]:
+    """Read ``{key: [size, mtime_ns]}``; a corrupt cache is silently ignored."""
+    try:
+        data = json.loads(cache_file.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    return {k: v for k, v in data.items() if isinstance(v, list) and len(v) == 2}
+
+
+def save_cache(cache_file: Path, cache: dict[str, list[int]]) -> None:
+    """Atomically replace the cache file (tmp file + rename)."""
+    tmp = cache_file.with_suffix(cache_file.suffix + ".tmp")
+    try:
+        tmp.write_text(json.dumps(cache, separators=(",", ":")), encoding="utf-8")
+        os.replace(tmp, cache_file)
+    except OSError:
+        tmp.unlink(missing_ok=True)
+
+
+def _stat_signature(path: Path) -> list[int] | None:
+    try:
+        st = path.stat()
+    except OSError:
+        return None
+    return [st.st_size, st.st_mtime_ns]
+
+
+# --------------------------------------------------------------------------- #
+# Progress journal (resume after Ctrl+C)
+# --------------------------------------------------------------------------- #
+
+
+def job_id(directory: Path, workers: int, strip_types: bool, dry_run: bool, diff: bool) -> str:
+    """Stable id for a run: the directory plus every option that shapes output.
+
+    A journal from a run with different options must never be resumed, so the
+    options are part of the id.
+    """
+    return f"{directory.resolve()}|w={workers}|t={int(strip_types)}|n={int(dry_run)}|d={int(diff)}|v={SCHEMA_VERSION}"
+
+
+def load_journal(progress_file: Path) -> dict | None:
+    try:
+        data = json.loads(progress_file.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return data if isinstance(data, dict) and "pending" in data else None
+
+
+def save_journal(progress_file: Path, journal: dict) -> None:
+    progress_file.parent.mkdir(parents=True, exist_ok=True)
+    tmp = progress_file.with_suffix(progress_file.suffix + ".tmp")
+    tmp.write_text(json.dumps(journal, separators=(",", ":")), encoding="utf-8")
+    os.replace(tmp, progress_file)
+
+
+# --------------------------------------------------------------------------- #
+# Rendering
+# --------------------------------------------------------------------------- #
+
+
+def _human(size: float) -> str:
+    for unit in ("B", "KiB", "MiB", "GiB"):
+        if size < 1024 or unit == "GiB":
+            return f"{size:,.0f} {unit}" if unit == "B" else f"{size:,.1f} {unit}"
+        size /= 1024
+    return f"{size:,.1f} GiB"
+
+
+def _fit(text: str, width: int) -> str:
+    """Truncate from the middle so the extension stays visible."""
+    if len(text) <= width:
+        return text
+    if width <= 1:
+        return text[:width]
+    head = (width - 1) // 2
+    tail = width - 1 - head
+    return text[:head] + "…" + (text[-tail:] if tail else "")
+
+
+def _render(index: int, total: int, result: Result, width: int) -> Text:
+    """One progress line: ``[i/n]  name  bytes``.
+
+    The name column absorbs whatever the terminal offers, the byte column is
+    dim when nothing was freed and green otherwise.
+    """
+    idx = f"[{index}/{total}]"
+    idx_col = len(idx) + 2
+    size_col = 9
+    name_col = max(10, width - idx_col - size_col - 2)
+
+    line = Text()
+    line.append(idx.ljust(idx_col), style=_DIM)
+    line.append(_fit(result.name, name_col).ljust(name_col), style=_DIM if result.error else "")
+
+    if result.error:
+        line.append("!error".rjust(size_col), style=_BAD)
+    else:
+        style = _DIM if result.saved == 0 else (_GOOD if result.saved > 0 else _BAD)
+        line.append(f"{result.saved:>{size_col},}", style=style)
+    return line
+
+
+def _diff_body(line: str) -> Text:
+    """Classify one unified-diff line: header, hunk, addition or removal."""
+    if line.startswith(("--- ", "+++ ", "diff ", "index ")):
+        return Text(line, style="bold")
+    if line.startswith(("@@", "@@")):
+        return Text(line, style="bold cyan")
+    if line.startswith("+"):
+        return Text(line, style=_GOOD)
+    if line.startswith("-"):
+        return Text(line, style=_BAD)
+    if line.startswith("\\"):
+        return Text(line, style=_DIM)
+    return Text(line, style=_DIM)  # context
+
+
+def render_diff(result: Result) -> Text | None:
+    """Colored unified diff for one file, or None when there is nothing to show."""
+    if not result.diff:
+        return None
+    out = Text()
+    out.append(f"\n{'─' * 4} {result.path}\n", style="bold")
+    for line in result.diff:
+        out.append(_diff_body(line))
+        out.append("\n")
+    return out
+
+
+# --------------------------------------------------------------------------- #
+# CLI
+# --------------------------------------------------------------------------- #
 
 app = typer.Typer(
-    name="clean-py",
-    help="Auto-lint .py and .ipynb files with autoflake, isort and black",
     add_completion=False,
+    rich_markup_mode="rich",
+    help=__doc__,
+    pretty_exceptions_show_locals=False,
 )
 
 
 @app.command()
 def main(
-    path: Optional[list[Path]] = typer.Argument(None, help="File or directory to clean"),
-    stdin: bool = typer.Option(False, "--stdin", help="Read source from stdin, write to stdout"),
-    py: bool = typer.Option(True, help="Apply to .py source"),
-    ipynb: bool = typer.Option(True, help="Apply to .ipynb source"),
-    autoflake: bool = typer.Option(True, help="Apply autoflake to source"),
-    isort: bool = typer.Option(True, help="Apply isort to source"),
-    black: bool = typer.Option(True, help="Apply black to source"),
-    verbose: bool = typer.Option(False, help="Enable verbose output"),
-    quiet: bool = typer.Option(False, "--quiet", "-q", help="Suppress info output"),
-    no_color: bool = typer.Option(False, "--no-color", help="Disable color output"),
-    line_length: int = typer.Option(DEFAULT_LINE_LENGTH, "--line-length", help="Line length"),
-    skip_string_normalization: bool = typer.Option(False, "--skip-string-normalization"),
-    skip_magic_trailing_comma: bool = typer.Option(False, "--skip-magic-trailing-comma"),
-    target_version: Optional[str] = typer.Option(None, "--target-version"),
-    isort_profile: str = typer.Option("black", "--isort-profile"),
-    autoflake_remove_unused_variables: bool = typer.Option(
-        True, "--autoflake-remove-unused-variables/--no-autoflake-remove-unused-variables"
+    directory: Path = typer.Argument(
+        Path(),
+        exists=True,
+        help="Directory to rewrite recursively (default: current directory).",
     ),
-    autoflake_ignore_init_module_imports: bool = typer.Option(False, "--autoflake-ignore-init-module-imports"),
-    check: bool = typer.Option(False, "--check", help="Do not write; fail if changes needed"),
-    diff: bool = typer.Option(False, "--diff", help="Print unified diff"),
-    backup: bool = typer.Option(False, "--backup", help="Backup files before writing"),
-    backup_suffix: str = typer.Option(".bak", "--backup-suffix"),
-    fail_fast: bool = typer.Option(False, "--fail-fast"),
-    clear_output: bool = typer.Option(True, "--clear-output/--keep-output"),
-    strip_magics: bool = typer.Option(True, "--strip-magics/--keep-magics"),
-    dedupe_cells: bool = typer.Option(False, "--dedupe-cells/--no-dedupe-cells"),
-    drop_empty_cells: bool = typer.Option(False, "--drop-empty-cells/--no-drop-empty-cells"),
-    strip_metadata: bool = typer.Option(False, "--strip-metadata"),
-    normalize_outputs: bool = typer.Option(False, "--normalize-outputs"),
-    strict_cell_errors: bool = typer.Option(False, "--strict-cell-errors"),
-    skip_header: bool = typer.Option(False, "--skip-header"),
-    add_trailing_newline: bool = typer.Option(True, "--add-trailing-newline/--no-add-trailing-newline"),
-    remove_trailing_newline: bool = typer.Option(False, "--remove-trailing-newline"),
-    respect_fmt_off: bool = typer.Option(True, "--respect-fmt-off/--no-respect-fmt-off"),
-    jobs: int = typer.Option(cpu_count(), "--jobs", "-j"),
-    no_parallel: bool = typer.Option(False, "--no-parallel"),
-    cache: bool = typer.Option(False, "--cache/--no-cache"),
-    include: Optional[str] = typer.Option(None, "--include"),
-    exclude: list[str] = typer.Option([], "--exclude"),
-    respect_gitignore: bool = typer.Option(False, "--respect-gitignore"),
-    follow_symlinks: bool = typer.Option(False, "--follow-symlinks/--no-follow-symlinks"),
-    max_depth: Optional[int] = typer.Option(None, "--max-depth"),
-    extensions: str = typer.Option(".py,.pyi,.ipynb", "--extensions"),
-    notebook_version: Optional[int] = typer.Option(None, "--notebook-version"),
-    config_path: Optional[Path] = typer.Option(None, "--config"),
-    profile: str = typer.Option("default", "--profile"),
-    show_stats: bool = typer.Option(False, "--stats"),
-    json_report: Optional[Path] = typer.Option(None, "--json-report"),
-    progress: bool = typer.Option(False, "--progress"),
-    list_files: bool = typer.Option(False, "--list-files"),
-    show_unchanged: bool = typer.Option(False, "--show-unchanged"),
-    error_format: str = typer.Option("plain", "--error-format"),
-    require_changes: bool = typer.Option(False, "--require-changes"),
-    since: Optional[str] = typer.Option(None, "--since"),
-    watch: bool = typer.Option(False, "--watch"),
-    linters: list[str] = typer.Option([], "--linters"),
-    doctor: bool = typer.Option(False, "--doctor"),
+    strip_types: bool = typer.Option(
+        False,
+        "-t",
+        "--strip-types",
+        is_flag=True,
+        help="Also remove type annotations (params, returns, variables, generics).",
+    ),
+    jobs: int = typer.Option(
+        WORKERS,
+        "-j",
+        "--workers",
+        min=1,
+        help=f"Worker processes (default: {WORKERS}).",
+    ),
+    diff: bool = typer.Option(
+        False,
+        "-d",
+        "--diff",
+        is_flag=True,
+        help="Print a colored unified diff for every changed file.",
+    ),
+    dry_run: bool = typer.Option(
+        False,
+        "-n",
+        "--dry-run",
+        is_flag=True,
+        help="Report (and diff) what would change, without writing any file.",
+    ),
+    cache: bool = typer.Option(
+        True,
+        "--cache/--no-cache",
+        help=f"Skip unchanged files using {CACHE_FILE.name} (stat-based).",
+    ),
+    resume: bool = typer.Option(
+        True,
+        "--resume/--no-resume",
+        help=f"Resume an interrupted run from {PROGRESS_FILE.name}; --no-resume starts over.",
+    ),
 ) -> None:
-    "Run the command-line interface."
-    setup_logging(verbose, quiet, no_color)
+    """Strip comments and docstrings from Python files in place."""
+    console = CONSOLE
+    show_diff = diff or dry_run  # a dry run is only useful if you can see the change
+    cache_path = directory / CACHE_FILE if directory.is_dir() else directory.parent / CACHE_FILE
+    progress_path = directory / PROGRESS_FILE if directory.is_dir() else directory.parent / PROGRESS_FILE
 
-    if doctor:
-        run_doctor()
-        return
+    files = list(iter_python_files(directory))  # cheap: paths only, no file reads
+    if not files:
+        console.print(f"[yellow]No Python files found under[/] {directory}")
+        raise typer.Exit(code=0)
 
-    paths: list[Path] = list(path or [])
+    run_id = job_id(directory, jobs, strip_types, dry_run, show_diff)
+    journal = load_journal(progress_path) if resume else None
+    if journal and journal.get("job") != run_id:
+        journal = None  # different directory/options: the old journal is moot
+    elif journal is None and progress_path.exists():
+        progress_path.unlink(missing_ok=True)
 
-    if not paths and not stdin:
-        console.print("[red]Error: No paths provided[/red]")
-        raise typer.Exit(1)
+    # A dry run never writes, so it must neither trust nor create cache entries:
+    # "unchanged since we checked" is only meaningful for files we rewrote.
+    use_cache = cache and not dry_run
+    known_cache = load_cache(cache_path) if use_cache else {}
+    cache_data: dict[str, list[int]] = dict(known_cache)
 
-    cfg = Config(
-        py=py,
-        ipynb=ipynb,
-        autoflake=autoflake,
-        isort=isort,
-        black=black,
-        line_length=line_length,
-        string_normalization=not skip_string_normalization,
-        magic_trailing_comma=not skip_magic_trailing_comma,
-        target_version=target_version,
-        isort_profile=isort_profile,
-        autoflake_remove_unused_variables=autoflake_remove_unused_variables,
-        autoflake_ignore_init_module_imports=autoflake_ignore_init_module_imports,
-        check=check,
-        diff=diff,
-        backup=backup,
-        backup_suffix=backup_suffix,
-        quiet=quiet,
-        fail_fast=fail_fast,
-        clear_output=clear_output,
-        strip_magics=strip_magics,
-        dedupe_cells=dedupe_cells,
-        drop_empty_cells=drop_empty_cells,
-        strip_metadata=strip_metadata,
-        normalize_outputs=normalize_outputs,
-        strict_cell_errors=strict_cell_errors,
-        skip_header=skip_header,
-        add_trailing_newline=add_trailing_newline,
-        remove_trailing_newline=remove_trailing_newline,
-        respect_fmt_off=respect_fmt_off,
-        jobs=jobs,
-        parallel=not no_parallel,
-        verbose=verbose,
-        cache=cache,
-        include=include,
-        exclude=tuple(exclude),
-        respect_gitignore=respect_gitignore,
-        follow_symlinks=follow_symlinks,
-        max_depth=max_depth,
-        extensions=tuple(e.strip() for e in extensions.split(",") if e.strip()),
-        notebook_version=notebook_version,
+    # Work out what is left to do: unfinished files minus cache hits.
+    skipped_cache = 0
+    todo: list[Job] = []
+    if journal:
+        wanted = sorted(journal["pending"])
+        skipped_done = max(0, journal.get("total", 0) - len(wanted))
+        candidates = [(i, files[i]) for i in wanted if 0 <= i < len(files)]
+    else:
+        skipped_done = 0
+        candidates = list(enumerate(files))
+
+    for index, path in candidates:
+        if use_cache:
+            signature = _stat_signature(path)
+            if signature is not None and known_cache.get(_cache_key(path, strip_types)) == signature:
+                skipped_cache += 1
+                continue
+        todo.append(Job(index, str(path), strip_types, dry_run, show_diff))
+
+    total = len(files)
+    pending_ids = [job.index for job in todo]
+    index_map = {job.index: job.path for job in todo}  # for journal bookkeeping
+    state = {
+        "job": run_id,
+        "version": SCHEMA_VERSION,
+        "total": total,
+        "index": index_map,
+        "pending": pending_ids,
+        "written": 0,  # bytes freed so far (journaled so a resume can report a total)
+        "changed": 0,
+        "errors": [],  # [name, message] pairs
+        "cache": {},  # key -> signature, only for files we rewrote
+    }
+    if journal:
+        state["written"] = journal.get("written", 0)
+        state["changed"] = journal.get("changed", 0)
+        state["errors"] = journal.get("errors", [])
+        state["cache"] = journal.get("cache", {})
+
+    banner = Text.assemble(
+        (f"{total} file{'s' if total != 1 else ''} ", "bold"),
+        (f"under {directory}", ""),
+        (f" · {jobs} workers", "dim"),
     )
+    if strip_types:
+        banner.append(" · strip types", style="dim")
+    if dry_run:
+        banner.append(" · dry run", style="dim")
+    if diff:
+        banner.append(" · diff", style="dim")
+    console.print(banner)
+    if skipped_done or skipped_cache:
+        note = Text("resuming", style="cyan") if skipped_done else Text()
+        if skipped_done:
+            note.append(f": {skipped_done} already done", style="cyan")
+        if skipped_cache:
+            note.append(f"{' · ' if skipped_done else ''}{skipped_cache} cached", style="dim")
+        console.print(note)
 
-    profile_overrides = PROFILES.get(profile)
-    if profile_overrides:
-        cfg = replace(cfg, **profile_overrides)
+    freed = state["written"]
+    changed = state["changed"]
+    errors: list[tuple[str, str]] = [tuple(e) for e in state["errors"]]
+    pending = list(pending_ids)
+    processed = 0
 
-    if config_path is None:
-        start = paths[0].resolve() if paths else Path.cwd()
-        config_path = find_config_file(start)
-    if config_path and config_path.exists():
-        file_cfg = load_config_file(config_path)
-        if file_cfg:
-            valid = {k: v for k, v in file_cfg.items() if hasattr(cfg, k)}
-            if valid:
-                cfg = replace(cfg, **valid)
-
-    if stdin:
-        clean_stdin(cfg)
-        return
-
-    for p in paths:
-        if not p.exists():
-            console.print(f"[red]Error: Path '{p}' does not exist[/red]")
-            raise typer.Exit(1)
-
-    exts = list(cfg.extensions)
-    if not cfg.py:
-        exts = [e for e in exts if e not in (".py", ".pyi")]
-    if not cfg.ipynb:
-        exts = [e for e in exts if e != ".ipynb"]
-    cfg = replace(cfg, extensions=tuple(exts))
-
-    files = discover_files(paths, cfg)
-
-    if since:
-        changed_set = set(_git_changed_files(since, paths[0].resolve()))
-        if not changed_set:
-            if not cfg.quiet:
-                console.print("[dim]No changed files since revision[/dim]")
-            return
-        files = [f for f in files if f.resolve() in changed_set]
-
-    if list_files:
-        for f in files:
-            console.print(str(f))
-        return
-
-    cache_file = Path(tempfile.gettempdir()) / "clean-py-cache.json"
-    cached_keys = _load_cache(cache_file) if cfg.cache else set()
-    new_keys: set[str] = set()
-    stats = Stats()
-
-    def process_file(f: Path) -> None:
-        "Process file."
-        stats.scanned += 1
-        key = _cache_key(f)
-        if cfg.cache and key in cached_keys:
-            return
-        try:
-            if f.suffix in (".py", ".pyi"):
-                changed = clean_py(f, cfg)
-            elif f.suffix == ".ipynb":
-                try:
-                    with open(f, encoding="utf-8") as fh:
-                        json.load(fh)
-                except json.JSONDecodeError:
-                    console.print(f"[red]Error: Invalid notebook format in {f}[/red]")
-                    stats.errors += 1
-                    stats.files.append({"path": str(f), "status": "error", "error": "invalid json"})
-                    if error_format == "github":
-                        _emit_error_github(f, "Invalid notebook format")
-                    if cfg.fail_fast:
-                        raise
-                    return
-                changed = clean_ipynb(f, cfg)
-            else:
-                return
-
-            if changed:
-                stats.changed += 1
-                stats.files.append({"path": str(f), "status": "changed"})
-            else:
-                stats.unchanged += 1
-                if show_unchanged and not cfg.quiet:
-                    console.print(f"[dim]Unchanged: {f}[/dim]")
-            new_keys.add(key)
-        except Exception as e:
-            stats.errors += 1
-            msg = f"Unable to clean {f}: {e}"
-            console.print(f"[yellow]Warning: {msg}[/yellow]")
-            stats.files.append({"path": str(f), "status": "error", "error": str(e)})
-            if error_format == "github":
-                _emit_error_github(f, str(e))
-            if verbose:
-                log.exception("Detailed error:")
-            if cfg.fail_fast:
-                raise
-
-    def run_all() -> None:
-        "Run all."
-        stats.scanned = 0
-        stats.changed = 0
-        stats.unchanged = 0
-        stats.errors = 0
-        stats.files = []
-        if progress:
-            with Progress(
-                SpinnerColumn(),
-                TextColumn("[progress.description]{task.description}"),
-                BarColumn(),
-                TaskProgressColumn(),
-                console=console,
-            ) as bar:
-                task = bar.add_task("Cleaning", total=len(files))
-                for f in files:
-                    process_file(f)
-                    bar.advance(task)
-        else:
-            for f in files:
-                if not cfg.quiet:
-                    log.info("Cleaning file: %s", f)
-                process_file(f)
-
-    if watch:
-        run_watch(paths, run_all, cfg)
-        return
-
+    pool = None if dry_run or jobs == 1 else mp.Pool(processes=jobs)
     try:
-        run_all()
-    except Exception as e:
-        console.print(f"[red]Error: {e}[/red]")
-        if verbose:
-            log.exception("Detailed error:")
-        raise typer.Exit(1)
+        if not todo:
+            results: Iterable[Result] = ()
+        elif pool is None:
+            results = (process_file(job) for job in todo)
+        else:
+            # chunksize=1 keeps the [i/n] progress numbers close to completion
+            # order without starving the workers on tiny files.
+            results = pool.imap_unordered(process_file, todo, chunksize=1)
 
-    if cfg.cache:
-        _save_cache(cache_file, new_keys)
+        for result in results:
+            processed += 1
+            if result.index in state["index"]:
+                pending.remove(result.index)
+            checkpoint = processed % CHECKPOINT_EVERY == 0 or processed == len(todo)
 
-    linter_rc = 0
-    if linters:
-        linter_rc = run_linters(files, linters)
-        if linter_rc != 0 and stats.errors == 0:
-            stats.errors += 1
+            if result.error:
+                errors.append((result.name, result.error))
+                state["errors"].append([result.name, result.error])
+            elif result.saved:
+                freed += result.saved
+                changed += 1
+                state["written"] = freed
+                state["changed"] = changed
+                state["cache"][_cache_key(Path(result.path), strip_types)] = _stat_signature(Path(result.path))
+            elif use_cache:
+                # Untouched: remember it so the next run can skip the parse.
+                state["cache"][_cache_key(Path(result.path), strip_types)] = _stat_signature(Path(result.path))
 
-    if show_stats or (not cfg.quiet and not cfg.diff and not cfg.check):
-        table = Table(title="Summary")
-        table.add_column("Metric")
-        table.add_column("Value")
-        table.add_row("Scanned", str(stats.scanned))
-        table.add_row("Changed", str(stats.changed))
-        table.add_row("Unchanged", str(stats.unchanged))
-        table.add_row("Errors", str(stats.errors))
-        console.print(table)
+            console.print(
+                _render(result.index + 1, total, result, console.width),
+                soft_wrap=True,
+                crop=False,
+                overflow="ignore",
+            )
+            if show_diff:
+                block = render_diff(result)
+                if block is not None:
+                    console.print(block, soft_wrap=False, crop=True)
 
-    if json_report:
-        json_report.write_text(
-            json.dumps(
-                {
-                    "scanned": stats.scanned,
-                    "changed": stats.changed,
-                    "unchanged": stats.unchanged,
-                    "errors": stats.errors,
-                    "files": stats.files,
-                },
-                indent=2,
-            ),
-            encoding="utf-8",
+            if checkpoint:
+                state["pending"] = sorted(pending)
+                save_journal(progress_path, state)
+    except KeyboardInterrupt:
+        if pool is not None:
+            pool.terminate()
+            pool = None
+        state["pending"] = sorted(pending)
+        save_journal(progress_path, state)
+        if use_cache:
+            cache_data.update(state["cache"])
+            save_cache(cache_path, cache_data)
+        console.print()
+        stopped = Text("Interrupted", style="bold yellow")
+        stopped.append(
+            f" · {len(pending)} file{'s' if len(pending) != 1 else ''} left"
+            f" · resume with --resume (state in {progress_path.name})",
+            style="yellow",
         )
+        console.print(stopped)
+        so_far = Text("Freed so far ", style="bold")
+        so_far.append(_human(freed), style="bold green" if freed else "bold dim")
+        so_far.append(f" ({freed:,} bytes) across {changed} file{'s' if changed != 1 else ''}")
+        console.print(so_far)
+        raise typer.Exit(code=130)
+    finally:
+        if pool is not None:
+            pool.close()
+            pool.join()
 
-    if check and stats.changed > 0:
-        console.print(f"[red]{stats.changed} file(s) need formatting[/red]")
-        raise typer.Exit(1)
+    if use_cache:
+        cache_data.update(state["cache"])
+        save_cache(cache_path, cache_data)
+    progress_path.unlink(missing_ok=True)  # run finished: nothing left to resume
 
-    if require_changes and stats.changed == 0:
-        console.print("[red]No changes made[/red]")
-        raise typer.Exit(1)
+    console.rule(style="dim")
+    summary = Text()
+    summary.append("Freed ", style="bold")
+    summary.append(_human(freed), style="bold green" if freed else "bold dim")
+    summary.append(f" ({freed:,} bytes) across {changed} file{'s' if changed != 1 else ''}")
+    if dry_run:
+        summary.append("  [dry run: nothing written]", style="dim")
+    if skipped_cache:
+        summary.append(f"  ·  {skipped_cache} cached", style="dim")
+    if errors:
+        summary.append(f"  ·  {len(errors)} failed", style="bold red")
+    console.print(summary)
 
-    if stats.errors > 0 or linter_rc != 0:
-        console.print("[yellow]Cleaning completed with some warnings.[/yellow]")
-        raise typer.Exit(2)
-
-    if not cfg.quiet:
-        console.print("[green]Cleaning completed successfully![/green]")
+    for name, message in errors[:20]:
+        console.print(Text(f"  {name}: {message}", style="dim red"))
+    if len(errors) > 20:
+        console.print(Text(f"  … and {len(errors) - 20} more", style="dim red"))
 
 
 if __name__ == "__main__":

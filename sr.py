@@ -30,6 +30,7 @@ from rich.table import Table
 from rich.text import Text
 import typer
 
+
 __version__ = "2.0.0"
 
 # ---------------------------------------------------------------- constants

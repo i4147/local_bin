@@ -9,9 +9,9 @@ Requires:
 """
 
 import multiprocessing as mp
+from pathlib import Path
 import re
 import subprocess
-from pathlib import Path
 
 from rich.console import Console
 from rich.text import Text
@@ -68,7 +68,7 @@ def fmt_bytes(n: int) -> str:
 def main() -> None:
     console = Console()
     term_width = console.size.width
-    root = Path(".")
+    root = Path()
 
     files = list(walk_so_files(root))
     total = len(files)

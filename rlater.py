@@ -49,6 +49,7 @@ from urllib.request import Request, urlopen
 import webbrowser
 import zlib
 
+
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Sequence
 

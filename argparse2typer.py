@@ -39,6 +39,7 @@ import shutil
 import sys
 import tokenize
 
+
 INDENT = "    "
 MISSING = object()
 FILE_TYPES = {

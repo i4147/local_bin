@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Annotated, Any
 import click
 import typer
 
+
 if TYPE_CHECKING:
     import argparse
     from collections.abc import Iterable, Sequence

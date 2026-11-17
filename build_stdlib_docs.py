@@ -13,13 +13,12 @@ Install any one, e.g. `pip install weasyprint`.
 """
 
 import argparse
+from datetime import datetime
 import importlib
 import os
+import pydoc
 import sys
 import sysconfig
-from datetime import datetime
-
-import pydoc
 
 
 # Modules whose import has side effects or is likely to fail / hang in a

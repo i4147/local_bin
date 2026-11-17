@@ -98,6 +98,7 @@ import urllib.request
 import click
 import typer
 
+
 if TYPE_CHECKING:
     import argparse
 

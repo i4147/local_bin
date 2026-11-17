@@ -44,6 +44,7 @@ from rich.table import Table
 from rich.text import Text
 import typer
 
+
 _STATE: dict[str, object] = {}
 
 

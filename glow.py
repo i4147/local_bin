@@ -26,6 +26,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+
 try:
     from loguru import logger
 except ImportError as _exc:

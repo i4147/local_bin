@@ -27,6 +27,7 @@ import requests
 from tldextract import tldextract
 import ujson as json
 
+
 __project__ = "auto_extract"
 __version__ = "0.1.3"
 

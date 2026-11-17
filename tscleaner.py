@@ -29,6 +29,7 @@ from rich.text import Text
 from tree_sitter import Language, Node, Parser
 import typer
 
+
 _EXTENSION_TO_LANGUAGE: Final[dict[str, str]] = {
     ".rs": "rust",
     ".sh": "bash",

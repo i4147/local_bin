@@ -12,6 +12,7 @@ import unicodedata
 
 import typer
 
+
 app = typer.Typer(add_completion=False)
 
 colours: dict[str, str] = {

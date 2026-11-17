@@ -72,6 +72,7 @@ import click
 from loguru import logger
 import typer
 
+
 if TYPE_CHECKING:
     import argparse
 

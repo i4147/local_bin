@@ -16,6 +16,7 @@ from pathlib import Path
 import sys
 import tokenize
 
+
 SKIP_DIRS = {
     "__pycache__",
     ".git",

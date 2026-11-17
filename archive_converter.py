@@ -33,6 +33,7 @@ import zipfile
 from loguru import logger
 import typer
 
+
 CHUNK = 1 << 20
 """Read/write chunk size in bytes."""
 

@@ -30,6 +30,7 @@ from rich.console import Console
 from rich.progress import BarColumn, Progress, TaskID, TextColumn, TimeElapsedColumn, TransferSpeedColumn
 import typer
 
+
 __version__ = "2.0.0-onefile"
 
 EXIT_OK = 0

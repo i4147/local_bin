@@ -16,6 +16,7 @@ import sys
 from typing import Any, Callable, Iterator, Mapping, Sequence
 from xml.parsers import expat
 
+
 EXIT_SUCCESS: int = 0
 EXIT_FAILURE: int = 1
 
@@ -8763,6 +8764,7 @@ VERSION_TEXT = "4.1.0\n"
 
 import errno
 import time
+
 
 #: Number of parallel workers (per the port specification).
 _WORKERS: int = 4

@@ -22,6 +22,7 @@ from rich.table import Table
 from rich.text import Text
 import typer
 
+
 Backend = Literal["langdetect", "lingua", "pycld2", "gcld3", "py3langid", "langid"]
 
 LIVE_FINDING_LIMIT = 15

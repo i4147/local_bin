@@ -22,6 +22,7 @@ import py7zr
 import typer
 import zstandard
 
+
 if TYPE_CHECKING:
     import argparse
 

@@ -29,6 +29,7 @@ from requests import exceptions
 from requests.utils import quote
 import typer
 
+
 if TYPE_CHECKING:
     import argparse
 

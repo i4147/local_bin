@@ -14,6 +14,7 @@ from typing import Annotated
 from loguru import logger
 import typer
 
+
 DEFAULT_CONFIG = {
     "skip_dirs": ["venv", ".venv", ".git", "__pycache__", ".mypy_cache", ".ruff_cache"],
     "dry_run": False,

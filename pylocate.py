@@ -14,16 +14,17 @@ Env:
 """
 
 from __future__ import annotations
-
 import argparse
+import contextlib
 import os
+from pathlib import Path
 import re
 import shlex
 import signal
 import sqlite3
 import sys
 import time
-from pathlib import Path
+
 
 # --------------------------------------------------------------------- config
 
@@ -69,7 +70,7 @@ def _default_db() -> str:
     if env:
         return os.path.expanduser(env)
     xdg = os.environ.get("XDG_DATA_HOME")
-    base = xdg if xdg else os.path.expanduser("~/.local/share")
+    base = xdg or os.path.expanduser("~/.local/share")
     return os.path.join(base, "locate", "locatedb.sqlite")
 
 
@@ -142,10 +143,8 @@ def cmd_updatedb(args) -> None:
 
     tmp = db.with_name(db.name + ".tmp")
     for side in ("", "-wal", "-shm", "-journal"):
-        try:
+        with contextlib.suppress(FileNotFoundError):
             Path(str(tmp) + side).unlink()
-        except FileNotFoundError:
-            pass
 
     roots = _pick_roots(args.roots)
     prune = frozenset(DEFAULT_PRUNE) | frozenset(os.path.abspath(os.path.expanduser(p)) for p in args.prune)

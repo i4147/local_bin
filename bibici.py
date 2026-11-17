@@ -26,6 +26,7 @@ from SPARQLWrapper import JSON, SPARQLWrapper
 from termcolor import colored
 import typer
 
+
 _STATE: dict[str, object] = {}
 
 

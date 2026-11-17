@@ -23,6 +23,7 @@ from dh import SKIP_DIRS
 from isbinary import is_binary
 import typer
 
+
 try:
     from charset_normalizer import from_bytes as _detect_encoding_fn
 except ImportError:
