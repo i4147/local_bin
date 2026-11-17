@@ -36,10 +36,10 @@ Cache and resume
 Both live beside the files being rewritten and are safe to delete or commit
 ignored:
 
-* ``.strip-comments-cache.json`` -- ``path -> (size, mtime_ns)`` for files that
+* ``.cache.json`` -- ``path -> (size, mtime_ns)`` for files that
   were inspected, so a re-run skips unchanged files without parsing them.
   Disable with ``--no-cache``.
-* ``.strip-comments-progress.json`` -- written on Ctrl+C (and every
+* ``.progress.json`` -- written on Ctrl+C (and every
   ``CHECKPOINT_EVERY`` files) with the work that is still pending. The next run
   picks it up automatically: ``--resume`` is the default, ``--no-resume`` starts
   over. A finished run deletes the file.
@@ -69,14 +69,14 @@ from rich.text import Text
 # --------------------------------------------------------------------------- #
 
 #: Default number of worker processes (``-j/--workers`` overrides it).
-WORKERS = 4
+WORKERS = 6
 
 #: Bump when the transformation itself changes, to invalidate cache + journals.
 SCHEMA_VERSION = 2
 
 #: Cache and resume state live next to the files being rewritten.
-CACHE_FILE = Path(".strip-comments-cache.json")
-PROGRESS_FILE = Path(".strip-comments-progress.json")
+CACHE_FILE = Path(".cache.json")
+PROGRESS_FILE = Path(".progress.json")
 
 #: Journal a checkpoint every N files, so Ctrl+C loses at most this much work.
 CHECKPOINT_EVERY = 20
