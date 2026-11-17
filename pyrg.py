@@ -90,26 +90,24 @@ __version__: str = "0.3.0"
 MAX_WORKERS: int = min(64, max(1, (os.cpu_count() or 2)) + 4)
 
 #: Directory names always skipped during recursion.
-SKIP_DIRS: frozenset[str] = frozenset(
-    {
-        ".git",
-        ".hg",
-        ".svn",
-        ".bzr",
-        "__pycache__",
-        ".tox",
-        ".venv",
-        "venv",
-        "env",
-        "node_modules",
-        ".next",
-        "dist",
-        "build",
-        ".mypy_cache",
-        ".ruff_cache",
-        ".pytest_cache",
-    }
-)
+SKIP_DIRS: frozenset[str] = frozenset({
+    ".git",
+    ".hg",
+    ".svn",
+    ".bzr",
+    "__pycache__",
+    ".tox",
+    ".venv",
+    "venv",
+    "env",
+    "node_modules",
+    ".next",
+    "dist",
+    "build",
+    ".mypy_cache",
+    ".ruff_cache",
+    ".pytest_cache",
+})
 
 _LOG_PATH_DEFAULT: Path = Path.home() / "tmp" / "apps" / "pyrg.log"
 
@@ -571,19 +569,14 @@ def _walk_dir(root: Path, opts: WalkOptions) -> Iterator[Path]:
                 yield p
 
 
-def matches_any_glob(
-    path: Path, patterns: list[str], ignore_case: bool = False
-) -> bool:
+def matches_any_glob(path: Path, patterns: list[str], ignore_case: bool = False) -> bool:
     """Return ``True`` if ``path`` matches any of ``patterns`` (name or full)."""
     name = path.name
     s = str(path)
     if ignore_case:
         s_l = s.lower()
         name_l = name.lower()
-        return any(
-            fnmatch.fnmatch(s_l, p.lower()) or fnmatch.fnmatch(name_l, p.lower())
-            for p in patterns
-        )
+        return any(fnmatch.fnmatch(s_l, p.lower()) or fnmatch.fnmatch(name_l, p.lower()) for p in patterns)
     return any(fnmatch.fnmatch(s, p) or fnmatch.fnmatch(name, p) for p in patterns)
 
 
@@ -1098,11 +1091,7 @@ def _process_lines(
                     if replace is not None:
                         if compiled is not None and not literal_replace:
                             m_obj = next(
-                                (
-                                    mm
-                                    for mm in compiled.finditer(line)
-                                    if mm.start() == s and mm.end() == e
-                                ),
+                                (mm for mm in compiled.finditer(line) if mm.start() == s and mm.end() == e),
                                 None,
                             )
                             replacement_text = m_obj.expand(replace) if m_obj is not None else replace
@@ -1138,11 +1127,7 @@ def _process_lines(
                 if replace is not None:
                     if compiled is not None and not literal_replace:
                         m_obj = next(
-                            (
-                                mm
-                                for mm in compiled.finditer(line)
-                                if mm.start() == s and mm.end() == e
-                            ),
+                            (mm for mm in compiled.finditer(line) if mm.start() == s and mm.end() == e),
                             None,
                         )
                         piece = m_obj.expand(replace) if m_obj is not None else replace
@@ -2073,14 +2058,13 @@ _app = typer.Typer(
 @_app.command()
 def _pyrg_command(
     pattern: Optional[str] = typer.Argument(
-        None, help="Regex pattern (or use -r/--regexp). Required unless --files/--type-list/--generate/--version/--undo."
+        None,
+        help="Regex pattern (or use -r/--regexp). Required unless --files/--type-list/--generate/--version/--undo.",
     ),
     paths: Optional[list[str]] = typer.Argument(
         None, help="Files or directories to search (default: current directory)."
     ),
-    regexp: Optional[str] = typer.Option(
-        None, "-r", "--regexp", help="Pattern (alternative to positional PATTERN)."
-    ),
+    regexp: Optional[str] = typer.Option(None, "-r", "--regexp", help="Pattern (alternative to positional PATTERN)."),
     e_opt: Optional[str] = typer.Option(
         None, "-e", help="Alias for -r/--regexp (extension mode under --legacy-flags)."
     ),
@@ -2099,9 +2083,7 @@ def _pyrg_command(
     type_add: Optional[list[str]] = typer.Option(
         None, "--type-add", help="Register preset NAME:EXT[,EXT...] (repeatable)."
     ),
-    type_clear: Optional[list[str]] = typer.Option(
-        None, "--type-clear", help="Remove preset NAME (repeatable)."
-    ),
+    type_clear: Optional[list[str]] = typer.Option(None, "--type-clear", help="Remove preset NAME (repeatable)."),
     type_list: bool = typer.Option(False, "--type-list", help="Print known presets and exit."),
     ignore_case: bool = typer.Option(False, "-i", "--ignore-case", help="Case-insensitive matching."),
     smart_case: bool = typer.Option(False, "-S", "--smart-case", help="Case-insensitive unless pattern has uppercase."),
@@ -2116,10 +2098,10 @@ def _pyrg_command(
     pcre2: bool = typer.Option(False, "-P", "--pcre2", help="Use the 'regex' module (alias for --engine regex)."),
     engine: str = typer.Option("re", "--engine", help="Regex engine: 're' (default) or 'regex'."),
     only_matching: bool = typer.Option(False, "-o", "--only-matching", help="Print only matched parts."),
-    replace: Optional[str] = typer.Option(
-        None, "--replace", help="Replacement template (\\1 backreferences)."
+    replace: Optional[str] = typer.Option(None, "--replace", help="Replacement template (\\1 backreferences)."),
+    literal_replace: bool = typer.Option(
+        False, "--literal-replace", help="Do not expand backreferences in replacement."
     ),
-    literal_replace: bool = typer.Option(False, "--literal-replace", help="Do not expand backreferences in replacement."),
     replace_from: Optional[str] = typer.Option(
         None, "--replace-from", help="Read replacement template from PATH (-: stdin)."
     ),
@@ -2153,9 +2135,7 @@ def _pyrg_command(
     field_match_separator: str = typer.Option(
         ":", "--field-match-separator", help="Separator between path/line/text for matches."
     ),
-    field_context_separator: str = typer.Option(
-        "-", "--field-context-separator", help="Separator for context lines."
-    ),
+    field_context_separator: str = typer.Option("-", "--field-context-separator", help="Separator for context lines."),
     after_context: int = typer.Option(0, "-A", "--after-context", help="Show N lines after each match."),
     before_context: int = typer.Option(0, "-B", "--before-context", help="Show N lines before each match."),
     context: Optional[int] = typer.Option(None, "-C", "--context", help="Shorthand for -A N -B N."),
@@ -2166,59 +2146,41 @@ def _pyrg_command(
     text_flag: bool = typer.Option(False, "-a", "--text", help="Treat binary files as text."),
     binary_flag: bool = typer.Option(False, "--binary", help="Search binary files, escape NULs."),
     require_git: bool = typer.Option(False, "--require-git", help="Only search files tracked by git."),
-    require_clean_git: bool = typer.Option(
-        False, "--require-clean-git", help="Refuse if git working tree is dirty."
-    ),
+    require_clean_git: bool = typer.Option(False, "--require-clean-git", help="Refuse if git working tree is dirty."),
     glob_patterns: Optional[list[str]] = typer.Option(
         None, "-g", "--glob", help="Only search paths matching GLOB (repeatable)."
     ),
-    iglob: Optional[list[str]] = typer.Option(
-        None, "--iglob", help="Case-insensitive include glob (repeatable)."
-    ),
+    iglob: Optional[list[str]] = typer.Option(None, "--iglob", help="Case-insensitive include glob (repeatable)."),
     glob_case_insensitive: bool = typer.Option(
         False, "--glob-case-insensitive", help="Make -g/--iglob/--exclude-dir case-insensitive."
     ),
-    exclude: Optional[list[str]] = typer.Option(
-        None, "--exclude", help="Exclude paths matching GLOB (repeatable)."
-    ),
+    exclude: Optional[list[str]] = typer.Option(None, "--exclude", help="Exclude paths matching GLOB (repeatable)."),
     exclude_dirs: Optional[list[str]] = typer.Option(
         None, "--exclude-dir", help="Exclude directory NAME (repeatable)."
     ),
     max_depth: Optional[int] = typer.Option(None, "--max-depth", help="Maximum directory depth."),
-    max_filesize: int = typer.Option(
-        10_000_000, "--max-filesize", help="Skip files larger than BYTES."
-    ),
+    max_filesize: int = typer.Option(10_000_000, "--max-filesize", help="Skip files larger than BYTES."),
     max_count: int = typer.Option(0, "-m", "-M", "--max-count", help="Stop after N matching lines per file."),
     no_ignore: bool = typer.Option(False, "--no-ignore", help="Do not honour .gitignore / .ignore."),
-    ignore_file: Optional[list[str]] = typer.Option(
-        None, "--ignore-file", help="Additional ignore file (repeatable)."
-    ),
+    ignore_file: Optional[list[str]] = typer.Option(None, "--ignore-file", help="Additional ignore file (repeatable)."),
     follow: bool = typer.Option(False, "--follow", help="Follow symlinks (with cycle detection)."),
     files_from: Optional[str] = typer.Option(None, "--files-from", help="Read file list from PATH (-: stdin)."),
     encoding: str = typer.Option("utf-8", "--encoding", help="Text encoding to use."),
     list_files: bool = typer.Option(False, "--files", help="List files that would be searched, then exit."),
     sort: str = typer.Option("none", "--sort", help="Sort: path|modified|accessed|created|none."),
     sortr: bool = typer.Option(False, "--sortr", help="Reverse sort order."),
-    pre_cmd: Optional[str] = typer.Option(
-        None, "--pre", help="Pipe each file through CMD and search its stdout."
-    ),
-    pre_glob: Optional[str] = typer.Option(
-        None, "--pre-glob", help="Only preprocess files matching GLOB."
-    ),
+    pre_cmd: Optional[str] = typer.Option(None, "--pre", help="Pipe each file through CMD and search its stdout."),
+    pre_glob: Optional[str] = typer.Option(None, "--pre-glob", help="Only preprocess files matching GLOB."),
     threads: int = typer.Option(MAX_WORKERS, "-j", "--threads", help="Worker count."),
     no_parallel: bool = typer.Option(False, "--no-parallel", help="Force single-threaded execution."),
     mmap_flag: bool = typer.Option(True, "--mmap/--no-mmap", help="Use mmap for large files (default on)."),
-    mmap_threshold: int = typer.Option(
-        1_048_576, "--mmap-threshold", help="mmap files >= BYTES."
-    ),
+    mmap_threshold: int = typer.Option(1_048_576, "--mmap-threshold", help="mmap files >= BYTES."),
     buffer_size: int = typer.Option(65_536, "--buffer-size", help="Buffered reader size."),
     process_lines: bool = typer.Option(False, "--process-lines", help="Stream lines instead of reading whole file."),
     regex_size_limit: int = typer.Option(
         10_000_000, "--regex-size-limit", help="Regex size limit (engine=regex only)."
     ),
-    dfa_size_limit: int = typer.Option(
-        10_000_000, "--dfa-size-limit", help="DFA size limit (engine=regex only)."
-    ),
+    dfa_size_limit: int = typer.Option(10_000_000, "--dfa-size-limit", help="DFA size limit (engine=regex only)."),
     in_place: bool = typer.Option(False, "-W", "--in-place", help="Modify files in place (requires --replace)."),
     dry_run: bool = typer.Option(False, "--dry-run", help="Preview changes without writing (implies --diff)."),
     diff: bool = typer.Option(False, "--diff", help="Print unified diff (implies --dry-run)."),
