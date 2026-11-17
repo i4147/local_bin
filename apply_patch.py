@@ -532,9 +532,15 @@ def run(args: argparse.Namespace) -> int:
     )
     if not patches:
         if explicit:
-            print(f"error: patch file(s) not found: {', '.join(map(str, explicit))}", file=sys.stderr)
+            print(
+                f"error: patch file(s) not found: {', '.join(map(str, explicit))}",
+                file=sys.stderr,
+            )
         else:
-            print(f"error: no patch files matching {', '.join(args.patches)} in {patch_dir}", file=sys.stderr)
+            print(
+                f"error: no patch files matching {', '.join(args.patches)} in {patch_dir}",
+                file=sys.stderr,
+            )
         return 2
 
     parsed: list[tuple[Path, list[FileDiff], str]] = []
@@ -688,12 +694,23 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="GLOB",
         help="glob(s) for patch files (default: *.patch and *.diff); repeatable",
     )
-    parser.add_argument("--patch-dir", default=".", metavar="DIR", help="directory holding patch files (default: .)")
     parser.add_argument(
-        "--source-dir", default=".", metavar="DIR", help="directory holding the source files (default: .)"
+        "--patch-dir",
+        default=".",
+        metavar="DIR",
+        help="directory holding patch files (default: .)",
     )
     parser.add_argument(
-        "--output-dir", default="output", metavar="DIR", help="directory for the results (default: output)"
+        "--source-dir",
+        default=".",
+        metavar="DIR",
+        help="directory holding the source files (default: .)",
+    )
+    parser.add_argument(
+        "--output-dir",
+        default="output",
+        metavar="DIR",
+        help="directory for the results (default: output)",
     )
     parser.add_argument(
         "--layout",
@@ -717,11 +734,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="max line offset when locating a hunk (0 = search whole file)",
     )
     parser.add_argument(
-        "--ignore-whitespace", action="store_true", help="match hunk context ignoring surrounding whitespace"
+        "--ignore-whitespace",
+        action="store_true",
+        help="match hunk context ignoring surrounding whitespace",
     )
     parser.add_argument("--clean", action="store_true", help="empty the output directory before writing")
     parser.add_argument("--dry-run", action="store_true", help="check patches without writing anything")
-    parser.add_argument("--strict", action="store_true", help="exit with status 1 if any section could not be applied")
+    parser.add_argument(
+        "--strict",
+        action="store_true",
+        help="exit with status 1 if any section could not be applied",
+    )
     parser.add_argument("--verbose", action="store_true", help="print every file section")
     parser.add_argument("--quiet", action="store_true", help="suppress the summary")
     return parser

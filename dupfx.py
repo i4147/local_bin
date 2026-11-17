@@ -144,17 +144,28 @@ app = typer.Typer(
 @app.command(help="Find and delete duplicate files by content.")
 def main(
     recursive: Annotated[
-        bool, typer.Option("--recursive", help="Search directories recursively (default: True).")
+        bool,
+        typer.Option("--recursive", help="Search directories recursively (default: True)."),
     ] = True,
     remove: Annotated[
         bool,
-        typer.Option("-r", "--remove", help="Actually delete duplicate files. Without this flag, only report them."),
+        typer.Option(
+            "-r",
+            "--remove",
+            help="Actually delete duplicate files. Without this flag, only report them.",
+        ),
     ] = True,
     all: Annotated[
-        bool, typer.Option("-a", "--all", help="Include .git directories in the search (symlinks are still skipped).")
+        bool,
+        typer.Option(
+            "-a",
+            "--all",
+            help="Include .git directories in the search (symlinks are still skipped).",
+        ),
     ] = False,
     dry_run: Annotated[
-        bool, typer.Option("-n", "--dry-run", help="Don't delete; just show what would be done.")
+        bool,
+        typer.Option("-n", "--dry-run", help="Don't delete; just show what would be done."),
     ] = False,
     follow_symlinks: Annotated[bool, typer.Option("--follow-symlinks", help="Follow symlinks to files.")] = False,
     keep: Annotated[Keep, typer.Option("-k", "--keep", help="Which file to keep within duplicates.")] = Keep.oldest,

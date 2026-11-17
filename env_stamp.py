@@ -161,7 +161,6 @@ from venv import create as _venv_create
 import click
 import typer
 
-
 if TYPE_CHECKING:
     import argparse
     from collections.abc import Iterable, Iterator, Mapping, Sequence
@@ -569,7 +568,12 @@ class Stamp:
         environments always produce equal hashes.
         """
         core = cls._core_dict(
-            python=python, os=os, packages=packages, env_keys=env_keys, env_redacted=env_redacted, tools=tools
+            python=python,
+            os=os,
+            packages=packages,
+            env_keys=env_keys,
+            env_redacted=env_redacted,
+            tools=tools,
         )
         return cls(
             schema=SCHEMA_VERSION,
@@ -1344,9 +1348,27 @@ def diff_stamps(a: Stamp, b: Stamp) -> list[Change]:
     env_added = sorted(set(b.env_keys) - set(a.env_keys))
     env_removed = sorted(set(a.env_keys) - set(b.env_keys))
     if env_added:
-        changes.append(Change("env", 5, "names", "env:+", _name_list(env_added, "present only in suspect"), 0))
+        changes.append(
+            Change(
+                "env",
+                5,
+                "names",
+                "env:+",
+                _name_list(env_added, "present only in suspect"),
+                0,
+            )
+        )
     if env_removed:
-        changes.append(Change("env", 5, "names", "env:-", _name_list(env_removed, "present only in baseline"), 0))
+        changes.append(
+            Change(
+                "env",
+                5,
+                "names",
+                "env:-",
+                _name_list(env_removed, "present only in baseline"),
+                0,
+            )
+        )
 
     changes.sort(key=lambda c: (c.rank, -c.severity, c.name, c.detail))
     return changes
@@ -1388,7 +1410,10 @@ def render_markdown(
     if not changes:
         return "_No differences between the two environment stamps._"
     shown = list(changes) if max_lines is None else list(changes[:max_lines])
-    out = [f"**{len(changes)} environment difference(s)** (rank 1 = most likely relevant):", ""]
+    out = [
+        f"**{len(changes)} environment difference(s)** (rank 1 = most likely relevant):",
+        "",
+    ]
     for c in shown:
         out.append(f"- `[{c.rank}]` **{c.axis}** {c.name} -- {c.detail}")
     hidden = len(changes) - len(shown)
@@ -1574,7 +1599,10 @@ def _refusal_reasons(baseline: Stamp, suspect: Stamp) -> list[str]:
             f"({baseline.python.version} vs {suspect.python.version}); "
             "only patch-level differences can be bisected"
         )
-    if baseline.os.libc != suspect.os.libc and "unknown" not in (baseline.os.libc, suspect.os.libc):
+    if baseline.os.libc != suspect.os.libc and "unknown" not in (
+        baseline.os.libc,
+        suspect.os.libc,
+    ):
         reasons.append(
             f"C library differs ({baseline.os.libc} vs {suspect.os.libc}) -- system-level, outside env-stamp's control"
         )
@@ -1589,15 +1617,31 @@ def _changes_from_items(items: Sequence[_Atomic]) -> list[Change]:
     for item in items:
         if item.axis == "packages":
             if item.kind == "add-pkg":
-                rank, kind, detail = 2, "added", f"{item.name} {item.payload} present only in suspect"
+                rank, kind, detail = (
+                    2,
+                    "added",
+                    f"{item.name} {item.payload} present only in suspect",
+                )
             elif item.kind == "remove-pkg":
-                rank, kind, detail = 2, "removed", f"{item.name} {item.payload} present only in baseline"
+                rank, kind, detail = (
+                    2,
+                    "removed",
+                    f"{item.name} {item.payload} present only in baseline",
+                )
             else:
                 rank, kind, detail = 3, "changed", f"{item.name} -> {item.payload}"
         elif item.kind == "set-env":
-            rank, kind, detail = 4, "value", f"{item.name}={item.payload} (safe value from suspect)"
+            rank, kind, detail = (
+                4,
+                "value",
+                f"{item.name}={item.payload} (safe value from suspect)",
+            )
         else:
-            rank, kind, detail = 5, "names", f"unsetting {item.name} (absent in suspect)"
+            rank, kind, detail = (
+                5,
+                "names",
+                f"unsetting {item.name} (absent in suspect)",
+            )
         out.append(Change(item.axis, rank, kind, item.name, detail))
     return sorted(out, key=lambda c: (c.rank, c.name))
 
@@ -1883,7 +1927,15 @@ class Bisector:
                             "the exact change could not be reconstructed (uncaptured "
                             "values are blind spots)"
                         )
-                        culprits.append(Change(ax, 5, "names", ax, f"{ax} axis difference flips the test"))
+                        culprits.append(
+                            Change(
+                                ax,
+                                5,
+                                "names",
+                                ax,
+                                f"{ax} axis difference flips the test",
+                            )
+                        )
                     else:
                         culprits.extend(_changes_from_items(minimal))
                 if len(failing_axes) > 1:
@@ -2209,14 +2261,20 @@ def _cmd_diff(args: argparse.Namespace) -> int:
     baseline = _load_stamp(args.baseline)
     if args.stdin:
         if args.suspect:
-            print("env-stamp: error: --stdin cannot be combined with a second file", file=sys.stderr)
+            print(
+                "env-stamp: error: --stdin cannot be combined with a second file",
+                file=sys.stderr,
+            )
             return 2
         suspect = _load_stamp(None, stdin=True)
     elif args.suspect == "-":
         suspect = _load_stamp(None, stdin=True)
     else:
         if not args.suspect:
-            print("env-stamp: error: expected two stamp files (or --stdin)", file=sys.stderr)
+            print(
+                "env-stamp: error: expected two stamp files (or --stdin)",
+                file=sys.stderr,
+            )
             return 2
         suspect = _load_stamp(args.suspect)
     changes = diff_stamps(baseline, suspect)
@@ -2293,7 +2351,10 @@ def _root(
     version: Annotated[
         bool,
         typer.Option(
-            "--version", callback=_version_callback, is_eager=True, help="show program's version number and exit"
+            "--version",
+            callback=_version_callback,
+            is_eager=True,
+            help="show program's version number and exit",
         ),
     ] = False,
 ) -> None:
@@ -2303,10 +2364,12 @@ def _root(
 @app.command("capture", help="fingerprint the current (or --venv) environment")
 def cmd_capture(
     out: Annotated[
-        Path | None, typer.Option("--out", "-o", help="write the stamp JSON to this file (default: stdout)")
+        Path | None,
+        typer.Option("--out", "-o", help="write the stamp JSON to this file (default: stdout)"),
     ] = None,
     venv: Annotated[
-        Path | None, typer.Option("--venv", help="fingerprint the packages of this venv without activating it")
+        Path | None,
+        typer.Option("--venv", help="fingerprint the packages of this venv without activating it"),
     ] = None,
     allow_values: Annotated[
         str,
@@ -2316,13 +2379,19 @@ def cmd_capture(
         ),
     ] = ",".join(sorted(SAFE_VALUE_KEYS)),
     no_redact: Annotated[
-        bool, typer.Option("--no-redact", help="record ALL env values (prints a warning; do not share the file)")
+        bool,
+        typer.Option(
+            "--no-redact",
+            help="record ALL env values (prints a warning; do not share the file)",
+        ),
     ] = False,
     no_paths: Annotated[
-        bool, typer.Option("--no-paths", help="strip editable/file:// package origins (leak safety)")
+        bool,
+        typer.Option("--no-paths", help="strip editable/file:// package origins (leak safety)"),
     ] = False,
     no_tools: Annotated[
-        bool, typer.Option("--no-tools", help="skip probing external tool versions (pip/uv/gcc/...)")
+        bool,
+        typer.Option("--no-tools", help="skip probing external tool versions (pip/uv/gcc/...)"),
     ] = False,
     quiet: Annotated[bool, typer.Option("--quiet", "-q", help="suppress summary output")] = False,
 ) -> None:
@@ -2344,13 +2413,18 @@ def cmd_capture(
 def cmd_diff(
     baseline: Annotated[str, typer.Argument(help="path to the baseline (good) stamp JSON")],
     suspect: Annotated[
-        str | None, typer.Argument(help="path to the suspect (broken) stamp JSON, or '-' for stdin")
+        str | None,
+        typer.Argument(help="path to the suspect (broken) stamp JSON, or '-' for stdin"),
     ] = None,
     stdin: Annotated[bool, typer.Option("--stdin", help="read the suspect stamp from stdin")] = False,
     format: Annotated[Format, typer.Option("--format", help="output renderer (default: terminal)")] = Format.terminal,
     all: Annotated[bool, typer.Option("--all", help="show every change, not just the top 10")] = False,
     max_lines: Annotated[
-        int, typer.Option("--max-lines", help=f"truncate to N lines (default: {DEFAULT_MAX_DIFF_LINES})")
+        int,
+        typer.Option(
+            "--max-lines",
+            help=f"truncate to N lines (default: {DEFAULT_MAX_DIFF_LINES})",
+        ),
     ] = DEFAULT_MAX_DIFF_LINES,
 ) -> None:
     _STATE.update(
@@ -2368,31 +2442,54 @@ def cmd_diff(
 
 @app.command("bisect", help="find the smallest change set that flips a test to FAIL")
 def cmd_bisect(
-    baseline: Annotated[str, typer.Option("--baseline", help="stamp of the environment where the test passes")],
-    test: Annotated[str, typer.Option("--test", help="shell command; exit code 0 = PASS, anything else = FAIL")],
+    baseline: Annotated[
+        str,
+        typer.Option("--baseline", help="stamp of the environment where the test passes"),
+    ],
+    test: Annotated[
+        str,
+        typer.Option("--test", help="shell command; exit code 0 = PASS, anything else = FAIL"),
+    ],
     venv: Annotated[
-        Path | None, typer.Option("--venv", help="suspect venv to compare against (default: current environment)")
+        Path | None,
+        typer.Option(
+            "--venv",
+            help="suspect venv to compare against (default: current environment)",
+        ),
     ] = None,
     python: Annotated[
-        str | None, typer.Option("--python", help="interpreter used to build candidate venvs (default: running python)")
+        str | None,
+        typer.Option(
+            "--python",
+            help="interpreter used to build candidate venvs (default: running python)",
+        ),
     ] = None,
     find_links: Annotated[
         list[str],
         typer.Option(
-            "--find-links", help="local wheel directory; repeatable; implies --no-index (offline mode)", metavar="DIR"
+            "--find-links",
+            help="local wheel directory; repeatable; implies --no-index (offline mode)",
+            metavar="DIR",
         ),
     ] = [],
     max_runs: Annotated[
-        int, typer.Option("--max-runs", help=f"cap on test executions (default: {DEFAULT_MAX_RUNS})")
+        int,
+        typer.Option("--max-runs", help=f"cap on test executions (default: {DEFAULT_MAX_RUNS})"),
     ] = DEFAULT_MAX_RUNS,
     timeout: Annotated[
-        float, typer.Option("--timeout", help="per-test timeout in seconds (default: 900)")
+        float,
+        typer.Option("--timeout", help="per-test timeout in seconds (default: 900)"),
     ] = DEFAULT_TEST_TIMEOUT,
     workdir: Annotated[
-        Path | None, typer.Option("--workdir", help="where throwaway venvs live (default: a fresh temp dir)")
+        Path | None,
+        typer.Option("--workdir", help="where throwaway venvs live (default: a fresh temp dir)"),
     ] = None,
     parallel: Annotated[
-        bool, typer.Option("--parallel", help="run axis-level probes concurrently (each in its own venv)")
+        bool,
+        typer.Option(
+            "--parallel",
+            help="run axis-level probes concurrently (each in its own venv)",
+        ),
     ] = False,
     force_pip: Annotated[bool, typer.Option("--force-pip", help="use pip even when uv is available")] = False,
     keep: Annotated[bool, typer.Option("--keep", help="keep throwaway venvs for inspection")] = False,

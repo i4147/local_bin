@@ -26,7 +26,6 @@ from SPARQLWrapper import JSON, SPARQLWrapper
 from termcolor import colored
 import typer
 
-
 _STATE: dict[str, object] = {}
 
 
@@ -841,10 +840,14 @@ app = typer.Typer(
 def cmd_check(
     input: Annotated[typer.FileText, typer.Argument(help="Input file, default is stdin.")],
     output: Annotated[typer.FileTextWrite, typer.Option("--output", help="Optional output file.")] = sys.stdout,
-    try_fix: Annotated[bool, typer.Option("--try-fix", help="Flag to search information to fix the database.")] = False,
+    try_fix: Annotated[
+        bool,
+        typer.Option("--try-fix", help="Flag to search information to fix the database."),
+    ] = False,
     add_todo: Annotated[bool, typer.Option("--add-todo", help="Adds TODO for missing fields.")] = False,
     anthologies: Annotated[
-        list[str] | None, typer.Option("--anthologies", help="List of BibTeX files with know papers.")
+        list[str] | None,
+        typer.Option("--anthologies", help="List of BibTeX files with know papers."),
     ] = None,
 ) -> None:
     _STATE.update(

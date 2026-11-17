@@ -280,7 +280,12 @@ app = typer.Typer(
 @app.command(help="Find duplicated Python definitions and optionally strip them.")
 def parse_args(
     apply: Annotated[
-        bool, typer.Option("-a", "--apply", help="Apply changes (default: report only, source files are not modified).")
+        bool,
+        typer.Option(
+            "-a",
+            "--apply",
+            help="Apply changes (default: report only, source files are not modified).",
+        ),
     ] = False,
     min_files: Annotated[
         int,
@@ -294,28 +299,49 @@ def parse_args(
     json: Annotated[
         Path,
         typer.Option(
-            "-j", "--json", help=f"Path to write the JSON report (default: {REPEATED_JSON_PATH}).", metavar="PATH"
+            "-j",
+            "--json",
+            help=f"Path to write the JSON report (default: {REPEATED_JSON_PATH}).",
+            metavar="PATH",
         ),
     ] = REPEATED_JSON_PATH,
     workers: Annotated[
         int,
         typer.Option(
-            "-w", "--workers", help=f"Number of parallel workers when applying (default: {MAX_WORKERS}).", metavar="N"
+            "-w",
+            "--workers",
+            help=f"Number of parallel workers when applying (default: {MAX_WORKERS}).",
+            metavar="N",
         ),
     ] = MAX_WORKERS,
     root: Annotated[
-        Path, typer.Option("-r", "--root", help="Root directory to scan (default: current directory).", metavar="DIR")
+        Path,
+        typer.Option(
+            "-r",
+            "--root",
+            help="Root directory to scan (default: current directory).",
+            metavar="DIR",
+        ),
     ] = Path.cwd(),
     exclude: Annotated[
         list[str] | None,
-        typer.Option("-e", "--exclude", help="Substring to exclude from scanning (repeatable).", metavar="PATTERN"),
+        typer.Option(
+            "-e",
+            "--exclude",
+            help="Substring to exclude from scanning (repeatable).",
+            metavar="PATTERN",
+        ),
     ] = None,
     quiet: Annotated[bool, typer.Option("-q", "--quiet", help="Suppress the summary table.")] = False,
     no_json: Annotated[bool, typer.Option("--no-json", help="Do not write the JSON report.")] = False,
     version: Annotated[
         bool,
         typer.Option(
-            "-V", "--version", callback=_version_callback, is_eager=True, help="show program's version number and exit"
+            "-V",
+            "--version",
+            callback=_version_callback,
+            is_eager=True,
+            help="show program's version number and exit",
         ),
     ] = False,
 ) -> argparse.Namespace:

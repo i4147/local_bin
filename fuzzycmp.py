@@ -447,11 +447,26 @@ def nysiis(name: str) -> str:
     name = re.sub(r"[^A-Z]", "", name.upper())
     if not name:
         return ""
-    for pre, rep in (("MAC", "MCC"), ("KN", "NN"), ("K", "C"), ("PH", "FF"), ("PF", "FF"), ("SCH", "SSS")):
+    for pre, rep in (
+        ("MAC", "MCC"),
+        ("KN", "NN"),
+        ("K", "C"),
+        ("PH", "FF"),
+        ("PF", "FF"),
+        ("SCH", "SSS"),
+    ):
         if name.startswith(pre):
             name = rep + name[len(pre) :]
             break
-    for suf, rep in (("EE", "Y"), ("IE", "Y"), ("DT", "D"), ("RT", "D"), ("RD", "D"), ("NT", "D"), ("ND", "D")):
+    for suf, rep in (
+        ("EE", "Y"),
+        ("IE", "Y"),
+        ("DT", "D"),
+        ("RT", "D"),
+        ("RD", "D"),
+        ("NT", "D"),
+        ("ND", "D"),
+    ):
         if name.endswith(suf):
             name = name[: -len(suf)] + rep
             break
@@ -1266,7 +1281,10 @@ def _root(
     version: Annotated[
         bool,
         typer.Option(
-            "--version", callback=_version_callback, is_eager=True, help="show program's version number and exit"
+            "--version",
+            callback=_version_callback,
+            is_eager=True,
+            help="show program's version number and exit",
         ),
     ] = False,
 ) -> None:

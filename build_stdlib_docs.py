@@ -20,7 +20,6 @@ import pydoc
 import sys
 import sysconfig
 
-
 # Modules whose import has side effects or is likely to fail / hang in a
 # headless/automated context. Skip them.
 BLACKLIST = {
@@ -144,7 +143,12 @@ def html_to_pdf(html_path, pdf_path):
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("-p", "--pdf", action="store_true", help="Also generate a PDF version.")
-    parser.add_argument("-o", "--output", default="stdlib.html", help="Output HTML path (default: stdlib.html).")
+    parser.add_argument(
+        "-o",
+        "--output",
+        default="stdlib.html",
+        help="Output HTML path (default: stdlib.html).",
+    )
     args = parser.parse_args()
 
     version = sys.version.split()[0]

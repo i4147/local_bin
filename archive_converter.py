@@ -33,7 +33,6 @@ import zipfile
 from loguru import logger
 import typer
 
-
 CHUNK = 1 << 20
 """Read/write chunk size in bytes."""
 
@@ -602,7 +601,10 @@ def extract_tar(src: Path, codec: Codec | None, root: Path) -> None:
         msg = "this Python lacks safe tar extraction filters; update Python"
         raise ToolError(msg)
 
-    with open_reader(src, codec) as stream, tarfile.open(fileobj=stream, mode="r|") as archive:
+    with (
+        open_reader(src, codec) as stream,
+        tarfile.open(fileobj=stream, mode="r|") as archive,
+    ):
         archive.extractall(root, filter="data")
 
 
@@ -617,7 +619,10 @@ def extract_7z(src: Path, root: Path) -> None:
 
 def extract_raw(src: Path, codec: Codec | None, root: Path, stem: str) -> None:
     """Decompress a bare compressed stream into a single output file."""
-    with open_reader(src, codec) as source, (root / (stem or "data")).open("wb") as sink:
+    with (
+        open_reader(src, codec) as source,
+        (root / (stem or "data")).open("wb") as sink,
+    ):
         shutil.copyfileobj(source, sink, CHUNK)
 
 
@@ -744,7 +749,10 @@ def recode(
     """Stream-recompress *src* and return the SHA-256 of the decoded payload."""
     digest = hashlib.sha256()
 
-    with open_reader(src, src_codec) as reader, open_writer(part, dst_codec, level) as writer:
+    with (
+        open_reader(src, src_codec) as reader,
+        open_writer(part, dst_codec, level) as writer,
+    ):
         while chunk := reader.read(CHUNK):
             digest.update(chunk)
             writer.write(chunk)
@@ -799,7 +807,10 @@ def verify_output(out: Path, dst: Fmt, digest: str | None) -> None:
                 raise ToolError(msg)
 
         case Container.TAR:
-            with open_reader(out, dst.codec) as reader, tarfile.open(fileobj=reader, mode="r|") as archive:
+            with (
+                open_reader(out, dst.codec) as reader,
+                tarfile.open(fileobj=reader, mode="r|") as archive,
+            ):
                 for member in archive:
                     if member.isreg():
                         handle = archive.extractfile(member)
@@ -813,7 +824,10 @@ def verify_output(out: Path, dst: Fmt, digest: str | None) -> None:
 
 def streamable(src: Fmt, dst: Fmt) -> bool:
     """Return whether *src* can be converted by streaming without staging."""
-    return src.container is dst.container and src.container in (Container.RAW, Container.TAR)
+    return src.container is dst.container and src.container in (
+        Container.RAW,
+        Container.TAR,
+    )
 
 
 def convert_one(src: Path, opts: Options) -> Result:

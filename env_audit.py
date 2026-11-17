@@ -14,7 +14,6 @@ from typing import Annotated, Any, Optional
 import click
 import typer
 
-
 _STATE: dict[str, object] = {}
 
 
@@ -61,7 +60,14 @@ DEFAULT_IGNORE: set[str] = {
     "LOGNAME",
 }
 
-SECRET_PREFIXES: tuple[str, ...] = ("sk_live_", "ghp_", "AKIA", "-----BEGIN", "xoxb-", "ghs_")
+SECRET_PREFIXES: tuple[str, ...] = (
+    "sk_live_",
+    "ghp_",
+    "AKIA",
+    "-----BEGIN",
+    "xoxb-",
+    "ghs_",
+)
 HIGH_ENTROPY_MIN_LEN: int = 20
 
 
@@ -375,7 +381,10 @@ def reconcile(
             sev = severity_map.get("E002", "warning")
             findings.append(
                 Finding(
-                    code="E002", message=f"Key '{k}' is in .env.example but never read in code", severity=sev, key=k
+                    code="E002",
+                    message=f"Key '{k}' is in .env.example but never read in code",
+                    severity=sev,
+                    key=k,
                 )
             )
 

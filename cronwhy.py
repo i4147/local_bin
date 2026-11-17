@@ -14,7 +14,6 @@ from zoneinfo import ZoneInfo
 import click
 import typer
 
-
 _STATE: dict[str, object] = {}
 
 
@@ -89,7 +88,11 @@ def humanize_list(values: Sequence[int], names: Optional[dict] = None) -> str:
 
 
 def field_summary(
-    field_name: str, values: set[int], *, names: Optional[dict] = None, use_wildcard: bool = False
+    field_name: str,
+    values: set[int],
+    *,
+    names: Optional[dict] = None,
+    use_wildcard: bool = False,
 ) -> str:
     ordered = sorted(values)
     if field_name == "minute":
@@ -307,7 +310,11 @@ def explain_spec(spec: CronSpec) -> str:
 
 
 def iter_next_runs(
-    spec: CronSpec, tz: ZoneInfo, after: Optional[datetime] = None, count: int = 5, max_steps: int = 1_000_000
+    spec: CronSpec,
+    tz: ZoneInfo,
+    after: Optional[datetime] = None,
+    count: int = 5,
+    max_steps: int = 1_000_000,
 ) -> list[datetime]:
     "Yield next runs from the supplied input."
     if after is None:
@@ -409,7 +416,12 @@ def main() -> int:
         if args.overlaps:
             overlaps = detect_overlaps(specs, tz, horizon_days=args.horizon_days)
             if args.json:
-                print(json.dumps({"entries": [s.raw for s in specs], "overlaps": overlaps}, indent=2))
+                print(
+                    json.dumps(
+                        {"entries": [s.raw for s in specs], "overlaps": overlaps},
+                        indent=2,
+                    )
+                )
             else:
                 print(f"Loaded {len(specs)} cron entries from {args.file}")
                 if not overlaps:
@@ -476,7 +488,10 @@ def main() -> int:
             "explanation": explain_spec(spec),
             "next_runs": [dt.strftime("%Y-%m-%d %H:%M %Z") for dt in next_runs],
             "dst_warnings": [
-                {"time": dt.strftime("%Y-%m-%d %H:%M %Z"), "warning": "Potential DST edge case"}
+                {
+                    "time": dt.strftime("%Y-%m-%d %H:%M %Z"),
+                    "warning": "Potential DST edge case",
+                }
                 for dt in next_runs
                 if is_dst_quirky(dt, tz)
             ],
@@ -513,15 +528,28 @@ app = typer.Typer(
 @app.command(help="Explain cron expressions in plain English and estimate next runs.")
 def cli(
     expression: Annotated[str | None, typer.Argument(help="A single cron expression like '*/5 * * * *'")] = None,
-    file: Annotated[str | None, typer.Option("--file", help="Crontab file to parse instead of one expression")] = None,
-    tz: Annotated[str, typer.Option("--tz", help="Timezone to evaluate scheduling in, e.g. Europe/London")] = "UTC",
+    file: Annotated[
+        str | None,
+        typer.Option("--file", help="Crontab file to parse instead of one expression"),
+    ] = None,
+    tz: Annotated[
+        str,
+        typer.Option("--tz", help="Timezone to evaluate scheduling in, e.g. Europe/London"),
+    ] = "UTC",
     next: Annotated[int, typer.Option("--next", help="How many future run times to show")] = 5,
     overlaps: Annotated[
-        bool, typer.Option("--overlaps", help="Detect duplicate/overlapping schedules in a crontab file")
+        bool,
+        typer.Option(
+            "--overlaps",
+            help="Detect duplicate/overlapping schedules in a crontab file",
+        ),
     ] = False,
     dst_warnings: Annotated[bool, typer.Option("--dst-warnings", help="Call out times near DST transitions")] = False,
     json: Annotated[bool, typer.Option("--json", help="Emit JSON output")] = False,
-    horizon_days: Annotated[int, typer.Option("--horizon-days", help="Horizon used for overlap detection (days)")] = 30,
+    horizon_days: Annotated[
+        int,
+        typer.Option("--horizon-days", help="Horizon used for overlap detection (days)"),
+    ] = 30,
 ) -> None:
     _STATE.update(
         expression=expression,
