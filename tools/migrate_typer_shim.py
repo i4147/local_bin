@@ -246,7 +246,7 @@ def _emit_add_argument(
     # Handle --version callback
     if p.is_version:
         flag_args = ", ".join(repr(f) for f in p.flags)
-        kw = [f'action="version"', f"version={version_expr or repr('unknown')}"]
+        kw = ['action="version"', f"version={version_expr or repr('unknown')}"]
         if p.help_expr:
             kw.append(f"help={p.help_expr}")
         lines.append(f"{indent}{target_var}.add_argument({flag_args}, {', '.join(kw)})")

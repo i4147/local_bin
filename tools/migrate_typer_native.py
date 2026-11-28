@@ -481,8 +481,8 @@ def migrate_source(src: str) -> str:
 
     # Rewrite entry point: either `if __name__ == "__main__":\n    app()` or `_app()` call inside `def main(...)`
     dispatch_body = (
-        f"    parser = build_parser()\n"
-        f"    raw = sys.argv[1:] if argv is None else list(argv)\n"
+        "    parser = build_parser()\n"
+        "    raw = sys.argv[1:] if argv is None else list(argv)\n"
         + ("    if not raw:\n        parser.print_help()\n        return 0\n" if no_args_is_help else "")
         + f"    ns = parser.parse_args(raw)\n"
         f"    {fn.name}(**vars(ns))\n"
