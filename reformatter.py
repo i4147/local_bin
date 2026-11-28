@@ -1,10 +1,9 @@
 #!/data/data/com.termux/files/usr/bin/env python
 from __future__ import annotations
+
 import argparse
 import ast
 import builtins
-from collections.abc import Sequence
-from dataclasses import asdict, dataclass, replace
 import functools
 import io
 import json
@@ -14,6 +13,8 @@ import re
 import sys
 import time
 import tokenize
+from collections.abc import Sequence
+from dataclasses import asdict, dataclass, replace
 
 from dh import atomic_write
 from loguru import logger

@@ -1,19 +1,19 @@
 #!/data/data/com.termux/files/usr/bin/env python
 from __future__ import annotations
+
 import argparse
-from collections.abc import Callable, Iterator, Sequence
-from dataclasses import dataclass
 import hashlib
 import importlib
 import importlib.util
 import multiprocessing as mp
 import os
-from pathlib import Path, PurePosixPath
 import re
-import shlex
 import shutil
 import sys
 import time
+from collections.abc import Callable, Iterator, Sequence
+from dataclasses import dataclass
+from pathlib import Path, PurePosixPath
 from typing import Final, Literal, NamedTuple, Protocol, cast
 
 from dh import SKIP_DIRS, atomic_write
@@ -23,7 +23,6 @@ from rich.live import Live
 from rich.table import Table
 from rich.text import Text
 from tree_sitter import Language, Node, Parser, Tree
-
 
 Status = Literal["changed", "unchanged", "skipped", "unsupported", "invalid", "error"]
 VetoFn = Callable[[Node, bytes], bool]
@@ -504,6 +503,7 @@ def _get_parser(lang: str) -> Parser | None:
 
 
 def _shebang_language(first_line: bytes) -> str | None:
+    import shlex
     if not first_line.startswith(b"#!"):
         return None
     line: str = first_line[2:].decode("utf-8", "replace").strip()

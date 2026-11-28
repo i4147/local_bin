@@ -3,17 +3,18 @@
 "Optimized Zip Brute-Forcer for Python 3.11+"
 
 from __future__ import annotations
+
 import argparse
-from dataclasses import dataclass, field
-from itertools import islice
 import multiprocessing
-from pathlib import Path
+import os
 import sys
 import time
-from typing import TYPE_CHECKING, Annotated, Final
 import zipfile
 import zlib
-import os
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import TYPE_CHECKING, Final
+
 from loguru import logger
 
 logger.remove()
@@ -84,6 +85,7 @@ def check_password_batch(zip_path: Path, passwords: list[str]) -> tuple[str | No
 
 def get_wordlist_batches(path: Path, batch_size: int) -> Generator[list[str], None, None]:
     "Return wordlist batches."
+    from itertools import islice
     with path.open("r", encoding="utf-8", errors="ignore") as f:
         while True:
             batch = [line.strip() for line in islice(f, batch_size) if line.strip()]

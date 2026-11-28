@@ -20,15 +20,16 @@ Command-line script:
 """
 
 from __future__ import annotations
+
 import argparse
 import ast
-from pathlib import Path
+import os
 import re
-from typing import Any, Optional
+import sys
+from pathlib import Path
+from typing import Any
 
 from dh import MAX_WORKERS, atomic_write
-import os
-import sys
 from loguru import logger
 
 logger.remove()
@@ -207,7 +208,7 @@ SIX_MOVES_MAP: dict[str, str] = {
 
 
 class SixImportRewriter(ast.NodeTransformer):
-    def visit_ImportFrom(self, node: ast.ImportFrom) -> Optional[ast.AST]:
+    def visit_ImportFrom(self, node: ast.ImportFrom) -> ast.AST | None:
         self.generic_visit(node)
         m = node.module or ""
         if m in SIX_MOVES_MAP:
@@ -220,7 +221,7 @@ class SixImportRewriter(ast.NodeTransformer):
             return None
         return node
 
-    def visit_Import(self, node: ast.Import) -> Optional[ast.AST]:
+    def visit_Import(self, node: ast.Import) -> ast.AST | None:
         self.generic_visit(node)
         kept = [a for a in node.names if a.name != "six"]
         if not kept:
@@ -446,7 +447,7 @@ class ExecutorTransformer(ast.NodeTransformer):
 
 
 class LoggingTransformer(ast.NodeTransformer):
-    def visit_Assign(self, node: ast.Assign) -> Optional[ast.AST]:
+    def visit_Assign(self, node: ast.Assign) -> ast.AST | None:
         self.generic_visit(node)
         v = node.value
         if (
@@ -623,7 +624,7 @@ def refactor(
     )
 
 
-def main(argv: Optional[list[str]] = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Consolidate a multi-file Python package into one module.")
     parser.add_argument(
         "input",
@@ -670,7 +671,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         modules = [(str(p), parse_file(p)) for p in files]
         source_label = str(input_path)
         source_default = input_path.stem if input_path.is_file() else input_path.name
-    output: Optional[Path] = args.output
+    output: Path | None = args.output
     if output is None:
         output = Path.cwd() / f"{source_default}_single.py"
     if args.merged_file is not None and output.resolve() == args.merged_file.resolve():

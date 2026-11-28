@@ -2,20 +2,19 @@
 "Fuzzy text comparison CLI"
 
 from __future__ import annotations
-from abc import ABC, abstractmethod
+
 import argparse
-from collections import Counter
-from collections.abc import Callable, Iterable, Sequence
-from dataclasses import dataclass, field
 import hashlib
-import math
-from pathlib import Path
+import os
 import random
 import re
 import sys
-from types import SimpleNamespace
-from typing import IO, Annotated, Any, NoReturn
-import os
+from abc import ABC, abstractmethod
+from collections import Counter
+from collections.abc import Callable, Iterable, Sequence
+from dataclasses import dataclass, field
+from pathlib import Path
+
 from loguru import logger
 
 logger.remove()
@@ -303,6 +302,7 @@ class Cosine(SimilarityMetric):
         return {t: c * self.idf.get(t, 1.0) for t, c in tf.items()}
 
     def similarity(self, a: str, b: str) -> float:
+        import math
         va, vb = self._vector(a), self._vector(b)
         if not va and not vb:
             return 1.0

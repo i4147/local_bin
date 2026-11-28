@@ -2,19 +2,19 @@
 "Merge JSON files with matching schemas, including bilingual string dictionaries."
 
 from __future__ import annotations
+
 import argparse
-from collections.abc import Sequence
-from enum import StrEnum
 import glob
 import json
 import mmap
 import os
-from pathlib import Path
 import secrets
 import string
 import sys
-from types import SimpleNamespace
-from typing import IO, Annotated, Any, NoReturn
+from collections.abc import Sequence
+from pathlib import Path
+from typing import Any, NoReturn
+
 from loguru import logger
 
 logger.remove()

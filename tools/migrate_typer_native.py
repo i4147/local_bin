@@ -15,10 +15,9 @@ from __future__ import annotations
 
 import argparse
 import ast
+import re
 from dataclasses import dataclass
 from pathlib import Path
-import re
-import sys
 
 
 @dataclass(frozen=True)
@@ -437,7 +436,7 @@ def migrate_source(src: str) -> str:
     extracted = _extract_command(tree)
     if extracted is None:
         raise ValueError("No single-command typer.Typer() / @app.command() found")
-    app_var, app_assign, fn, dec = extracted
+    app_var, app_assign, fn, _dec = extracted
     assert isinstance(app_assign.value, ast.Call)
     specs = _parse_params(fn)
     parser_code, no_args_is_help = _emit_parser_code(specs, app_assign.value, fn)

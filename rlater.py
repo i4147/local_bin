@@ -24,30 +24,30 @@ Data lives in $RLATER_DB, or $XDG_DATA_HOME/rlater/rlater.db
 """
 
 from __future__ import annotations
+
 import argparse
 import codecs
-from concurrent.futures import ThreadPoolExecutor
 import contextlib
-from dataclasses import dataclass, field
-from datetime import UTC, datetime
-from html.parser import HTMLParser
 import json
 import math
 import os
-from pathlib import Path
 import re
-import shlex
 import shutil
 import sqlite3
 import subprocess
 import sys
 import textwrap
+import webbrowser
+import zlib
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from html.parser import HTMLParser
+from pathlib import Path
 from typing import TYPE_CHECKING, Final, NoReturn
 from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit, urlunsplit
 from urllib.request import Request, urlopen
-import webbrowser
-import zlib
 
 from dh import atomic_write
 from loguru import logger
@@ -138,6 +138,7 @@ def terminal_width(requested: int | None) -> int:
 
 def page(text: str, enabled: bool) -> None:
     """Send *text* through a pager when stdout is a terminal."""
+    import shlex
     if not text.endswith("\n"):
         text += "\n"
     if not enabled or not sys.stdout.isatty():

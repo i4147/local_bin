@@ -8,18 +8,19 @@ Requires:  pip install libcst
 """
 
 from __future__ import annotations
+
 import argparse
-from collections.abc import Iterable, Iterator, Sequence
 import io
-from pathlib import Path
+import os
 import re
 import sys
 import tokenize
+from collections.abc import Iterable, Iterator, Sequence
+from pathlib import Path
 from typing import Any, TypeVar
 
-from dh import atomic_write
 import libcst as cst
-import os
+from dh import atomic_write
 from loguru import logger
 
 logger.remove()

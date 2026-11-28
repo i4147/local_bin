@@ -5,20 +5,21 @@ CLI entry point with separate build and search parsers; indexing stores paths in
 SQLite for later pattern queries."""
 
 from __future__ import annotations
+
 import argparse
-from collections.abc import Callable, Iterator
 import contextlib
-from dataclasses import dataclass
 import os
-from pathlib import Path
 import re
-import shlex
 import signal
 import sqlite3
 import struct
 import sys
 import time
 import zlib
+from collections.abc import Callable, Iterator
+from dataclasses import dataclass
+from pathlib import Path
+
 from loguru import logger
 
 logger.remove()
@@ -110,6 +111,7 @@ def _default_db() -> str:
 
 
 def _pick_roots(cli_roots: list[str]) -> list[str]:
+    import shlex
     if cli_roots:
         raw = list(cli_roots)
     else:

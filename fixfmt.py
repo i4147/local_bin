@@ -63,21 +63,20 @@ How it works
 """
 
 from __future__ import annotations
+
 import argparse
 import ast
 import builtins
-from collections.abc import Sequence
-from dataclasses import dataclass, field
 import io
-from pathlib import Path
+import os
 import re
 import sys
-from pathlib import Path
 import tokenize
-from typing import TYPE_CHECKING, Annotated
+from collections.abc import Sequence
+from dataclasses import dataclass, field
+from pathlib import Path
 
 from dh import atomic_write
-import os
 from loguru import logger
 
 logger.remove()

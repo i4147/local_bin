@@ -3,33 +3,30 @@
 
 from __future__ import annotations
 
-from collections import OrderedDict
-from contextlib import closing, suppress
+import argparse
 import copy
-from io import BytesIO
 import json
 import os
-from pathlib import Path
 import re
-from shutil import get_terminal_size
 import subprocess
 import sys
 import tempfile
-from traceback import format_exc
-from types import SimpleNamespace
-from typing import IO, TYPE_CHECKING, Annotated, Any, NoReturn
-from urllib.parse import quote, urljoin
 import zipfile
+from collections import OrderedDict
+from contextlib import closing, suppress
+from io import BytesIO
+from pathlib import Path
+from shutil import get_terminal_size
+from traceback import format_exc
+from typing import Any
+from urllib.parse import quote, urljoin
 
-from bs4 import BeautifulSoup, Tag
-from guessit import guessit
 import rarfile
 import requests
-from requests import exceptions
-
-
-import argparse
+from bs4 import BeautifulSoup, Tag
+from guessit import guessit
 from loguru import logger
+from requests import exceptions
 
 logger.remove()
 logger.add(

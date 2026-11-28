@@ -25,16 +25,16 @@ Keys:
 
 from __future__ import annotations
 
-from collections.abc import Sequence
 import curses
-from datetime import datetime
 import os
-from pathlib import Path
 import shutil
 import stat
 import subprocess
 import sys
-from typing import Any, NoReturn
+from datetime import datetime
+from pathlib import Path
+from typing import Any
+
 from loguru import logger
 
 logger.remove()

@@ -47,15 +47,13 @@ Limitations (inherent to single-file flattening, reported as warnings)
 """
 
 from __future__ import annotations
+
 import argparse
 import ast as _pyast
 import base64
-from collections.abc import Mapping, Sequence
 import dataclasses
-from dataclasses import dataclass, field
 import keyword
 import os
-from pathlib import Path
 import re
 import shutil
 import string
@@ -63,7 +61,11 @@ import subprocess
 import sys
 import tempfile
 import textwrap
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
+
 from loguru import logger
 
 logger.remove()
@@ -78,6 +80,8 @@ try:
     import libcst as cst
     from libcst import (
         RemovalSentinel,
+    )
+    from libcst import (
         RemovalSentinel as _RS,
     )
     from libcst.metadata import (
@@ -1228,7 +1232,7 @@ def rename_in_module(
             if isinstance(scope, (FunctionScope, ComprehensionScope)):
                 # name may be local to that scope -- only rename if it
                 # actually resolves to the module global
-                assign = scope.assignments[node.value] if node.value in scope.assignments else ()
+                assign = scope.assignments[node.value]
                 if assign:
                     return  # truly local binding, skip
                 # check enclosing scopes for a local binding

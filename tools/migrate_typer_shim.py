@@ -5,11 +5,9 @@ from __future__ import annotations
 
 import argparse
 import ast
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
-import re
-import sys
-from typing import Any
 
 
 @dataclass
@@ -466,9 +464,7 @@ def migrate_file(path: Path, *, dry_run: bool = False) -> bool:
             names = [a.name for a in node.names]
             if names in (["typer"], ["click"]):
                 remove_ranges.append((node.lineno, node.end_lineno or node.lineno))
-        elif isinstance(node, ast.ImportFrom) and node.module in ("typer", "click"):
-            remove_ranges.append((node.lineno, node.end_lineno or node.lineno))
-        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name) and node.target.id == "_STATE":
+        elif isinstance(node, ast.ImportFrom) and node.module in ("typer", "click") or isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name) and node.target.id == "_STATE":
             remove_ranges.append((node.lineno, node.end_lineno or node.lineno))
         elif isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
             tname = node.targets[0].id
@@ -479,9 +475,7 @@ def migrate_file(path: Path, *, dry_run: bool = False) -> bool:
                     if kw.arg == "help":
                         app_help_expr = ast.unparse(kw.value)
                 remove_ranges.append((node.lineno, node.end_lineno or node.lineno))
-        elif isinstance(node, ast.ClassDef) and node.name in ("_Args", "_ParserShim"):
-            remove_ranges.append((node.lineno, node.end_lineno or node.lineno))
-        elif isinstance(node, ast.ClassDef) and node.name in cli_only_enums:
+        elif isinstance(node, ast.ClassDef) and node.name in ("_Args", "_ParserShim") or isinstance(node, ast.ClassDef) and node.name in cli_only_enums:
             remove_ranges.append((node.lineno, node.end_lineno or node.lineno))
         elif isinstance(node, ast.FunctionDef):
             if node.name == "_version_callback":
@@ -491,7 +485,7 @@ def migrate_file(path: Path, *, dry_run: bool = False) -> bool:
                 end = node.end_lineno or node.lineno
                 # Capture indented body
                 body_src = "".join(lines[node.body[0].lineno - 1 : end])
-                dedented = [ln[4:] if ln.startswith("    ") else ln for ln in body_src.splitlines()]
+                dedented = [ln.removeprefix("    ") for ln in body_src.splitlines()]
                 run_body_lines = [ln for ln in dedented if ln.strip()]
                 remove_ranges.append((start, end))
             elif id(node) in cli_fn_nodes:

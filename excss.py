@@ -26,20 +26,16 @@ Run `python extract_assets.py --help-optional` for the 3rd-party status.
 """
 
 from __future__ import annotations
+
 import argparse
 import base64
-from collections.abc import Iterable, Sequence
 import concurrent.futures
 import csv
-from dataclasses import dataclass, field
 import gzip
 import hashlib
-from html.parser import HTMLParser
 import ipaddress
 import json
 import mimetypes
-import os
-from pathlib import Path
 import re
 import shutil
 import socket
@@ -47,16 +43,19 @@ import ssl
 import sys
 import threading
 import time
-from typing import Any
 import urllib.error
 import urllib.parse
 import urllib.request
 import zipfile
 import zlib
+from collections.abc import Iterable, Sequence
+from dataclasses import dataclass, field
+from html.parser import HTMLParser
+from pathlib import Path
+from typing import Any
 
 from dh import atomic_write
 from loguru import logger
-
 
 try:
     import tomllib as _toml

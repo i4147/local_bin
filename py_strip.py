@@ -5,31 +5,29 @@ CLI entry point; walks files or directories recursively and dispatches work
 through a multiprocessing pool."""
 
 from __future__ import annotations
+
 import argparse
 import ast
 import codecs
-from collections import deque
-from collections.abc import Iterable, Iterator, Sequence
-from dataclasses import dataclass
-import difflib
 import enum
-import functools
 import io
 import multiprocessing as mp
-from multiprocessing.pool import AsyncResult, Pool
 import os
-from pathlib import Path
 import re
 import shutil
 import signal
 import sys
 import tempfile
 import tokenize
+from collections import deque
+from collections.abc import Iterable, Iterator, Sequence
+from dataclasses import dataclass
+from multiprocessing.pool import AsyncResult, Pool
+from pathlib import Path
 from typing import Final, Literal, get_args
 
 import libcst as cst
 from loguru import logger
-
 
 # --------------------------------------------------------------------------- #
 # Constants
@@ -362,6 +360,7 @@ def strip_source(source: str) -> tuple[str, int, int]:
 
 def _make_diff(path: Path, old: str, new: str) -> str:
     """Return a unified diff of *old* -> *new* ending in a newline."""
+    import difflib
     diff = "".join(
         difflib.unified_diff(
             old.splitlines(keepends=True),
@@ -502,7 +501,7 @@ def iter_python_files(targets: Iterable[Path], excludes: frozenset[str]) -> Iter
                 seen.add(resolved)
                 yield resolved
             continue
-        for root, dirnames, filenames in resolved.walk(on_error=_log_walk_error):
+        for root, dirnames, filenames in ((Path(root), dirs, files) for root, dirs, files in os.walk(resolved, onerror=_log_walk_error)):
             dirnames[:] = sorted(d for d in dirnames if d not in excludes and not d.endswith(".egg-info"))
             for name in sorted(filenames):
                 candidate = root / name
@@ -529,6 +528,7 @@ def iter_results(pool: Pool, method: PoolMethod, paths: Iterable[Path], options:
         ``apply_async``        Ordered, with a sliding window of at most
                                ``MAX_IN_FLIGHT`` pending tasks (bounded memory).
     """
+    import functools
     worker = functools.partial(process_file, options=options)
     match method:
         case "map":

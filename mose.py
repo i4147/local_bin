@@ -61,30 +61,34 @@ Notes:
 """
 
 from __future__ import annotations
+
 import argparse
-from collections import deque
-from collections.abc import Iterable, Sequence
-from dataclasses import (
-    dataclass,
-    field,
-    replace as _dc_replace,
-)
 import fnmatch
-from html import escape as _hesc
 import json
 import os
-from pathlib import Path
 import re
 import shutil
 import sys
 import tarfile
 import tempfile
 import time
-from typing import Any
 import urllib.error
 import urllib.parse
 import urllib.request
 import zipfile
+from collections import deque
+from collections.abc import Iterable, Sequence
+from dataclasses import (
+    dataclass,
+    field,
+)
+from dataclasses import (
+    replace as _dc_replace,
+)
+from html import escape as _hesc
+from pathlib import Path
+from typing import Any
+
 from loguru import logger
 
 logger.remove()

@@ -3,26 +3,17 @@
 "Find duplicate Python files, definitions, and near-duplicates using normalized AST fingerprints."
 
 from __future__ import annotations
+
 import argparse
 import ast
-from collections import defaultdict
-from collections.abc import Callable, Iterable, Sequence
-from concurrent.futures import ProcessPoolExecutor, as_completed
-from copy import deepcopy
 import csv
-from dataclasses import dataclass
-from datetime import UTC, datetime
-import difflib
-from enum import StrEnum
 import fnmatch
-import functools
 import hashlib
 import importlib
 import importlib.util
 import io
 import json
 import os
-from pathlib import Path
 import random
 import re
 import shutil
@@ -31,12 +22,17 @@ import sys
 import threading
 import time
 import tokenize
-from types import SimpleNamespace
-from typing import IO, Annotated, Any, NoReturn, TypeAlias
+from collections import defaultdict
+from collections.abc import Callable, Iterable, Sequence
+from concurrent.futures import ProcessPoolExecutor, as_completed
+from copy import deepcopy
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any, TypeAlias
 
 from dh import MAX_WORKERS, atomic_write
 from loguru import logger
-
 
 try:
     from xxhash import xxh64_hexdigest as _xxh64_hexdigest
@@ -330,7 +326,7 @@ class SourceNormalizer(ast.NodeTransformer):
 
     def _clear_type_params(self, node: ast.AST) -> None:
         if self.strip_type_nodes and hasattr(node, "type_params"):
-            setattr(node, "type_params", [])
+            node.type_params = []
 
     def visit_Module(self, node: ast.Module) -> ast.Module:
         """Visit Module nodes."""
@@ -1012,6 +1008,7 @@ def _run_mp_pool(
     operation: str,
     on_complete: Callable[[], None] | None,
 ) -> list[WorkerResult]:
+    import functools
     import multiprocessing
 
     results: list[WorkerResult] = []
@@ -2692,6 +2689,7 @@ def _apply_removals(
 
 
 def _run_diff(args: argparse.Namespace) -> int:
+    import difflib
     left_path, right_path = args.diff
     texts: list[str] = []
     for path in (left_path, right_path):

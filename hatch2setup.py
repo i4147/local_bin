@@ -30,23 +30,23 @@ readable output.
 """
 
 from __future__ import annotations
+
 import argparse
-from collections.abc import Sequence
-from dataclasses import dataclass, field
-import difflib
 import json
 import os
-from pathlib import Path
 import re
 import shutil
 import subprocess
 import sys
 import tempfile
+from collections.abc import Sequence
+from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 import tomlkit
-from tomlkit.items import Table
 from loguru import logger
+from tomlkit.items import Table
 
 logger.remove()
 logger.add(
@@ -240,6 +240,7 @@ def _path_to_attr(path: str) -> str | None:
 
 
 def _render_diff(original: str, converted: str, path: Path) -> str:
+    import difflib
     return "".join(
         difflib.unified_diff(
             original.splitlines(keepends=True),

@@ -69,28 +69,28 @@ names are always passed to git as argv entries - never through a shell.
 """
 
 from __future__ import annotations
+
 import argparse
-from collections.abc import Generator, Iterable, Iterator, Sequence
-from contextlib import contextmanager
-from dataclasses import dataclass, field
-from datetime import UTC, datetime
-from enum import StrEnum
 import fnmatch
 import json
 import os
-from pathlib import Path
 import re
 import subprocess
 import sys
 import tempfile
-from typing import Annotated, Any
+from collections.abc import Generator, Iterable, Sequence
+from contextlib import contextmanager
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from enum import StrEnum
+from pathlib import Path
+from typing import Any
 
 from dh import atomic_write
 from loguru import logger
 from rich.console import Console
 from rich.table import Table
 from rich.text import Text
-
 
 __all__: list[str] = [
     "Branch",

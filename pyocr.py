@@ -4,23 +4,22 @@
 from __future__ import annotations
 
 import argparse
-import codecs
-from collections.abc import Iterable, Sequence
 import contextlib
 import ctypes
-from html.parser import HTMLParser
-from io import BytesIO
 import locale
 import os
-from pathlib import Path
 import re
 import shutil
 import subprocess
 import sys
 import tempfile
-from types import SimpleNamespace
-from typing import IO, Annotated, Any, NoReturn, TextIO
 import xml.dom.minidom
+from collections.abc import Iterable, Sequence
+from html.parser import HTMLParser
+from io import BytesIO
+from pathlib import Path
+from types import SimpleNamespace
+from typing import Any, TextIO
 
 from loguru import logger
 

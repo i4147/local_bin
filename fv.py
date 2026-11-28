@@ -1,20 +1,20 @@
 #!/data/data/com.termux/files/usr/bin/env python
 from __future__ import annotations
+
 import argparse
-from collections.abc import Callable
 import dataclasses
-from dataclasses import dataclass
 import gzip
 import multiprocessing as mp
 import os
-from pathlib import Path
 import pydoc
 import re
 import shutil
 import sys
-import textwrap
 import time
 import tomllib
+from collections.abc import Callable
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import argcomplete
@@ -25,7 +25,6 @@ from pygments.lexer import Lexer
 from pygments.lexers import TextLexer, get_lexer_for_filename
 from pygments.styles import get_all_styles
 from pygments.util import ClassNotFound
-
 
 __version__ = "2.1.0"
 
@@ -408,6 +407,7 @@ def _plain(text: str) -> str:
 
 
 def render(entries: list[Entry], opts: Options, paint: Painter) -> str:
+    import textwrap
     if not entries:
         return ""
     width = len(str(entries[-1][0]))

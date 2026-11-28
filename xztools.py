@@ -4,23 +4,21 @@
 from __future__ import annotations
 
 import argparse
-from collections.abc import Callable, Sequence
 import contextlib
-from dataclasses import dataclass
-from datetime import datetime
-from enum import StrEnum
 import importlib
 import io
 import lzma
-from multiprocessing import Pool
 import os
-from pathlib import Path
 import shutil
 import sys
 import tarfile
 import time
-from types import SimpleNamespace
-from typing import IO, Annotated, Any, NoReturn
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass
+from datetime import datetime
+from multiprocessing import Pool
+from pathlib import Path
+from typing import Any
 
 from dh import MAX_WORKERS, SKIP_DIRS, atomic_write
 from loguru import logger

@@ -10,17 +10,17 @@ Requires:
 
 from __future__ import annotations
 
-from collections.abc import Iterator
 import multiprocessing as mp
-from pathlib import Path
+import os
 import re
 import subprocess
+import sys
+from collections.abc import Iterator
+from pathlib import Path
 
+from loguru import logger
 from rich.console import Console
 from rich.text import Text
-import os
-import sys
-from loguru import logger
 
 logger.remove()
 logger.add(

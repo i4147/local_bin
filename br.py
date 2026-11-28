@@ -4,21 +4,19 @@
 from __future__ import annotations
 
 import argparse
-from collections.abc import Callable, Iterator, Sequence
-from dataclasses import dataclass
 import hashlib
 import multiprocessing as mp
-from multiprocessing import Pool, cpu_count
 import os
-from pathlib import Path
 import shutil
 import struct
 import sys
 import tarfile
 import tempfile
 import time
-from types import SimpleNamespace
-from typing import IO, Annotated, Any, NoReturn
+from collections.abc import Callable, Iterator, Sequence
+from dataclasses import dataclass
+from multiprocessing import Pool, cpu_count
+from pathlib import Path
 
 import brotli
 from dh import MAX_WORKERS, SKIP_DIRS

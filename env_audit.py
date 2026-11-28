@@ -4,17 +4,14 @@
 from __future__ import annotations
 
 import argparse
-
 import ast
-from dataclasses import dataclass, field
 import os
 import pathlib
-from pathlib import Path
 import re
 import subprocess
 import sys
-from types import SimpleNamespace
-from typing import IO, Annotated, Any, NoReturn
+from dataclasses import dataclass, field
+from typing import Any
 
 from dh import atomic_write
 from loguru import logger

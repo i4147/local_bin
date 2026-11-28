@@ -2,16 +2,17 @@
 """Single-file Python port of html-minifier-terser (Python 3.12+)."""
 
 from __future__ import annotations
+
 import argparse
-from dataclasses import dataclass
 import json
-from pathlib import Path
+import os
 import re
 import sys
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from dh import atomic_write
-import os
 from loguru import logger
 
 logger.remove()

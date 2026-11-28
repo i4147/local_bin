@@ -10,19 +10,20 @@ file is touched.
 """
 
 from __future__ import annotations
+
 import argparse
 import builtins
-from concurrent.futures import ProcessPoolExecutor, as_completed
-from dataclasses import dataclass, field
 import difflib
 import fnmatch
 import json
 import os
-from pathlib import Path
 import re
 import shutil
 import sys
 import tempfile
+from concurrent.futures import ProcessPoolExecutor, as_completed
+from dataclasses import dataclass, field
+from pathlib import Path
 from typing import TYPE_CHECKING, NotRequired, TypedDict, cast, override
 
 import libcst as cst
@@ -54,11 +55,13 @@ def _create_progress() -> Progress | None:
         from rich.progress import (
             BarColumn,
             MofNCompleteColumn,
-            Progress as _RichProgress,
             SpinnerColumn,
             TextColumn,
             TimeElapsedColumn,
             TimeRemainingColumn,
+        )
+        from rich.progress import (
+            Progress as _RichProgress,
         )
     except ImportError:
         return None

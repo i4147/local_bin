@@ -3,15 +3,14 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
 import glob
 import os
-from pathlib import Path
 import re
 import shutil
+import sys
+from pathlib import Path
 
 from dh import fsz, gsz
-import sys
 from loguru import logger
 
 logger.remove()

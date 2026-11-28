@@ -2,26 +2,26 @@
 "Extract supported archives; originals are removed after successful extraction."
 
 from __future__ import annotations
+
 import argparse
-from collections.abc import Generator, Iterator
-from contextlib import contextmanager
 import gzip
 import io
 import lzma
-from multiprocessing import Pool
-from pathlib import Path
+import os
 import shutil
 import sys
 import tarfile
-from types import SimpleNamespace
-from typing import IO, TYPE_CHECKING, Annotated, Any, BinaryIO, Literal, NoReturn
 import zipfile
+from collections.abc import Generator
+from contextlib import contextmanager
+from multiprocessing import Pool
+from pathlib import Path
+from typing import Any, BinaryIO, Literal
 
 import lz4.block
 import lz4.frame
 import py7zr
 import zstandard
-import os
 from loguru import logger
 
 logger.remove()
@@ -32,8 +32,6 @@ logger.add(
 )
 
 
-if TYPE_CHECKING:
-    import argparse
 
 
 try:

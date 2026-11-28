@@ -5,22 +5,20 @@ CLI entry point; runs the three tools over files or directories using a thread
 pool."""
 
 from __future__ import annotations
-import argparse
 
-from collections.abc import Iterable
+import argparse
 import contextlib
-from dataclasses import dataclass, field, replace
-import difflib
-from functools import partial
 import json
-from multiprocessing import cpu_count
-from multiprocessing.dummy import Pool
-from pathlib import Path
 import shutil
-from subprocess import run
 import sys
 import tempfile
 import time
+from collections.abc import Iterable
+from dataclasses import dataclass, field, replace
+from multiprocessing import cpu_count
+from multiprocessing.dummy import Pool
+from pathlib import Path
+from subprocess import run
 from typing import TYPE_CHECKING, Any
 
 from autoflake import fix_code
@@ -275,6 +273,7 @@ def clean_python_code(source: str, config: Config, is_notebook_cell: bool = Fals
 
 
 def _print_diff(path: Path, old: str, new: str) -> None:
+    import difflib
     diff = difflib.unified_diff(
         old.splitlines(keepends=True),
         new.splitlines(keepends=True),
@@ -380,6 +379,7 @@ def clean_ipynb_cell(cell_dict: dict[str, Any], config: Config):
 
 def clean_ipynb(ipynb_file_path: Path, config: Config):
     """Clean ipynb."""
+    from functools import partial
     if config.clear_output:
         try:
             clear_ipynb_output(ipynb_file_path)
@@ -746,7 +746,7 @@ def main(
     no_parallel: Any = False,
     cache: bool = False,
     include: Any = None,
-    exclude: list[str] = [],
+    exclude: list[str] | None = None,
     respect_gitignore: Any = False,
     follow_symlinks: Any = False,
     max_depth: int | None = None,
@@ -763,10 +763,14 @@ def main(
     require_changes: Any = False,
     since: Any = None,
     watch: Any = False,
-    linters: Any = [],
+    linters: Any = None,
     doctor: Any = False,
 ) -> None:
     """Run the command-line interface."""
+    if linters is None:
+        linters = []
+    if exclude is None:
+        exclude = []
     setup_logging(verbose, quiet, no_color)
     if doctor:
         run_doctor()

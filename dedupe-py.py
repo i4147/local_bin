@@ -7,6 +7,8 @@ import argparse
 import ast
 import collections
 import json
+import os
+import sys
 from pathlib import Path
 from typing import Any, Final, cast
 
@@ -15,8 +17,6 @@ from dh import MAX_WORKERS, atomic_write
 from loguru import logger
 from rich.console import Console
 from rich.table import Table
-import os
-import sys
 
 logger.remove()
 logger.add(

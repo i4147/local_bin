@@ -4,10 +4,10 @@
 from __future__ import annotations
 
 import argparse
-from collections import Counter
-from pathlib import Path
 import re
 import sys
+from collections import Counter
+from pathlib import Path
 
 _DIAG_RE = re.compile(r"^(?P<file>[^:\s]+):\d+:\d+:\s+(?P<level>error|warning)\[(?P<rule>[^\]]+)\]\s+(?P<msg>.*)$")
 

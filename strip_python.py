@@ -12,36 +12,33 @@ Optional: python -m pip install joblib
 """
 
 from __future__ import annotations
+
 import argparse
 import ast
-from collections.abc import Iterable, Iterator
 import concurrent.futures as cf
-from dataclasses import asdict, dataclass
-import difflib
 import fnmatch
 import importlib
 import io
 import json
 import multiprocessing as mp
-from multiprocessing.pool import ThreadPool
 import os
-from pathlib import Path
 import re
-import shlex
 import stat
 import sys
 import tempfile
 import threading
-from time import perf_counter
 import tokenize
 import traceback
+from collections.abc import Iterable, Iterator
+from dataclasses import asdict, dataclass
+from multiprocessing.pool import ThreadPool
+from pathlib import Path
+from time import perf_counter
 from typing import TYPE_CHECKING, Protocol, cast
-
 
 if TYPE_CHECKING:
     from libcst import CSTTransformer
 from loguru import logger
-
 
 _Edit = tuple[int, int, bytes]
 
@@ -278,6 +275,7 @@ class ASTStripper:
 
 def make_diff(before: str, after: str, name: str) -> str:
     """Unified diff with explicit markers for missing final newlines."""
+    import difflib
     output: list[str] = []
     for line in difflib.unified_diff(
         before.splitlines(keepends=True),
@@ -385,7 +383,7 @@ def _cst_transformer_types(
     )
     if cache is None:
         cache = {}
-        setattr(thread, "_strip_python_cst_types_v1", cache)
+        thread._strip_python_cst_types_v1 = cache
     if strip_all in cache:
         return cache[strip_all]
 
@@ -569,7 +567,7 @@ def get_worker_stripper(options: FileOptions) -> ASTStripper:
     state = cast(_WorkerState | None, getattr(thread, "_strip_python_worker_state_v1", None))
     if state is None:
         state = _WorkerState()
-        setattr(thread, "_strip_python_worker_state_v1", state)
+        thread._strip_python_worker_state_v1 = state
     key = (
         options.backend,
         options.comments,
@@ -690,6 +688,7 @@ def should_skip(path: Path, root_dir: Path) -> bool:
 
 def is_python_file(path: Path, issues: list[DiscoveryIssue] | None = None) -> bool:
     """Recognize .py and extensionless scripts with a Python/PyPy shebang."""
+    import shlex
     if path.suffix.lower() == ".py":
         return True
     if path.suffix:
@@ -1020,8 +1019,8 @@ def colorize_diff(diff: str, color: bool) -> str:
 
 def main() -> int:
     """Run the command-line interface."""
-    from contextlib import nullcontext
     import importlib.util
+    from contextlib import nullcontext
 
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument(

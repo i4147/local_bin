@@ -8,22 +8,23 @@ other detectors are optional and provide install hints when selected.
 """
 
 from __future__ import annotations
+
 import argparse
-from dataclasses import asdict, dataclass
-from datetime import UTC, datetime
 import importlib
 import json
 import os
+import sys
+from dataclasses import asdict, dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal, cast
 
 from dh import SKIP_DIRS, atomic_write
+from loguru import logger
 from rich.console import Console, Group
 from rich.live import Live
 from rich.table import Table
 from rich.text import Text
-import sys
-from loguru import logger
 
 logger.remove()
 logger.add(

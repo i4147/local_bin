@@ -89,19 +89,21 @@ Run ``python -m doctest git_rewrite_history.py`` for the embedded self-test.
 """
 
 from __future__ import annotations
+
 import argparse
-from collections.abc import Callable, Iterable, Mapping, Sequence
 import dataclasses
-from dataclasses import dataclass, field
 import datetime as _dt
 import hashlib
 import os
-from pathlib import Path
 import re
 import shutil
 import subprocess
 import sys
 import xml.etree.ElementTree as _ET
+from collections.abc import Callable, Iterable, Mapping, Sequence
+from dataclasses import dataclass, field
+from pathlib import Path
+
 from loguru import logger
 
 logger.remove()

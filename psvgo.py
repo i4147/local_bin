@@ -9,19 +9,19 @@ handling.
 from __future__ import annotations
 
 import base64
+import functools
+import json
+import math
+import os
+import re
+import stat
+import sys
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass, field
 from decimal import ROUND_HALF_UP, Decimal
-import functools
 from html.entities import html5 as _HTML5_ENTITIES
-import json
-import math
-import os
 from pathlib import Path
-import re
-import stat
-import sys
 from typing import Any, ClassVar, Literal, NoReturn
 from xml.parsers import expat
 
@@ -2364,7 +2364,7 @@ def cleanup_out_data(
     return text
 
 
-def path2js(node: "Element") -> list[PathDataItem]:
+def path2js(node: Element) -> list[PathDataItem]:
     cached = getattr(node, "_path_js", None)
     if cached is not None:
         return cached
@@ -2376,7 +2376,7 @@ def path2js(node: "Element") -> list[PathDataItem]:
 
 
 def js2path(
-    node: "Element",
+    node: Element,
     data: Sequence[PathDataItem],
     float_precision: int | None = 3,
     no_space_after_flags: bool = False,
@@ -4662,7 +4662,7 @@ class BuiltinPlugin:
     description: str
     fn: PluginFn
     is_preset: bool = False
-    plugins: tuple["BuiltinPlugin", ...] = ()
+    plugins: tuple[BuiltinPlugin, ...] = ()
 
 
 def _remove_doctype(root: Document, params: dict[str, Any], info: dict[str, Any]) -> dict[str, Any]:
@@ -9135,7 +9135,6 @@ HELP_TEXT: str = (
 VERSION_TEXT: str = "4.1.0\n"
 import errno
 import time
-
 
 _WORKERS: int = 4
 _TASK_CHUNK: int = 32

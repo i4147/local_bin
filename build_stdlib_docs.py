@@ -13,16 +13,17 @@ Install any one, e.g. `pip install weasyprint`.
 """
 
 from __future__ import annotations
+
 import argparse
-from collections.abc import Iterable, Sequence
-from datetime import datetime
 import importlib
 import os
-from pathlib import Path
 import pydoc
 import sys
 import sysconfig
-from typing import Any
+from collections.abc import Sequence
+from datetime import datetime
+from pathlib import Path
+
 from loguru import logger
 
 logger.remove()

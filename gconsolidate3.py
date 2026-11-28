@@ -2,20 +2,21 @@
 """Consolidate a small-to-medium Python package into a single importable file."""
 
 from __future__ import annotations
+
 import argparse
 import ast
 import base64
-from collections import defaultdict
-from dataclasses import dataclass, field
 import importlib.util
 import json
 import os
-from pathlib import Path
 import re
 import sys
 import tempfile
 import tomllib
+from collections import defaultdict
 from collections.abc import Sequence
+from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 import libcst as cst

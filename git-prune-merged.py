@@ -2,25 +2,22 @@
 "List and bulk-delete branches that are already merged into the base branch."
 
 from __future__ import annotations
-from dataclasses import asdict, dataclass
-from enum import StrEnum
+
+import argparse
 import fnmatch
 import json
 import os
-from pathlib import Path
 import re
 import shlex
 import shutil
 import subprocess
 import sys
 import time
-from types import SimpleNamespace
-from typing import IO, TYPE_CHECKING, Annotated, Any, Literal, NoReturn
+from dataclasses import asdict, dataclass
+from pathlib import Path
+from typing import TYPE_CHECKING, Literal
 
 from dh import atomic_write
-
-
-import argparse
 from loguru import logger
 
 logger.remove()

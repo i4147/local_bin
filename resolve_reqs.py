@@ -21,21 +21,22 @@ Exit codes:
 """
 
 from __future__ import annotations
+
 import argparse
-from collections.abc import Sequence
-from dataclasses import asdict, dataclass, field
-from datetime import UTC, datetime
 import fnmatch
 import json
 import os
-from pathlib import Path
 import re
 import shutil
 import subprocess
 import sys
 import tempfile
-from typing import Any, Literal
 import urllib.request
+from collections.abc import Sequence
+from dataclasses import asdict, dataclass, field
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any, Literal
 
 from dh import atomic_write
 from loguru import logger

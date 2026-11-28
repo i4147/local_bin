@@ -14,15 +14,17 @@ Placate-style minimal SQLite DB (stdlib only):
 """
 
 from __future__ import annotations
+
 import argparse
 import json
 import os
-from pathlib import Path
 import re
 import sqlite3
 import sys
 import urllib.error
 import urllib.request
+from pathlib import Path
+
 from loguru import logger
 
 logger.remove()

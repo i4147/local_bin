@@ -1,0 +1,68 @@
+{
+  "files_discovered": 121,
+  "files_compared": 121,
+  "pair_count": 7260,
+  "mean": 0.185,
+  "median": 0.182,
+  "maximum": 0.949,
+  "top_5": [
+    {
+      "a": "consolidate2.py",
+      "b": "consolidaze.py",
+      "score": 0.949,
+      "components": {
+        "funcs": 0.981,
+        "mods": 0.815,
+        "flags": 1.0,
+        "words": 0.999
+      }
+    },
+    {
+      "a": "rmcfull.py",
+      "b": "strip_python.py",
+      "score": 0.839,
+      "components": {
+        "funcs": 0.783,
+        "mods": 0.861,
+        "flags": 0.75,
+        "words": 0.961
+      }
+    },
+    {
+      "a": "autoslim.py",
+      "b": "codeslim.py",
+      "score": 0.759,
+      "components": {
+        "funcs": 0.785,
+        "mods": 0.852,
+        "flags": 0.406,
+        "words": 0.993
+      }
+    },
+    {
+      "a": "strip_python.py",
+      "b": "tmc.py",
+      "score": 0.712,
+      "components": {
+        "funcs": 0.365,
+        "mods": 0.789,
+        "flags": 0.783,
+        "words": 0.912
+      }
+    },
+    {
+      "a": "check_pypi_name.py",
+      "b": "pkgname.py",
+      "score": 0.705,
+      "components": {
+        "funcs": 0.121,
+        "mods": 0.957,
+        "flags": 0.917,
+        "words": 0.827
+      }
+    }
+  ],
+  "failures": {},
+  "sequential_fallback": false,
+  "note": "Generated before Phase 1 was completed."
+}

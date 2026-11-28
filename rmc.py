@@ -7,36 +7,36 @@ when no inputs are supplied, and reports per-file bytes reduced with Rich.
 """
 
 from __future__ import annotations
+
 import argparse
 import ast
 import codecs
-from concurrent.futures import ProcessPoolExecutor
 import contextlib
 import dataclasses
-import difflib
 import enum
 import fnmatch
 import json
 import os
-from pathlib import Path
 import re
 import shutil
 import signal
 import sys
-import textwrap
+from concurrent.futures import ProcessPoolExecutor
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final, TypeVar, cast
 
+import libcst as cst
 from dh import (
     MAX_WORKERS,
     SKIP_DIRS,
+)
+from dh import (
     atomic_write as _atomic_write,
 )
-import libcst as cst
 from loguru import logger
 from rich.console import Console
 from rich.table import Table
 from rich.text import Text
-
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, Sequence
@@ -147,6 +147,7 @@ def _is_trivial(node: ast.stmt) -> bool:
 
 def _looks_like_code(values: Sequence[str]) -> bool:
     """Return True if the given comment block parses as meaningful Python code."""
+    import textwrap
     lines: list[str] = []
     for value in values:
         body = value[1:]
@@ -413,6 +414,7 @@ def _make_backup(path: Path, backup_dir: Path | None) -> None:
 
 
 def _build_diff(path: Path, before: str, after: str) -> str:
+    import difflib
     return "".join(
         difflib.unified_diff(
             before.splitlines(keepends=True),

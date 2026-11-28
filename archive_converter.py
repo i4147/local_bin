@@ -9,10 +9,8 @@ Direct use of ``click`` has been removed. Typer remains the CLI framework.
 
 from __future__ import annotations
 
+import argparse
 import bz2
-from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
-from enum import Enum
 import gzip
 import hashlib
 import importlib
@@ -20,21 +18,22 @@ import importlib.util
 import io
 import lzma
 import os
-from pathlib import Path, PurePosixPath, PureWindowsPath
 import shutil
-import argparse
 import stat
 import sys
 import tarfile
 import tempfile
 import threading
 import time
+import zipfile
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
+from enum import Enum
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from types import ModuleType
 from typing import IO, Any, Literal, cast
-import zipfile
 
 from loguru import logger
-
 
 CHUNK: int = 1 << 20
 """Read/write chunk size in bytes."""

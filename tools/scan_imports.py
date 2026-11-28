@@ -5,9 +5,9 @@ from __future__ import annotations
 
 import argparse
 import ast
+import sys
 from collections import defaultdict
 from pathlib import Path
-import sys
 
 
 def scan_third_party_imports(root: Path) -> dict[str, list[str]]:

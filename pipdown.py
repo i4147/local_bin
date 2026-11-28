@@ -2,19 +2,20 @@
 "Find and download Python distributions from PEP 503/691 indexes."
 
 from __future__ import annotations
+
 import argparse
-from collections.abc import Iterator
-from dataclasses import dataclass, field
 import hashlib
-from html.parser import HTMLParser
 import importlib
 import json
-from pathlib import Path
 import sys
 import tarfile
+import zipfile
+from collections.abc import Iterator
+from dataclasses import dataclass, field
+from html.parser import HTMLParser
+from pathlib import Path
 from typing import Any, Self
 from urllib.parse import parse_qs, unquote, urljoin, urlparse
-import zipfile
 
 import httpx
 from loguru import logger
@@ -34,7 +35,6 @@ from packaging.utils import (
     parse_wheel_filename,
 )
 from packaging.version import InvalidVersion, Version
-
 
 PYPI: str = "https://pypi.org/simple/"
 TSINGHUA: str = "https://pypi.tuna.tsinghua.edu.cn/simple/"

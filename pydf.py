@@ -7,15 +7,15 @@ table."""
 from __future__ import annotations
 
 import argparse
-from math import log
 import os
-from pathlib import Path
 import re
 import struct
 import subprocess
 import sys
-from typing import Any
 import unicodedata
+from pathlib import Path
+from typing import Any
+
 from loguru import logger
 
 logger.remove()
@@ -166,6 +166,7 @@ class DumbStatus:
 
 
 def hfnum(size: int, base: int, inodes: bool) -> str:
+    from math import log
     if size == 0:
         return "0"
     if size < 0:

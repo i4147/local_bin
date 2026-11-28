@@ -6,20 +6,21 @@ argparse CLI version (no typer/rich dependency).
 """
 
 from __future__ import annotations
+
 import argparse
 import asyncio
-from collections import OrderedDict
-from collections.abc import Awaitable, Callable
-from dataclasses import asdict, dataclass, field
-from enum import Enum
 import hashlib
 import json
 import keyword
 import os
-from pathlib import Path
 import re
 import sys
 import time
+from collections import OrderedDict
+from collections.abc import Awaitable, Callable
+from dataclasses import asdict, dataclass, field
+from enum import Enum
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -32,7 +33,6 @@ from tenacity import (
     stop_after_attempt,
     wait_exponential,
 )
-
 
 try:
     import msgpack  # type: ignore[import-not-found]

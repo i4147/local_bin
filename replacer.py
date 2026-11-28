@@ -57,18 +57,15 @@ Fixes (bugs found in 2.0)
 """
 
 from __future__ import annotations
+
 import argparse
 import ast
-from collections.abc import Callable, Iterator, Sequence
 import concurrent.futures
 import contextlib
-from dataclasses import dataclass, field
-import difflib
 import fnmatch
 import hashlib
 import json
 import os
-from pathlib import Path
 import re
 import shutil
 import stat
@@ -77,7 +74,11 @@ import sys
 import tempfile
 import threading
 import time
+from collections.abc import Callable, Iterator, Sequence
+from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, NoReturn, TypeAlias, TypedDict
+
 from loguru import logger
 
 logger.remove()
@@ -434,6 +435,7 @@ def _fast_probe_is_safe(search_text: str, opts: Options, raw: bytes, enc: str | 
 
 def _make_diff(path: Path, old: str, new: str, context: int) -> str:
     """Unified diff of one file's change (context lines scaled like 2.0)."""
+    import difflib
     n_lines = max(0, context // 20)
     return "".join(
         difflib.unified_diff(

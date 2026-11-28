@@ -20,22 +20,22 @@ bindings. A missing language binding affects only files of that language.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import argparse
 import importlib
-from pathlib import Path
+import os
 import re
-from typing import Annotated, Final
+import sys
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Final
 
 from dh import atomic_write
-import argparse
+from loguru import logger
 from rich.console import Console
 from rich.live import Live
 from rich.table import Table
 from rich.text import Text
 from tree_sitter import Language, Node, Parser
-import os
-import sys
-from loguru import logger
 
 logger.remove()
 logger.add(

@@ -6,12 +6,14 @@ from module docstrings / CLI help text inspected during the run.
 """
 
 from __future__ import annotations
+
 import json
+import os
+import sys
 from pathlib import Path
 from typing import Any
 from xml.sax.saxutils import escape
-import os
-import sys
+
 from loguru import logger
 
 logger.remove()

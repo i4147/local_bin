@@ -7,21 +7,20 @@ report before deleting anything."""
 from __future__ import annotations
 
 import argparse
-from collections import Counter, defaultdict
-from collections.abc import Sequence
 import contextlib
-from datetime import UTC, datetime
 import filecmp
-from fnmatch import fnmatch
-from functools import partial
 import json
-from multiprocessing.pool import ThreadPool
 import os
-from pathlib import Path
 import re
 import stat
 import sys
 import time
+from collections import Counter, defaultdict
+from collections.abc import Sequence
+from datetime import UTC, datetime
+from fnmatch import fnmatch
+from multiprocessing.pool import ThreadPool
+from pathlib import Path
 from typing import Any, NamedTuple, TypeAlias
 
 from dh import MAX_WORKERS, SKIP_DIRS, atomic_write, fsz
@@ -160,6 +159,7 @@ def hash_file(path: str, limit: int | None = None) -> HashResult:
 
 
 def hash_many(pool: ThreadPool, paths: Sequence[str], limit: int | None, workers: int) -> list[HashResult]:
+    from functools import partial
     if not paths:
         return []
     chunksize: int = max(1, min(64, len(paths) // (workers * 4)))
