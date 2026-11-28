@@ -1,0 +1,5 @@
+# Ignore extensionless symlinks in root
+/*
+!*.*
+!.gitignore
+!shebang-filter
