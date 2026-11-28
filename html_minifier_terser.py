@@ -11,6 +11,15 @@ import sys
 from typing import Any
 
 from dh import atomic_write
+import os
+from loguru import logger
+
+logger.remove()
+logger.add(
+    sys.stderr,
+    level=os.environ.get("LOGURU_LEVEL", "INFO"),
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+)
 
 
 __version__: str = "1.0.0"
@@ -143,7 +152,7 @@ class Options:
     useShortDoctype: bool = False
 
 
-def _patterns(values: list[Any]):
+def _patterns(values: list[Any] | None):
     out = []
     for v in values or []:
         out.append(
@@ -183,7 +192,7 @@ def _escape_attr(value: str, quote: str, prevent: Any) -> str:
     return value.replace('"', "&quot;") if quote == '"' else value.replace("'", "&#39;")
 
 
-def _unquotable(v: bool) -> bool:
+def _unquotable(v: str) -> bool:
     return bool(v) and not re.search(r"""[\s"'=<>`&]""", v)
 
 
@@ -443,7 +452,7 @@ def _config(path: Path):
     return data
 
 
-def _options(args: list[Any]) -> Options:
+def _options(args: Any) -> Options:
     data = _config(args.config_file)
     for _, dest, action, _ in CLI_FLAGS:
         v = getattr(args, dest)
@@ -471,7 +480,7 @@ def _options(args: list[Any]) -> Options:
         raise HTMLMinifierError(f"invalid option: {e}") from e
 
 
-def _files(args: list[Any]) -> list[Path]:
+def _files(args: Any) -> list[Path]:
     if args.input_dir:
         root = Path(args.input_dir)
         return sorted(p for p in root.rglob(f"*.{args.file_ext.lstrip('.')}") if p.is_file())

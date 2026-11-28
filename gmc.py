@@ -34,6 +34,14 @@ import unicodedata
 import zipfile
 
 from dh import atomic_write
+from loguru import logger
+
+logger.remove()
+logger.add(
+    sys.stderr,
+    level=os.environ.get("LOGURU_LEVEL", "INFO"),
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+)
 
 
 try:
@@ -219,7 +227,7 @@ def lookup_group(gid: int) -> str:
 
 def shorten_home(path_str: str) -> str:
     """Shorten home."""
-    home = os.path.expanduser("~")
+    home = str(Path.home())
     if path_str == home:
         return "~"
     if path_str.startswith(home + os.sep):
@@ -493,7 +501,7 @@ def sort_entries(entries: list[FileEntry], field_name: SortField, reverse: bool)
             case SortField.NAME:
                 return (e.name.lower(), e.name)
             case SortField.EXT:
-                _, ext = os.path.splitext(e.name)
+                ext = Path(e.name).suffix
                 return (ext.lower(), e.name.lower())
             case SortField.SIZE:
                 return (e.size, e.name.lower())
@@ -2530,7 +2538,7 @@ class MidnightCommander:
         self.cmdline.push_history(stripped)
         if stripped == "cd" or stripped.startswith("cd "):
             arg = stripped[2:].strip()
-            target = Path.home() if not arg else Path(os.path.expanduser(arg))
+            target = Path.home() if not arg else Path(arg).expanduser()
             if not target.is_absolute():
                 target = self.active.cwd / target
             self.change_directory(self.active, target)
@@ -2716,7 +2724,7 @@ TOOLS & SHELL
         if not dest_str:
             return
         preserve, follow_symlinks = check_vals
-        dest_path = Path(os.path.expanduser(dest_str))
+        dest_path = Path(dest_str).expanduser()
         if not dest_path.is_absolute():
             dest_path = self.active.cwd / dest_path
         if self.active.vfs is not None:
@@ -2931,7 +2939,7 @@ TOOLS & SHELL
             except re.error as exc:
                 modal_message(self.canvas, "Regex Error", [str(exc)], is_error=True)
                 return
-        root = Path(os.path.expanduser(start_dir))
+        root = Path(start_dir).expanduser()
         results: list[Path] = []
         self._draw_progress("Find File", f"Scanning {root}...", 0, 1)
         for cur_root, dirs, files in os.walk(root):
@@ -3573,7 +3581,7 @@ TOOLS & SHELL
                 case "c":
                     target, _ = modal_input(self.canvas, "Quick cd", "Change directory to:")
                     if target:
-                        p = Path(os.path.expanduser(target))
+                        p = Path(target).expanduser()
                         if not p.is_absolute():
                             p = self.active.cwd / p
                         self.change_directory(self.active, p)

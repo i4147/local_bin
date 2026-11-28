@@ -13,46 +13,23 @@ import os
 from pathlib import Path
 import shutil
 import struct
+import sys
 import tarfile
 import tempfile
 import time
 from types import SimpleNamespace
-from typing import Annotated, Any, NoReturn
+from typing import IO, Annotated, Any, NoReturn
 
 import brotli
-import click
 from dh import MAX_WORKERS, SKIP_DIRS
-import typer
+from loguru import logger
 
-
-_STATE: dict[str, object] = {}
-
-
-class _Args(SimpleNamespace):
-    """argparse.Namespace look-alike: unknown attributes read as None."""
-
-    def __getattr__(self, name: str) -> None:
-        if name.startswith("__"):
-            raise AttributeError(name)
-
-
-class _ParserShim:
-    """Stand-in for the removed argparse parser; hands back what Typer parsed."""
-
-    def parse_args(self, args: list[Any] | None = None, namespace: Any = None) -> _Args:
-        "Parse args."
-        return _Args(**_STATE)
-
-    def error(self, message: str) -> NoReturn:
-        raise typer.BadParameter(message)
-
-    def print_help(self, file: Path | None = None) -> None:
-        "Print help."
-        typer.echo(click.get_current_context().get_help(), file=file)
-
-    def print_usage(self, file: Path | None = None) -> None:
-        "Print usage."
-        typer.echo(click.get_current_context().get_usage(), file=file)
+logger.remove()
+logger.add(
+    sys.stderr,
+    level=os.environ.get("LOGURU_LEVEL", "INFO"),
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+)
 
 
 try:
@@ -1148,9 +1125,29 @@ def swallowed_directory(args: argparse.Namespace) -> str | None:
     return None
 
 
+def _build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description='📦 Recursively compress/decompress files using Brotli with parallel processing (deletes originals by default)')
+    parser.add_argument('-c', '--compress', action=argparse.BooleanOptionalAction, default=True, help='Compress files (default)')
+    parser.add_argument('-d', '--decompress', action="store_true", default=False, help='Decompress .br files')
+    parser.add_argument('-t', '--tar-subdirs-first', action="store_true", default=False, help='Tar subdirectories first, then apply Brotli compression on the .tar files (only valid with -c/--compress)')
+    parser.add_argument('paths', nargs="*", help='Files and/or directories to process. If omitted, uses current directory and tars subdirs first.')
+    parser.add_argument('-e', '--extensions', action="append", default=None, help='Compress only specific file extensions (e.g., txt log csv). Only valid with -c/--compress.')
+    parser.add_argument('-q', '--quality', type=int, choices=range(12), default=11, help='Brotli compression quality (0-11, default: 11). Only valid with -c/--compress.')
+    parser.add_argument('--chunk-size', type=int, default=DEFAULT_CHUNK_SIZE, help=f'Streaming chunk size in bytes (default: {DEFAULT_CHUNK_SIZE}, minimum: {MIN_CHUNK_SIZE})')
+    parser.add_argument('--verify', action="store_true", default=False, help='Decompress each result in memory and compare SHA-256 with the source before deleting originals')
+    parser.add_argument('--keep-originals', action="store_true", default=False, help='Keep original files after processing (default: delete originals)')
+    parser.add_argument('--allow-truncated', action="store_true", default=False, help='Accept Brotli streams without an end-of-stream marker (only valid with -d/--decompress)')
+    parser.add_argument('--exclude', action="append", default=[], help='Directory/file patterns to exclude from processing (e.g., node_modules .git)')
+    parser.add_argument('--no-parallel', action="store_true", default=False, help='Disable parallel processing')
+    parser.add_argument('--dry-run', action="store_true", default=False, help='Show what would be processed without actually modifying files')
+    parser.add_argument('--no-skip-compressed', action="store_true", default=False, help='Do not skip already compressed files (dangerous, may double-compress). Only valid with -c/--compress.')
+    parser.add_argument('-y', '--yes', action="store_true", default=False, help='Skip the confirmation prompt shown before deleting originals')
+    return parser
+
+
 def main() -> int:
     "Run the command-line interface."
-    parser = _ParserShim()
+    parser = _build_parser()
     args = parser.parse_args()
     stolen: str | None = swallowed_directory(args)
     if stolen is not None:
@@ -1300,142 +1297,6 @@ def main() -> int:
     successful: int = sum(1 for r in results if r.success)
     return 0 if successful else 1
 
-
-def _run() -> None:
+if __name__ == "__main__":
     mp.freeze_support()
     raise SystemExit(main())
-
-
-app = typer.Typer(
-    add_completion=False,
-    context_settings={"help_option_names": ["-h", "--help"]},
-    pretty_exceptions_show_locals=False,
-)
-
-
-@app.command(
-    help="📦 Recursively compress/decompress files using Brotli with parallel processing (deletes originals by default)",
-    epilog="\nExamples:\n  %(prog)s                          # Compress all files in current dir (tars subdirs first)\n  %(prog)s -c                       # Compress all files (explicit)\n  %(prog)s -c file1 file2 dir/      # Compress multiple inputs\n  %(prog)s -d                       # Decompress all .br files (auto-untar .tar.br)\n  %(prog)s -d archive.tar.br        # Decompress and untar archive.tar.br\n  %(prog)s -c -t /path/to/dir       # Tar subdirs first, then compress\n  %(prog)s -c -e txt log csv        # Compress only specific extensions\n  %(prog)s -c -q 11 -w 8            # Custom quality and workers\n  %(prog)s -c --verify              # Verify round-trip before deleting originals\n  %(prog)s -c --keep-originals      # Keep original files when compressing\n  %(prog)s -d --keep-originals      # Keep compressed files when decompressing\n  %(prog)s -c --dry-run             # Preview compression without modifying\n  %(prog)s --exclude .git -- .      # Exclude patterns, use '.' as target\n        ",
-)
-def cli(
-    compress: Annotated[bool, typer.Option("-c", "--compress", help="Compress files (default)")] = True,
-    decompress: Annotated[bool, typer.Option("-d", "--decompress", help="Decompress .br files")] = False,
-    tar_subdirs_first: Annotated[
-        bool,
-        typer.Option(
-            "-t",
-            "--tar-subdirs-first",
-            help="Tar subdirectories first, then apply Brotli compression on the .tar files (only valid with -c/--compress)",
-        ),
-    ] = False,
-    paths: Annotated[
-        list[str] | None,
-        typer.Argument(
-            help="Files and/or directories to process. If omitted, uses current directory and tars subdirs first."
-        ),
-    ] = None,
-    extensions: Annotated[
-        list[str] | None,
-        typer.Option(
-            "-e",
-            "--extensions",
-            help="Compress only specific file extensions (e.g., txt log csv). Only valid with -c/--compress.",
-        ),
-    ] = None,
-    quality: Annotated[
-        int,
-        typer.Option(
-            "-q",
-            "--quality",
-            help="Brotli compression quality (0-11, default: 11). Only valid with -c/--compress.",
-        ),
-    ] = 11,
-    chunk_size: Annotated[
-        int,
-        typer.Option(
-            "--chunk-size",
-            help=f"Streaming chunk size in bytes (default: {DEFAULT_CHUNK_SIZE}, minimum: {MIN_CHUNK_SIZE})",
-        ),
-    ] = DEFAULT_CHUNK_SIZE,
-    verify: Annotated[
-        bool,
-        typer.Option(
-            "--verify",
-            help="Decompress each result in memory and compare SHA-256 with the source before deleting originals",
-        ),
-    ] = False,
-    keep_originals: Annotated[
-        bool,
-        typer.Option(
-            "--keep-originals",
-            help="Keep original files after processing (default: delete originals)",
-        ),
-    ] = False,
-    allow_truncated: Annotated[
-        bool,
-        typer.Option(
-            "--allow-truncated",
-            help="Accept Brotli streams without an end-of-stream marker (only valid with -d/--decompress)",
-        ),
-    ] = False,
-    exclude: Annotated[
-        list[str] | None,
-        typer.Option(
-            "--exclude",
-            help="Directory/file patterns to exclude from processing (e.g., node_modules .git)",
-        ),
-    ] = None,
-    no_parallel: Annotated[bool, typer.Option("--no-parallel", help="Disable parallel processing")] = False,
-    dry_run: Annotated[
-        bool,
-        typer.Option(
-            "--dry-run",
-            help="Show what would be processed without actually modifying files",
-        ),
-    ] = False,
-    no_skip_compressed: Annotated[
-        bool,
-        typer.Option(
-            "--no-skip-compressed",
-            help="Do not skip already compressed files (dangerous, may double-compress). Only valid with -c/--compress.",
-        ),
-    ] = False,
-    yes: Annotated[
-        bool,
-        typer.Option(
-            "-y",
-            "--yes",
-            help="Skip the confirmation prompt shown before deleting originals",
-        ),
-    ] = False,
-) -> None:
-    """Run the command-line interface."""
-    if exclude is None:
-        exclude = []
-    if paths is None:
-        paths = []
-    if quality is not None and quality not in range(12):
-        msg = f"invalid choice: {quality!r} (choose from {range(12)})"
-        raise typer.BadParameter(msg)
-    _STATE.update(
-        compress=compress,
-        decompress=decompress,
-        tar_subdirs_first=tar_subdirs_first,
-        paths=paths,
-        extensions=extensions,
-        quality=quality,
-        chunk_size=chunk_size,
-        verify=verify,
-        keep_originals=keep_originals,
-        allow_truncated=allow_truncated,
-        exclude=exclude,
-        no_parallel=no_parallel,
-        dry_run=dry_run,
-        no_skip_compressed=no_skip_compressed,
-        yes=yes,
-    )
-    _run()
-
-
-if __name__ == "__main__":
-    app()

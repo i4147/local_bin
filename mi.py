@@ -22,7 +22,7 @@ import stat
 import sys
 import tempfile
 import tokenize
-from typing import Literal, cast
+from typing import Literal, TypeGuard, cast
 
 import libcst as cst
 from libcst.metadata import MetadataWrapper, ScopeProvider
@@ -89,7 +89,7 @@ def binding_name(alias):
     return cst.ensure_type(name, cst.Name).value
 
 
-def is_import(node):
+def is_import(node: cst.CSTNode) -> TypeGuard[cst.Import | cst.ImportFrom]:
     return isinstance(node, (cst.Import, cst.ImportFrom))
 
 

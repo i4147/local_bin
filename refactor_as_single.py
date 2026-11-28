@@ -27,6 +27,16 @@ import re
 from typing import Any, Optional
 
 from dh import MAX_WORKERS, atomic_write
+import os
+import sys
+from loguru import logger
+
+logger.remove()
+logger.add(
+    sys.stderr,
+    level=os.environ.get("LOGURU_LEVEL", "INFO"),
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+)
 
 
 LOGURU_LOGFORMAT: str = "{time:YYYY-MM-DD HH:mm:ss.SSS} {level} {file.name}:{line} {message}"
@@ -386,7 +396,7 @@ def _is_executor_ref(node: ast.expr) -> bool:
 
 
 class ExecutorTransformer(ast.NodeTransformer):
-    def visit_With(self, node: ast.With) -> ast.AST:
+    def visit_With(self, node: ast.With) -> ast.AST | list[ast.stmt]:
         self.generic_visit(node)
         if len(node.items) != 1:
             return node
@@ -407,7 +417,7 @@ class ExecutorTransformer(ast.NodeTransformer):
         )
         renamer = _ExecutorMethodRenamer(var.id)
         new_body = [renamer.visit(stmt) for stmt in node.body]
-        cleanup = [
+        cleanup: list[ast.stmt] = [
             ast.Expr(
                 ast.Call(
                     func=ast.Attribute(
@@ -455,7 +465,7 @@ class LoggingTransformer(ast.NodeTransformer):
             return ast.Constant(value=node.attr)
         return node
 
-    def visit_Expr(self, node: ast.Expr) -> ast.AST:
+    def visit_Expr(self, node: ast.Expr) -> ast.AST | list[ast.stmt]:
         self.generic_visit(node)
         call = node.value
         if not isinstance(call, ast.Call):

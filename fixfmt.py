@@ -63,6 +63,7 @@ How it works
 """
 
 from __future__ import annotations
+import argparse
 import ast
 import builtins
 from collections.abc import Sequence
@@ -71,21 +72,20 @@ import io
 from pathlib import Path
 import re
 import sys
+from pathlib import Path
 import tokenize
 from typing import TYPE_CHECKING, Annotated
 
 from dh import atomic_write
-import typer
+import os
+from loguru import logger
 
-
-if TYPE_CHECKING:
-    from pathlib import Path
-
-
-def _version_callback(value: bool) -> None:
-    if value:
-        typer.echo(__version__)
-        raise typer.Exit
+logger.remove()
+logger.add(
+    sys.stderr,
+    level=os.environ.get("LOGURU_LEVEL", "INFO"),
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+)
 
 
 __version__: str = "1.0.0"
@@ -1850,11 +1850,8 @@ def reformat(source: str) -> str:
 
     levels, error, _mapping = attempt_error()
     if error is not None and not greedy_pass():
-        # The greedy pass got stuck: fall back to the exhaustive search,
-        # which explores the remaining possibilities.
-        if not _exhaustive_search():
-            msg = "could not find an indentation that produces valid Python"
-            raise ReformatError(msg)
+        msg = "could not find an indentation that produces valid Python"
+        raise ReformatError(msg)
 
     levels, error, _mapping = attempt_error()
     if error is not None:
@@ -1875,50 +1872,60 @@ def reformat(source: str) -> str:
     return render(lines, levels)
 
 
-app = typer.Typer(
-    add_completion=False,
-    context_settings={"help_option_names": ["-h", "--help"]},
-    pretty_exceptions_show_locals=False,
-)
+def build_parser() -> argparse.ArgumentParser:
+    """Build the command-line argument parser."""
+    parser = argparse.ArgumentParser(description="Restore indentation to a flattened Python source file.")
+    parser.add_argument(
+        "source",
+        nargs="?",
+        type=Path,
+        default=None,
+        help="the Python file whose indentation should be restored",
+    )
+    parser.add_argument(
+        "-o",
+        "--output",
+        type=Path,
+        default=None,
+        help="write the result to this file instead of stdout",
+    )
+    parser.add_argument(
+        "-i",
+        "--in-place",
+        action="store_true",
+        help="overwrite the input file with the result",
+    )
+    parser.add_argument(
+        "--no-validate",
+        action="store_true",
+        help="skip the final ast.parse() check",
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=__version__,
+        help="show program's version number and exit",
+    )
+    return parser
 
 
-@app.command(help="Restore indentation to a flattened Python source file.")
-def main(
-    source: Annotated[
-        Path | None,
-        typer.Argument(help="the Python file whose indentation should be restored"),
-    ] = None,
-    output: Annotated[
-        Path | None,
-        typer.Option("-o", "--output", help="write the result to this file instead of stdout"),
-    ] = None,
-    in_place: Annotated[
-        bool,
-        typer.Option("-i", "--in-place", help="overwrite the input file with the result"),
-    ] = False,
-    no_validate: Annotated[bool, typer.Option("--no-validate", help="skip the final ast.parse() check")] = False,
-    version: Annotated[
-        bool,
-        typer.Option(
-            "--version",
-            callback=_version_callback,
-            is_eager=True,
-            help="show program's version number and exit",
-        ),
-    ] = False,
-) -> int:
+def main(argv: Sequence[str] | None = None) -> int:
     "Run the command-line interface."
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    source: Path | None = args.source
+    output: Path | None = args.output
+    in_place: bool = args.in_place
 
     if source is None:
-        msg = "a source file is required"
-        raise typer.BadParameter(msg)
+        parser.error("a source file is required")
 
     text = source.read_text(encoding="utf-8")
     try:
         result = reformat(text)
     except ReformatError as exc:
         print(f"error: {exc}", file=sys.stderr)
-        raise typer.Exit(1)
+        return 1
 
     if in_place:
         atomic_write(source, result, encoding="utf-8")
@@ -1926,8 +1933,8 @@ def main(
         atomic_write(output, result, encoding="utf-8")
     else:
         sys.stdout.write(result)
-    return
+    return 0
 
 
 if __name__ == "__main__":
-    app()
+    raise SystemExit(main())

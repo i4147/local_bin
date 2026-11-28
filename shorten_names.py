@@ -71,6 +71,7 @@ Requires Python 3.10+ and ``libcst``.
 """
 
 from __future__ import annotations
+import argparse
 import ast
 import builtins
 from collections import Counter
@@ -82,13 +83,23 @@ import keyword
 from pathlib import Path
 import string
 import sys
-from typing import Annotated
+from typing import Annotated, TypeVar
 
 from dh import atomic_write
 import libcst as cst
+import os
+from loguru import logger
+
+logger.remove()
+logger.add(
+    sys.stderr,
+    level=os.environ.get("LOGURU_LEVEL", "INFO"),
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+)
+
+_DeclT = TypeVar("_DeclT", cst.Global, cst.Nonlocal)
 from libcst.helpers import get_full_name_for_node
 from libcst.metadata import ClassScope, MetadataWrapper, ScopeProvider
-import typer
 
 
 __all__: list[str] = ["shorten_names"]
@@ -433,7 +444,7 @@ class _Analyzer(cst.CSTVisitor):
     def visit_Import(self, node: cst.Import) -> bool:
         self._import_depth += 1
         for index, alias in enumerate(node.names):
-            asname = alias.asname.name.value if alias.asname else None
+            asname = alias.asname.name.value if alias.asname and isinstance(alias.asname.name, cst.Name) else None
             dotted = get_full_name_for_node(alias.name) or ""
             bound = asname or dotted.split(".")[0]
             self.f.identifiers.update(dotted.split("."))
@@ -491,7 +502,7 @@ class _Analyzer(cst.CSTVisitor):
             source_name = (
                 alias.name.value if isinstance(alias.name, cst.Name) else (get_full_name_for_node(alias.name) or "")
             )
-            asname = alias.asname.name.value if alias.asname else None
+            asname = alias.asname.name.value if alias.asname and isinstance(alias.asname.name, cst.Name) else None
             binding = asname or source_name
             self.f.identifiers.update(n for n in (source_name, asname) if n)
             # `from x import y` may actually import the submodule x.y
@@ -528,8 +539,7 @@ class _Analyzer(cst.CSTVisitor):
     def visit_MatchClass(self, node: cst.MatchClass) -> bool:
         # `case Point(x=0)` matches by attribute name on the subject
         for keyword in node.kwds:
-            if keyword.keyword is not None:
-                self.f.attrs.add(keyword.keyword.value)
+            self.f.attrs.add(keyword.key.value)
         return True
 
     def visit_Arg(self, node: cst.Arg) -> bool:
@@ -582,6 +592,8 @@ class _Analyzer(cst.CSTVisitor):
             scope = self.get_metadata(ScopeProvider, node)
         except KeyError:
             return True  # attribute / global / nonlocal statement token
+        if scope is None:
+            return True
         try:
             qnames = scope.get_qualified_names_for(node)
         except KeyError:
@@ -667,7 +679,8 @@ class _Plan:
                     # one name bound by several imports: cannot follow them
                     # all, so every source must keep its name
                     for record in plain:
-                        self.force_keep.add((record.target, record.source_name))
+                        if record.target is not None:
+                            self.force_keep.add((record.target, record.source_name))
                 if len(records) == 1 and plain and records[0].module_ref:
                     continue
             # ambiguous references through an import binding freeze the source
@@ -710,7 +723,7 @@ class _Plan:
         ):
             return name
         record = _follow_binding(facts, name)
-        if record is not None:
+        if record is not None and record.target is not None:
             source = self.facts.get(record.target)
             if source is None or record.source_name not in source.module_slot_names:
                 return name
@@ -838,6 +851,8 @@ class _Rewriter(cst.CSTTransformer):
             scope = self.get_metadata(ScopeProvider, original_node)
         except KeyError:
             return updated_node
+        if scope is None:
+            return updated_node
         try:
             qnames = scope.get_qualified_names_for(original_node)
         except KeyError:
@@ -851,9 +866,9 @@ class _Rewriter(cst.CSTTransformer):
 
     def _rewrite_declaration(
         self,
-        original_node: cst.Global | cst.Nonlocal,
-        updated_node: cst.Global | cst.Nonlocal,
-    ) -> cst.Global | cst.Nonlocal:
+        original_node: _DeclT,
+        updated_node: _DeclT,
+    ) -> _DeclT:
         try:
             scope = self.get_metadata(ScopeProvider, original_node)
         except KeyError:
@@ -956,6 +971,8 @@ def shorten_names(
             if verbose:
                 print(f"{module.path}: nothing to rename")
             continue
+        if module.wrapper is None:
+            continue
         rewriter = _Rewriter(decisions, edits)
         new_source = module.wrapper.visit(rewriter).code
         if new_source == module.source:
@@ -975,34 +992,32 @@ def shorten_names(
     return changed_any
 
 
-app = typer.Typer(
-    add_completion=False,
-    context_settings={"help_option_names": ["-h", "--help"]},
-    pretty_exceptions_show_locals=False,
-)
+def build_parser() -> argparse.ArgumentParser:
+    """Build the command-line argument parser."""
+    parser = argparse.ArgumentParser(description="Shorten identifier names in a Python file or package.")
+    parser.add_argument("path", help="a .py file or a package directory")
+    parser.add_argument("--no-backup", action="store_true", help="do not write .bak files")
+    parser.add_argument("--dry-run", action="store_true", help="analyze only, write nothing")
+    parser.add_argument("-q", "--quiet", action="store_true", help="suppress per-file output")
+    return parser
 
 
-@app.command(help="Shorten identifier names in a Python file or package.")
-def _main(
-    path: Annotated[str, typer.Argument(help="a .py file or a package directory")],
-    no_backup: Annotated[bool, typer.Option("--no-backup", help="do not write .bak files")] = False,
-    dry_run: Annotated[bool, typer.Option("--dry-run", help="analyze only, write nothing")] = False,
-    quiet: Annotated[bool, typer.Option("-q", "--quiet", help="suppress per-file output")] = False,
-) -> int:
+def _main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
     try:
         changed = shorten_names(
-            path,
-            backup=not no_backup,
-            dry_run=dry_run,
-            verbose=not quiet,
+            args.path,
+            backup=not args.no_backup,
+            dry_run=args.dry_run,
+            verbose=not args.quiet,
         )
     except (SyntaxError, FileNotFoundError) as exc:
         print(f"error: {exc}", file=sys.stderr)
-        raise typer.Exit(2)
-    if not quiet:
+        return 2
+    if not args.quiet:
         print("done." if changed else "nothing to change.")
-    return
+    return 0
 
 
 if __name__ == "__main__":
-    app()
+    raise SystemExit(_main())

@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import bz2
 from collections.abc import Callable, Iterable
+import importlib
 import gzip
 import json
 import lzma
@@ -15,42 +16,18 @@ import shutil
 import sys
 import tarfile
 from types import SimpleNamespace
-from typing import Any, NoReturn
+from typing import IO, Any, NoReturn
 import zipfile
 
-import click
 from dh import SKIP_DIRS, atomic_write
-import typer
+from loguru import logger
 
-
-_STATE: dict[str, object] = {}
-
-
-class _Args(SimpleNamespace):
-    """argparse.Namespace look-alike: unknown attributes read as None."""
-
-    def __getattr__(self, name: str) -> None:
-        if name.startswith("__"):
-            raise AttributeError(name)
-
-
-class _ParserShim:
-    """Stand-in for the removed argparse parser; hands back what Typer parsed."""
-
-    def parse_args(self, args: list[Any] | None = None, namespace: Any = None) -> _Args:
-        "Parse args."
-        return _Args(**_STATE)
-
-    def error(self, message: str) -> NoReturn:
-        raise typer.BadParameter(message)
-
-    def print_help(self, file: Path | None = None) -> None:
-        "Print help."
-        typer.echo(click.get_current_context().get_help(), file=file)
-
-    def print_usage(self, file: Path | None = None) -> None:
-        "Print usage."
-        typer.echo(click.get_current_context().get_usage(), file=file)
+logger.remove()
+logger.add(
+    sys.stderr,
+    level=os.environ.get("LOGURU_LEVEL", "INFO"),
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+)
 
 
 try:
@@ -58,7 +35,7 @@ try:
 except ImportError:
     py7zr = None
 try:
-    import pylzma
+    pylzma: Any = importlib.import_module("pylzma")
 except ImportError:
     pylzma = None
 try:
@@ -565,7 +542,10 @@ def cmd_sizes(directory: str) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     "Build parser."
-    parser = _ParserShim()
+    parser = argparse.ArgumentParser(
+        prog="xreport",
+        description="Unified archive scanner and uncompressed-size reporter.",
+    )
     sub: argparse._SubParsersAction[Any] = parser.add_subparsers(dest="command")
     sp_scan: argparse.ArgumentParser = sub.add_parser(
         "scan",
@@ -629,26 +609,5 @@ def main(argv: Iterable[str] | None = None) -> int:
         return 2
     return args.func(args)
 
-
-def _run() -> None:
-    raise SystemExit(main())
-
-
-app = typer.Typer(
-    add_completion=False,
-    context_settings={"help_option_names": ["-h", "--help"]},
-    pretty_exceptions_show_locals=False,
-)
-
-
-@app.command(
-    help="Unified archive scanner and uncompressed-size reporter (merges xreport.py, xreport2.py, zreport.py).",
-    epilog="examples:\n  archive_report.py scan . -a -v\n  archive_report.py scan ~/Downloads -j\n  archive_report.py sizes ~/Downloads\n",
-)
-def cli() -> None:
-    """Run the command-line interface."""
-    _run()
-
-
 if __name__ == "__main__":
-    app()
+    raise SystemExit(main())

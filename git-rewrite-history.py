@@ -30,6 +30,15 @@ import sys
 import textwrap
 
 from dh import atomic_write
+import os
+from loguru import logger
+
+logger.remove()
+logger.add(
+    sys.stderr,
+    level=os.environ.get("LOGURU_LEVEL", "INFO"),
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+)
 
 
 EXIT_REFUSED: int = 3
@@ -140,6 +149,7 @@ def run(
     cwd: Path | None = None,
     capture: bool = True,
     check: bool = True,
+    input: str | None = None,
 ) -> subprocess.CompletedProcess[str]:
     """Run a subprocess and return its captured result."""
     try:
@@ -149,6 +159,7 @@ def run(
             check=check,
             capture_output=capture,
             text=True,
+            input=input,
         )
     except FileNotFoundError as exc:
         executable = command[0]
@@ -161,9 +172,9 @@ def run(
     return result
 
 
-def git(repo: Path, *arguments: str, check: bool = True) -> str:
+def git(repo: Path, *arguments: str, check: bool = True, input: str | None = None) -> str:
     """Run Git in a repository and return standard output."""
-    result = run(["git", "-C", str(repo), *arguments], check=check)
+    result = run(["git", "-C", str(repo), *arguments], check=check, input=input)
     return result.stdout.strip()
 
 
@@ -538,7 +549,7 @@ def post_checks(
     missing_tags = set(original_tag_names) - remaining_tags
     if missing_tags:
         raise RewriteError("Post-check failed: rewrite removed tags: " + ", ".join(sorted(missing_tags)))
-    git(repo, "cat-file", "--batch-check", input=None)
+    git(repo, "cat-file", "--batch-check", input="")
 
 
 def print_analyze(consequences: Consequences) -> None:

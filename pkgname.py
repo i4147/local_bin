@@ -33,7 +33,6 @@ from enum import Enum
 import hashlib
 import json
 import keyword
-import logging
 import os
 from pathlib import Path
 import re
@@ -43,6 +42,7 @@ from types import TracebackType
 from typing import Any, Self
 
 import httpx
+from loguru import logger
 from rapidfuzz import process
 from rapidfuzz.distance import Levenshtein
 from tenacity import (
@@ -61,7 +61,8 @@ except ImportError:  # pragma: no cover - optional dependency
 
 __version__: str = "0.1.0"
 
-logger = logging.getLogger("pkgname")
+logger.remove()
+logger.add(sys.stderr, level="WARNING", format="{level} pkgname: {message}")
 
 # --------------------------------------------------------------------------
 # Config
@@ -771,13 +772,13 @@ class LocalIndex:
         if self.use_cache and self._try_load_cache():
             self.available = True
             self._load_time_ms = elapsed()
-            logger.debug("loaded %d names from cache %s", len(self._names_list), self._cache_path)
+            logger.debug("loaded {} names from cache {}", len(self._names_list), self._cache_path)
             return self
 
         names = self._parse_source()
         if not names:
             self.error = "index file appears corrupt or empty (no package entries parsed)"
-            logger.warning("%s: %s", self.error, self.path)
+            logger.warning("{}: {}", self.error, self.path)
             self._load_time_ms = elapsed()
             return self
 
@@ -786,7 +787,7 @@ class LocalIndex:
         self._write_cache()
         self._load_time_ms = elapsed()
         logger.debug(
-            "parsed %d names from %s in %.1f ms",
+            "parsed {} names from {} in {:.1f} ms",
             len(names),
             self.path,
             self._load_time_ms,
@@ -867,7 +868,7 @@ class LocalIndex:
             self._names_list = names
             return True
         except Exception as exc:  # corrupt cache is never fatal
-            logger.debug("ignoring unreadable cache %s: %s", cache_path, exc)
+            logger.debug("ignoring unreadable cache {}: {}", cache_path, exc)
             return False
 
     def _write_cache(self) -> None:
@@ -887,7 +888,7 @@ class LocalIndex:
                 )
             tmp.replace(cache_path)
         except OSError as exc:
-            logger.warning("could not write index cache %s: %s", cache_path, exc)
+            logger.warning("could not write index cache {}: {}", cache_path, exc)
 
     def _parse_source(self) -> list[str]:
         names: list[str] = []
@@ -900,7 +901,7 @@ class LocalIndex:
                         seen.add(name)
                         names.append(name)
         except (OSError, UnicodeDecodeError) as exc:
-            logger.warning("error reading index %s: %s", self.path, exc)
+            logger.warning("error reading index {}: {}", self.path, exc)
             return []
         return names
 
@@ -1427,7 +1428,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.print_help()
         return 0
     if getattr(args, "verbose", False):
-        logging.basicConfig(level=logging.DEBUG, format="%(levelname)s %(name)s: %(message)s")
+        logger.remove()
+        logger.add(sys.stderr, level="DEBUG", format="{level} pkgname: {message}")
     func: Any = args.func
     code: int = func(args)
     return code

@@ -14,49 +14,15 @@ import secrets
 import string
 import sys
 from types import SimpleNamespace
-from typing import Annotated, Any, NoReturn
+from typing import IO, Annotated, Any, NoReturn
+from loguru import logger
 
-import click
-import typer
-
-
-class Conflict(StrEnum):
-    "Enumerate the supported Conflict values."
-
-    last = "last"
-    first = "first"
-    list = "list"
-    error = "error"
-
-
-_STATE: dict[str, object] = {}
-
-
-class _Args(SimpleNamespace):
-    """argparse.Namespace look-alike: unknown attributes read as None."""
-
-    def __getattr__(self, name: str) -> None:
-        if name.startswith("__"):
-            raise AttributeError(name)
-
-
-class _ParserShim:
-    """Stand-in for the removed argparse parser; hands back what Typer parsed."""
-
-    def parse_args(self, args: list[Any] | None = None, namespace: Any = None) -> _Args:
-        "Parse args."
-        return _Args(**_STATE)
-
-    def error(self, message: str) -> NoReturn:
-        raise typer.BadParameter(message)
-
-    def print_help(self, file: Path | None = None) -> None:
-        "Print help."
-        typer.echo(click.get_current_context().get_help(), file=file)
-
-    def print_usage(self, file: Path | None = None) -> None:
-        "Print usage."
-        typer.echo(click.get_current_context().get_usage(), file=file)
+logger.remove()
+logger.add(
+    sys.stderr,
+    level=os.environ.get("LOGURU_LEVEL", "INFO"),
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+)
 
 
 MMAP_THRESHOLD: int = 5 * 1024 * 1024
@@ -226,10 +192,20 @@ def write_json_exclusively(path: Path, value: Any, sort_keys: bool = False) -> N
         raise
 
 
+def _build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description='Merge JSON files with matching schemas, including bilingual string dictionaries.')
+    parser.add_argument('inputs', nargs="+", help='Input JSON files or glob patterns; quote patterns containing wildcards')
+    parser.add_argument('--output-dir', type=Path, default=Path.cwd(), help='Directory for a randomly named output file (default: current directory)')
+    parser.add_argument('--output', type=Path, default=None, help='Write to this exact path; existing files are not overwritten')
+    parser.add_argument('--conflict', choices=['last', 'first', 'list', 'error'], default='last', help='How to handle keys with different values (default: last)')
+    parser.add_argument('-d', '--dedup', action="store_true", default=False, help='Remove duplicate list items and repeated values after merging')
+    parser.add_argument('-s', '--sort-keys', action="store_true", default=False, help='Sort object keys in the output JSON')
+    parser.add_argument('--dry-run', action="store_true", default=False, help='Report which files would be merged without writing an output file')
+    return parser
+
+
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
-    "Parse args."
-    parser = _ParserShim()
-    return parser.parse_args(argv)
+    return _build_parser().parse_args(argv)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -322,77 +298,5 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"  {path}")
     return 0
 
-
-def _run() -> None:
-    raise SystemExit(main())
-
-
-app = typer.Typer(
-    add_completion=False,
-    context_settings={"help_option_names": ["-h", "--help"]},
-    pretty_exceptions_show_locals=False,
-)
-
-
-@app.command(help="Merge JSON files with matching schemas, including bilingual string dictionaries.")
-def cli(
-    inputs: Annotated[
-        list[str],
-        typer.Argument(help="Input JSON files or glob patterns; quote patterns containing wildcards"),
-    ],
-    output_dir: Annotated[
-        Path,
-        typer.Option(
-            "--output-dir",
-            help="Directory for a randomly named output file (default: current directory)",
-        ),
-    ] = Path.cwd(),
-    output: Annotated[
-        Path | None,
-        typer.Option(
-            "--output",
-            help="Write to this exact path; existing files are not overwritten",
-        ),
-    ] = None,
-    conflict: Annotated[
-        Conflict,
-        typer.Option(
-            "--conflict",
-            help="How to handle keys with different values (default: last)",
-        ),
-    ] = Conflict.last,
-    dedup: Annotated[
-        bool,
-        typer.Option(
-            "-d",
-            "--dedup",
-            help="Remove duplicate list items and repeated values after merging",
-        ),
-    ] = False,
-    sort_keys: Annotated[
-        bool,
-        typer.Option("-s", "--sort-keys", help="Sort object keys in the output JSON"),
-    ] = False,
-    dry_run: Annotated[
-        bool,
-        typer.Option(
-            "--dry-run",
-            help="Report which files would be merged without writing an output file",
-        ),
-    ] = False,
-) -> None:
-    """Run the command-line interface."""
-    _STATE.update(
-        inputs=inputs,
-        output_dir=output_dir,
-        output=output,
-        conflict=conflict,
-        dedup=dedup,
-        sort_keys=sort_keys,
-        dry_run=dry_run,
-    )
-    _run()
-
-
 if __name__ == "__main__":
-    app()
+    raise SystemExit(main())

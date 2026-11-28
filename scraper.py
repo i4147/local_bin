@@ -9,7 +9,7 @@ import contextlib
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 import hashlib
-from importlib.machinery import SourceFileLoader
+import importlib.util
 from io import BytesIO
 import json
 import multiprocessing as mp
@@ -22,62 +22,14 @@ import string
 import sys
 import time
 from types import SimpleNamespace
-from typing import Annotated, Any, NoReturn
+from typing import IO, Annotated, Any, NoReturn
 from urllib.parse import urldefrag, urljoin, urlparse
 from urllib.robotparser import RobotFileParser
 
-from bs4 import BeautifulSoup
-import click
+from bs4 import BeautifulSoup, Tag
 from dh import MAX_WORKERS, atomic_write
 from loguru import logger
 import requests
-import typer
-
-
-class Engine(StrEnum):
-    "Enumerate the supported Engine values."
-
-    basic = "basic"
-    simple = "simple"
-    parallel = "parallel"
-
-
-class Mode(StrEnum):
-    "Enumerate the supported Mode values."
-
-    ext = "ext"
-    pdf = "pdf"
-    keyword = "keyword"
-
-
-_STATE: dict[str, object] = {}
-
-
-class _Args(SimpleNamespace):
-    """argparse.Namespace look-alike: unknown attributes read as None."""
-
-    def __getattr__(self, name: str) -> None:
-        if name.startswith("__"):
-            raise AttributeError(name)
-
-
-class _ParserShim:
-    """Stand-in for the removed argparse parser; hands back what Typer parsed."""
-
-    def parse_args(self, args: list[Any] | None = None, namespace: Any = None) -> _Args:
-        "Parse args."
-        return _Args(**_STATE)
-
-    def error(self, message: str) -> NoReturn:
-        raise typer.BadParameter(message)
-
-    def print_help(self, file: Path | None = None) -> None:
-        "Print help."
-        typer.echo(click.get_current_context().get_help(), file=file)
-
-    def print_usage(self, file: Path | None = None) -> None:
-        "Print usage."
-        typer.echo(click.get_current_context().get_usage(), file=file)
 
 
 DEFAULT_UA: str = "Mozilla/5.0 (compatible; MergedTools/1.0)"
@@ -169,10 +121,11 @@ def fmt_bytes(n: float) -> str:
 def build_robots(session: requests.Session, base_url: str) -> RobotFileParser | None:
     "Build robots."
     rp = RobotFileParser()
-    rp.set_url(urljoin(base_url, "/robots.txt"))
+    robots_url = urljoin(base_url, "/robots.txt")
+    rp.set_url(robots_url)
     try:
         rp.read()
-        print(f"✅ Loaded robots.txt: {rp.url}")
+        print(f"✅ Loaded robots.txt: {robots_url}")
         return rp
     except Exception as e:
         print(f"⚠️  Could not load robots.txt ({e}). Proceeding with caution.")
@@ -319,7 +272,11 @@ def cmd_import_check(args: argparse.Namespace) -> int:
     def _try_load(path: Path) -> bool:
         name = "".join(random.choice(string.ascii_letters) for _ in range(20))
         try:
-            SourceFileLoader(name, str(path)).load_module()
+            spec = importlib.util.spec_from_file_location(name, str(path))
+            if spec is None or spec.loader is None:
+                raise ImportError(f"Cannot create module spec for {path}")
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
             logger.success(f"OK   {path}")
             return True
         except Exception:
@@ -962,7 +919,7 @@ def _same_host_links(soup: BeautifulSoup, base: str, host: str) -> set[str]:
     return out
 
 
-def _check_image_size(url: str, min_w: int, min_h: int) -> None:
+def _check_image_size(url: str, min_w: int, min_h: int) -> tuple[str, int, int] | None:
     from PIL import Image
 
     try:
@@ -1121,7 +1078,7 @@ def _crawl_site(
         if rp is None:
             return True
         try:
-            return rp.can_fetch(session.headers["User-Agent"], url)
+            return rp.can_fetch(str(session.headers["User-Agent"]), url)
         except Exception:
             return True
 
@@ -1226,18 +1183,18 @@ def _inspect_video_page(url: str, timeout: float) -> dict:
     if m:
         video_id = m.group(1)
     og_video = soup.find("meta", {"property": "og:video"})
-    if og_video:
-        content = og_video.get("content", "")
+    if isinstance(og_video, Tag):
+        content = str(og_video.get("content", ""))
         if "zzztube" in content:
             m2 = re.search(r"/(\d+)", content)
             if m2:
                 video_id = m2.group(1)
     title = None
     og_title = soup.find("meta", {"property": "og:title"})
-    if og_title:
+    if isinstance(og_title, Tag):
         title = og_title.get("content")
     iframe = soup.find("iframe", {"src": re.compile("zzztube")})
-    iframe_src = iframe.get("src") if iframe else None
+    iframe_src = iframe.get("src") if isinstance(iframe, Tag) else None
     return {
         "video_id": video_id,
         "title": title,
@@ -1382,9 +1339,81 @@ def cmd_web_size(args: argparse.Namespace) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    "Build parser."
-    p = _ParserShim()
-    return p
+    """Build parser."""
+    parser = argparse.ArgumentParser()
+    subparsers = parser.add_subparsers(dest='cmd')
+    sub_0 = subparsers.add_parser('pkg-updates', help='Check installed packages against a mirror.')
+    sub_0.add_argument('--mirror', default='https://mirror-pypi.runflare.com/')
+    sub_0.add_argument('--timeout', type=int, default=15)
+    sub_0.add_argument('--state', default='/sdcard/c4u.json')
+    sub_0.set_defaults(func=cmd_pkg_updates)
+    sub_1 = subparsers.add_parser('import-check', help='Try importing every .py in site-packages.')
+    sub_1.add_argument('paths', nargs="*", help='Optional explicit .py files to test.')
+    sub_1.add_argument('--log', default='check_modules.log')
+    sub_1.set_defaults(func=cmd_import_check)
+    sub_2 = subparsers.add_parser('coc-links', help='Scrape CoC TH18 base links from a list of sites.')
+    sub_2.add_argument('-l', '--links', default='links.txt')
+    sub_2.add_argument('-o', '--output', default='th18_bases.html')
+    sub_2.add_argument('--timeout', type=float, default=10)
+    sub_2.add_argument('--delay', type=float, default=1)
+    sub_2.set_defaults(func=cmd_coc_links)
+    sub_3 = subparsers.add_parser('coc-youtube', help='Extract CoC TH18 links from YouTube channels.')
+    sub_3.add_argument('--api-key', default=None)
+    sub_3.add_argument('--channels', default=None, help="Override channels as 'name=id,name=id'.")
+    sub_3.add_argument('--days', type=int, default=30)
+    sub_3.add_argument('--output-dir', default='output')
+    sub_3.set_defaults(func=cmd_coc_youtube)
+    sub_4 = subparsers.add_parser('movie-crawl', help='Movie index crawler with three engines.')
+    sub_4.add_argument('--engine', choices=['basic', 'simple', 'parallel'], default='basic')
+    sub_4.add_argument('-u', '--url', default=None, help='Base index URL. Engine defaults apply if omitted.')
+    sub_4.add_argument('-s', '--size', type=float, default=300, help='Max size in MB (default 300).')
+    sub_4.add_argument('--movies-file', default='movies.txt')
+    sub_4.add_argument('--state-file', default='crawler_state.json')
+    sub_4.add_argument('--json-out', default='movies.json', help='JSON output for --engine parallel.')
+    sub_4.add_argument('--timeout', type=float, default=15)
+    sub_4.add_argument('--extensions', action="append", default=['.mkv', '.mp4'])
+    sub_4.add_argument('--qualities', action="append", default=['480p', '720p'])
+    sub_4.set_defaults(func=cmd_movie_crawl)
+    sub_5 = subparsers.add_parser('image-hunt', help='Find/download large images from a site.')
+    sub_5.add_argument('url')
+    sub_5.add_argument('-p', '--print', dest='print_urls', action="store_true", default=False)
+    sub_5.add_argument('-d', '--download', action="store_true", default=False)
+    sub_5.add_argument('--max-pages', type=int, default=100)
+    sub_5.add_argument('--min-width', type=int, default=300)
+    sub_5.add_argument('--min-height', type=int, default=400)
+    sub_5.add_argument('--urls-file', default='img_urls.txt')
+    sub_5.set_defaults(func=cmd_image_hunt)
+    sub_6 = subparsers.add_parser('image-save', help='Save every <img> from one page.')
+    sub_6.add_argument('url')
+    sub_6.add_argument('output_dir', nargs="?", default='output')
+    sub_6.add_argument('--timeout', type=float, default=5)
+    sub_6.set_defaults(func=cmd_image_save)
+    sub_7 = subparsers.add_parser('link-crawl', help='Crawl a site, collect links by mode.')
+    sub_7.add_argument('url')
+    sub_7.add_argument('--mode', choices=['ext', 'pdf', 'keyword'], default='ext')
+    sub_7.add_argument('--ext', default=None, help='Extension for --mode ext.')
+    sub_7.add_argument('--keyword', default=None, help='Keyword for --mode keyword.')
+    sub_7.add_argument('--max-pages', type=int, default=1000)
+    sub_7.add_argument('--delay', type=float, default=1.0)
+    sub_7.add_argument('--timeout', type=float, default=10)
+    sub_7.add_argument('-o', '--output', default='urls.txt')
+    sub_7.set_defaults(func=cmd_link_crawl)
+    sub_8 = subparsers.add_parser('video-info', help='Inspect zzztube video URLs.')
+    sub_8.add_argument('urls', nargs="+")
+    sub_8.add_argument('-o', '--output', default='zzztube_links.json')
+    sub_8.add_argument('--timeout', type=float, default=10)
+    sub_8.set_defaults(func=cmd_video_info)
+    sub_9 = subparsers.add_parser('google-search', help='DuckDuckGo/Google search wrapper.')
+    sub_9.add_argument('query')
+    sub_9.add_argument('-n', '--num-results', type=int, default=10)
+    sub_9.set_defaults(func=cmd_google_search)
+    sub_10 = subparsers.add_parser('web-size', help='Measure total download size of a page.')
+    sub_10.add_argument('url')
+    sub_10.add_argument('--crawl', action="store_true", default=False)
+    sub_10.add_argument('--max-pages', type=int, default=50)
+    sub_10.add_argument('--user-agent', default='Mozilla/5.0 (size-checker)')
+    sub_10.set_defaults(func=cmd_web_size)
+    return parser
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -1397,237 +1426,6 @@ def main(argv: list[str] | None = None) -> int:
         print("\n⏹️ Interrupted by user.")
         return 130
 
-
-def _run() -> None:
+if __name__ == "__main__":
     mp.freeze_support()
     raise SystemExit(main())
-
-
-app = typer.Typer(
-    add_completion=False,
-    context_settings={"help_option_names": ["-h", "--help"]},
-    pretty_exceptions_show_locals=False,
-)
-
-
-@app.command("pkg-updates", help="Check installed packages against a mirror.")
-def cmd_pkg_updates2(
-    mirror: Annotated[str, typer.Option("--mirror")] = "https://mirror-pypi.runflare.com/",
-    timeout: Annotated[int, typer.Option("--timeout")] = 15,
-    state: Annotated[str, typer.Option("--state")] = "/sdcard/c4u.json",
-) -> None:
-    """Run the pkg-updates subcommand."""
-    _STATE.update(
-        mirror=mirror,
-        timeout=timeout,
-        state=state,
-        cmd="pkg-updates",
-        func=cmd_pkg_updates,
-    )
-    _run()
-
-
-@app.command("import-check", help="Try importing every .py in site-packages.")
-def cmd_import_check2(
-    paths: Annotated[list[str] | None, typer.Argument(help="Optional explicit .py files to test.")] = None,
-    log: Annotated[str, typer.Option("--log")] = "check_modules.log",
-) -> None:
-    """Run the import-check subcommand."""
-    paths = paths or []
-    _STATE.update(paths=paths, log=log, cmd="import-check", func=cmd_import_check)
-    _run()
-
-
-@app.command("coc-links", help="Scrape CoC TH18 base links from a list of sites.")
-def cmd_coc_links2(
-    links: Annotated[str, typer.Option("-l", "--links")] = "links.txt",
-    output: Annotated[str, typer.Option("-o", "--output")] = "th18_bases.html",
-    timeout: Annotated[float, typer.Option("--timeout")] = 10,
-    delay: Annotated[float, typer.Option("--delay")] = 1,
-) -> None:
-    """Run the coc-links subcommand."""
-    _STATE.update(
-        links=links,
-        output=output,
-        timeout=timeout,
-        delay=delay,
-        cmd="coc-links",
-        func=cmd_coc_links,
-    )
-    _run()
-
-
-@app.command("coc-youtube", help="Extract CoC TH18 links from YouTube channels.")
-def cmd_coc_youtube2(
-    api_key: Annotated[str | None, typer.Option("--api-key")] = None,
-    channels: Annotated[
-        str | None,
-        typer.Option("--channels", help="Override channels as 'name=id,name=id'."),
-    ] = None,
-    days: Annotated[int, typer.Option("--days")] = 30,
-    output_dir: Annotated[str, typer.Option("--output-dir")] = "output",
-) -> None:
-    """Run the coc-youtube subcommand."""
-    _STATE.update(
-        api_key=api_key,
-        channels=channels,
-        days=days,
-        output_dir=output_dir,
-        cmd="coc-youtube",
-        func=cmd_coc_youtube,
-    )
-    _run()
-
-
-@app.command("movie-crawl", help="Movie index crawler with three engines.")
-def cmd_movie_crawl2(
-    engine: Annotated[Engine, typer.Option("--engine")] = Engine.basic,
-    url: Annotated[
-        str | None,
-        typer.Option("-u", "--url", help="Base index URL. Engine defaults apply if omitted."),
-    ] = None,
-    size: Annotated[float, typer.Option("-s", "--size", help="Max size in MB (default 300).")] = 300,
-    movies_file: Annotated[str, typer.Option("--movies-file")] = "movies.txt",
-    state_file: Annotated[str, typer.Option("--state-file")] = "crawler_state.json",
-    json_out: Annotated[str, typer.Option("--json-out", help="JSON output for --engine parallel.")] = "movies.json",
-    timeout: Annotated[float, typer.Option("--timeout")] = 15,
-    extensions: Annotated[list[str] | None, typer.Option("--extensions")] = None,
-    qualities: Annotated[list[str] | None, typer.Option("--qualities")] = None,
-) -> None:
-    """Run the movie-crawl subcommand."""
-    if qualities is None:
-        qualities = ["480p", "720p"]
-    if extensions is None:
-        extensions = [".mkv", ".mp4"]
-    _STATE.update(
-        engine=engine,
-        url=url,
-        size=size,
-        movies_file=movies_file,
-        state_file=state_file,
-        json_out=json_out,
-        timeout=timeout,
-        extensions=extensions,
-        qualities=qualities,
-        cmd="movie-crawl",
-        func=cmd_movie_crawl,
-    )
-    _run()
-
-
-@app.command("image-hunt", help="Find/download large images from a site.")
-def cmd_image_hunt2(
-    url: Annotated[str, typer.Argument()],
-    print_urls: Annotated[bool, typer.Option("-p", "--print")] = False,
-    download: Annotated[bool, typer.Option("-d", "--download")] = False,
-    max_pages: Annotated[int, typer.Option("--max-pages")] = 100,
-    min_width: Annotated[int, typer.Option("--min-width")] = 300,
-    min_height: Annotated[int, typer.Option("--min-height")] = 400,
-    urls_file: Annotated[str, typer.Option("--urls-file")] = "img_urls.txt",
-) -> None:
-    """Run the image-hunt subcommand."""
-    _STATE.update(
-        url=url,
-        print_urls=print_urls,
-        download=download,
-        max_pages=max_pages,
-        min_width=min_width,
-        min_height=min_height,
-        urls_file=urls_file,
-        cmd="image-hunt",
-        func=cmd_image_hunt,
-    )
-    _run()
-
-
-@app.command("image-save", help="Save every <img> from one page.")
-def cmd_image_save2(
-    url: Annotated[str, typer.Argument()],
-    output_dir: Annotated[str, typer.Argument()] = "output",
-    timeout: Annotated[float, typer.Option("--timeout")] = 5,
-) -> None:
-    """Run the image-save subcommand."""
-    _STATE.update(
-        url=url,
-        output_dir=output_dir,
-        timeout=timeout,
-        cmd="image-save",
-        func=cmd_image_save,
-    )
-    _run()
-
-
-@app.command("link-crawl", help="Crawl a site, collect links by mode.")
-def cmd_link_crawl2(
-    url: Annotated[str, typer.Argument()],
-    mode: Annotated[Mode, typer.Option("--mode")] = Mode.ext,
-    ext: Annotated[str | None, typer.Option("--ext", help="Extension for --mode ext.")] = None,
-    keyword: Annotated[str | None, typer.Option("--keyword", help="Keyword for --mode keyword.")] = None,
-    max_pages: Annotated[int, typer.Option("--max-pages")] = 1000,
-    delay: Annotated[float, typer.Option("--delay")] = 1.0,
-    timeout: Annotated[float, typer.Option("--timeout")] = 10,
-    output: Annotated[str, typer.Option("-o", "--output")] = "urls.txt",
-) -> None:
-    """Run the link-crawl subcommand."""
-    _STATE.update(
-        url=url,
-        mode=mode,
-        ext=ext,
-        keyword=keyword,
-        max_pages=max_pages,
-        delay=delay,
-        timeout=timeout,
-        output=output,
-        cmd="link-crawl",
-        func=cmd_link_crawl,
-    )
-    _run()
-
-
-@app.command("video-info", help="Inspect zzztube video URLs.")
-def cmd_video_info2(
-    urls: Annotated[list[str], typer.Argument()],
-    output: Annotated[str, typer.Option("-o", "--output")] = "zzztube_links.json",
-    timeout: Annotated[float, typer.Option("--timeout")] = 10,
-) -> None:
-    """Run the video-info subcommand."""
-    _STATE.update(urls=urls, output=output, timeout=timeout, cmd="video-info", func=cmd_video_info)
-    _run()
-
-
-@app.command("google-search", help="DuckDuckGo/Google search wrapper.")
-def cmd_google_search2(
-    query: Annotated[str, typer.Argument()],
-    num_results: Annotated[int, typer.Option("-n", "--num-results")] = 10,
-) -> None:
-    """Run the google-search subcommand."""
-    _STATE.update(
-        query=query,
-        num_results=num_results,
-        cmd="google-search",
-        func=cmd_google_search,
-    )
-    _run()
-
-
-@app.command("web-size", help="Measure total download size of a page.")
-def cmd_web_size2(
-    url: Annotated[str, typer.Argument()],
-    crawl: Annotated[bool, typer.Option("--crawl")] = False,
-    max_pages: Annotated[int, typer.Option("--max-pages")] = 50,
-    user_agent: Annotated[str, typer.Option("--user-agent")] = "Mozilla/5.0 (size-checker)",
-) -> None:
-    """Run the web-size subcommand."""
-    _STATE.update(
-        url=url,
-        crawl=crawl,
-        max_pages=max_pages,
-        user_agent=user_agent,
-        cmd="web-size",
-        func=cmd_web_size,
-    )
-    _run()
-
-
-if __name__ == "__main__":
-    app()

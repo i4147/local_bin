@@ -7,9 +7,19 @@ from collections.abc import Iterator
 import glob
 import os
 from pathlib import Path
+import re
 import shutil
 
-from dh import gsz
+from dh import fsz, gsz
+import sys
+from loguru import logger
+
+logger.remove()
+logger.add(
+    sys.stderr,
+    level=os.environ.get("LOGURU_LEVEL", "INFO"),
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+)
 
 
 DIRS_TO_DELETE: list[str] = [
@@ -45,30 +55,39 @@ SCAN_ZONES: list[str] = [
 ]
 
 
-def expand_and_resolve(pattern: str) -> Iterator[Path]:
+def _expand_env(value: str) -> str:
+    return re.sub(
+        r"\$(?:(\w+)|\{([^}]+)\})",
+        lambda m: os.environ.get(m.group(1) or m.group(2), m.group(0)),
+        value,
+    )
+
+
+def expand_and_resolve(pattern: str) -> list[str]:
     """Expands environment variables and resolves wildcards."""
-    return glob.glob(os.path.expandvars(pattern), recursive=True)
+    return glob.glob(_expand_env(pattern), recursive=True)
 
 
 def purge_system() -> None:
     deleted_count = 0
+    total = 0
     before = gsz("/data/data/com.termux")
     before += gsz("/sdcard")
 
     for pattern in DIRS_TO_DELETE:
         for path in expand_and_resolve(pattern):
             p = Path(path)
-        if p.exists() and p.is_dir():
-            try:
-                total += gsz(path)
-                shutil.rmtree(path)
-                print(f"[-] Removed Dir: {path}")
-                deleted_count += 1
-            except Exception as e:
-                print(f"[!] Error removing dir {path}: {e}")
+            if p.exists() and p.is_dir():
+                try:
+                    total += gsz(path)
+                    shutil.rmtree(path)
+                    print(f"[-] Removed Dir: {path}")
+                    deleted_count += 1
+                except Exception as e:
+                    print(f"[!] Error removing dir {path}: {e}")
 
     for zone in SCAN_ZONES:
-        expanded_zone = os.path.expandvars(zone)
+        expanded_zone = _expand_env(zone)
         for ext in FILE_EXTENSIONS:
             # Recursively match anything ending in the extension
             search_pattern = str(Path(expanded_zone) / f"**/*{ext}")

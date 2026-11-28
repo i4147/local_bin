@@ -8,21 +8,22 @@ import ast
 import collections
 import json
 from pathlib import Path
-from types import SimpleNamespace
-from typing import Annotated, Any, Final, cast
+from typing import Any, Final, cast
 
 import astor
 from dh import MAX_WORKERS, atomic_write
 from loguru import logger
 from rich.console import Console
 from rich.table import Table
-import typer
+import os
+import sys
 
-
-def _version_callback(value: bool) -> None:
-    if value:
-        typer.echo("dupe-refactor 1.0.0")
-        raise typer.Exit
+logger.remove()
+logger.add(
+    sys.stderr,
+    level=os.environ.get("LOGURU_LEVEL", "INFO"),
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+)
 
 
 REPEATED_JSON_PATH: Final[Path] = Path("repeated.json")
@@ -264,97 +265,80 @@ def print_report(repeated: list[dict[str, Any]]) -> None:
         console.print(f"[dim]... and {len(repeated) - REPORT_ROW_LIMIT} more[/]")
 
 
-app = typer.Typer(
-    add_completion=False,
-    context_settings={"help_option_names": ["-h", "--help"]},
-    pretty_exceptions_show_locals=False,
-)
-
-
-@app.command(help="Find duplicated Python definitions and optionally strip them.")
-def parse_args(
-    apply: Annotated[
-        bool,
-        typer.Option(
-            "-a",
-            "--apply",
-            help="Apply changes (default: report only, source files are not modified).",
-        ),
-    ] = False,
-    min_files: Annotated[
-        int,
-        typer.Option(
-            "-m",
-            "--min-files",
-            help=f"Minimum number of files containing a duplicate (default: {DEFAULT_MIN_FILES}).",
-            metavar="N",
-        ),
-    ] = DEFAULT_MIN_FILES,
-    json: Annotated[
-        Path,
-        typer.Option(
-            "-j",
-            "--json",
-            help=f"Path to write the JSON report (default: {REPEATED_JSON_PATH}).",
-            metavar="PATH",
-        ),
-    ] = REPEATED_JSON_PATH,
-    workers: Annotated[
-        int,
-        typer.Option(
-            "-w",
-            "--workers",
-            help=f"Number of parallel workers when applying (default: {MAX_WORKERS}).",
-            metavar="N",
-        ),
-    ] = MAX_WORKERS,
-    root: Annotated[
-        Path,
-        typer.Option(
-            "-r",
-            "--root",
-            help="Root directory to scan (default: current directory).",
-            metavar="DIR",
-        ),
-    ] = Path.cwd(),
-    exclude: Annotated[
-        list[str] | None,
-        typer.Option(
-            "-e",
-            "--exclude",
-            help="Substring to exclude from scanning (repeatable).",
-            metavar="PATTERN",
-        ),
-    ] = None,
-    quiet: Annotated[bool, typer.Option("-q", "--quiet", help="Suppress the summary table.")] = False,
-    no_json: Annotated[bool, typer.Option("--no-json", help="Do not write the JSON report.")] = False,
-    version: Annotated[
-        bool,
-        typer.Option(
-            "-V",
-            "--version",
-            callback=_version_callback,
-            is_eager=True,
-            help="show program's version number and exit",
-        ),
-    ] = False,
-) -> argparse.Namespace:
-    "Parse args."
-    args = SimpleNamespace(
-        apply=apply,
-        min_files=min_files,
-        json=json,
-        workers=workers,
-        root=root,
-        exclude=exclude,
-        quiet=quiet,
-        no_json=no_json,
+def build_parser() -> argparse.ArgumentParser:
+    """Build the command-line argument parser."""
+    parser = argparse.ArgumentParser(description="Find duplicated Python definitions and optionally strip them.")
+    parser.add_argument(
+        "-a",
+        "--apply",
+        action="store_true",
+        help="Apply changes (default: report only, source files are not modified).",
     )
-    if args.exclude is None:
-        args.exclude = []
-    return args
+    parser.add_argument(
+        "-m",
+        "--min-files",
+        type=int,
+        default=DEFAULT_MIN_FILES,
+        metavar="N",
+        help=f"Minimum number of files containing a duplicate (default: {DEFAULT_MIN_FILES}).",
+    )
+    parser.add_argument(
+        "-j",
+        "--json",
+        type=Path,
+        default=REPEATED_JSON_PATH,
+        metavar="PATH",
+        help=f"Path to write the JSON report (default: {REPEATED_JSON_PATH}).",
+    )
+    parser.add_argument(
+        "-w",
+        "--workers",
+        type=int,
+        default=MAX_WORKERS,
+        metavar="N",
+        help=f"Number of parallel workers when applying (default: {MAX_WORKERS}).",
+    )
+    parser.add_argument(
+        "-r",
+        "--root",
+        type=Path,
+        default=Path.cwd(),
+        metavar="DIR",
+        help="Root directory to scan (default: current directory).",
+    )
+    parser.add_argument(
+        "-e",
+        "--exclude",
+        action="append",
+        default=None,
+        metavar="PATTERN",
+        help="Substring to exclude from scanning (repeatable).",
+    )
+    parser.add_argument("-q", "--quiet", action="store_true", help="Suppress the summary table.")
+    parser.add_argument("--no-json", action="store_true", help="Do not write the JSON report.")
+    parser.add_argument(
+        "-V",
+        "--version",
+        action="version",
+        version="dupe-refactor 1.0.0",
+        help="show program's version number and exit",
+    )
+    return parser
 
 
-app()
+def main(argv: list[str] | None = None) -> int:
+    "Run the command-line interface."
+    args = build_parser().parse_args(argv)
+    repeated = analyze_files(args.root, args.min_files, args.exclude or [])
+    if not args.quiet:
+        print_report(repeated)
+    if not args.no_json:
+        write_repeated_json(repeated, args.json)
+    if args.apply:
+        for file_path, objects in build_refactor_map(repeated).items():
+            refactor_single_file(file_path, objects)
+    return 0
+
+
 if __name__ == "__main__":
     raise SystemExit(main())

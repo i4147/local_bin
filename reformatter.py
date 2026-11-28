@@ -16,6 +16,14 @@ import time
 import tokenize
 
 from dh import atomic_write
+from loguru import logger
+
+logger.remove()
+logger.add(
+    sys.stderr,
+    level=os.environ.get("LOGURU_LEVEL", "INFO"),
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+)
 
 
 BUILTIN_NAMES: frozenset[str] = frozenset(dir(builtins))

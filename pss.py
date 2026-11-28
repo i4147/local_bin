@@ -23,6 +23,14 @@ import sqlite3
 import sys
 import urllib.error
 import urllib.request
+from loguru import logger
+
+logger.remove()
+logger.add(
+    sys.stderr,
+    level=os.environ.get("LOGURU_LEVEL", "INFO"),
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+)
 
 
 DB_PATH: Path = Path(os.environ.get("PIP_DB") or "/sdcard/data/pip.db")

@@ -23,6 +23,14 @@ import textwrap
 import zipfile
 
 from dh import MAX_WORKERS, SKIP_DIRS, atomic_write
+from loguru import logger
+
+logger.remove()
+logger.add(
+    sys.stderr,
+    level=os.environ.get("LOGURU_LEVEL", "INFO"),
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+)
 
 
 try:
@@ -77,7 +85,7 @@ def _display_path(p: str) -> str:
         return p
 
 
-def _iter_py_files(root: Path, skip_dirs: set[str]) -> list[Path]:
+def _iter_py_files(root: Path, skip_dirs: set[str] | frozenset[str]) -> list[Path]:
     return [p for p in root.rglob("*.py") if p.is_file() and not any(part in skip_dirs for part in p.parts)]
 
 
@@ -109,8 +117,9 @@ def _collect_type_checking_lines(tree: ast.Module) -> set[int]:
         )
         if is_tc:
             for sub in ast.walk(node):
-                if hasattr(sub, "lineno"):
-                    lines.add(sub.lineno)
+                lineno = getattr(sub, "lineno", None)
+                if isinstance(lineno, int):
+                    lines.add(lineno)
     return lines
 
 
@@ -592,7 +601,7 @@ class _DefCollector(ast.NodeVisitor):
         self.file = file
         self.defs: list[DefItem] = []
 
-    def _add(self, name: str, kind: str, node: ast.AST) -> None:
+    def _add(self, name: str, kind: str, node: ast.stmt) -> None:
         self.defs.append(
             DefItem(
                 name=name,
@@ -606,7 +615,8 @@ class _DefCollector(ast.NodeVisitor):
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
         self._add(node.name, "func", node)
 
-    visit_AsyncFunctionDef = visit_FunctionDef
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+        self._add(node.name, "func", node)
 
     def visit_ClassDef(self, node: ast.ClassDef) -> None:
         self._add(node.name, "class", node)
@@ -977,7 +987,7 @@ def _replace_func_in_file(path: Path, inspect_only: bool) -> tuple[Path, bool, s
         tree = ast.parse(src)
     except SyntaxError:
         return path, False, "Original file has a syntax error"
-    targets = [n for n in tree.body if _is_target_func(n, inspect_only)]
+    targets = [n for n in tree.body if isinstance(n, ast.FunctionDef) and _is_target_func(n, inspect_only)]
     if not targets:
         return path, False, "Target function not found"
     drop_lines: set[int] = set()
@@ -985,11 +995,11 @@ def _replace_func_in_file(path: Path, inspect_only: bool) -> tuple[Path, bool, s
         start = t.lineno - 1
         if t.decorator_list:
             start = t.decorator_list[0].lineno - 1
-        drop_lines.update(range(start, t.end_lineno))
+        drop_lines.update(range(start, t.end_lineno or t.lineno))
     last_import = -1
     for n in tree.body:
         if isinstance(n, (ast.Import, ast.ImportFrom)):
-            last_import = max(last_import, n.end_lineno - 1)
+            last_import = max(last_import, (n.end_lineno or n.lineno) - 1)
     docstring_end = 0
     if (
         tree.body
@@ -997,7 +1007,7 @@ def _replace_func_in_file(path: Path, inspect_only: bool) -> tuple[Path, bool, s
         and isinstance(tree.body[0].value, ast.Constant)
         and isinstance(tree.body[0].value.value, str)
     ):
-        docstring_end = tree.body[0].end_lineno
+        docstring_end = tree.body[0].end_lineno or tree.body[0].lineno
     new_lines: list[str] = []
     inserted = False
     for i, line in enumerate(src.splitlines(keepends=True)):

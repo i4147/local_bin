@@ -55,6 +55,7 @@ Requires Python 3.11+, git 2.21+, ``typer``, ``rich`` and ``loguru``.
 """
 
 from __future__ import annotations
+import argparse
 import ast
 from collections import Counter
 from collections.abc import Callable, Hashable, Iterable, Iterator, Sequence
@@ -81,7 +82,6 @@ from rich.console import Console
 from rich.markdown import Markdown
 from rich.table import Table
 from rich.text import Text
-import typer
 
 
 __all__: list[str] = [
@@ -3626,9 +3626,8 @@ def insert_into_changelog(path: Path, block_id: str, markdown: str, *, replace: 
 
 
 # ---------------------------------------------------------------------------
-# CLI (typer)
+# CLI (argparse)
 # ---------------------------------------------------------------------------
-app = typer.Typer(add_completion=False, help="Release notes for the people who use the software.")
 
 
 def _stderr_sink(message: str) -> None:
@@ -3655,19 +3654,7 @@ def configure_logging(verbosity: int) -> None:
     logger.enable(__name__)
 
 
-def _version_callback(value: bool) -> None:
-    """Print the version and exit when ``--version`` is given.
-    Args:
-        value: True when the flag is present.
-    Raises:
-        typer.Exit: Always, when *value* is true.
-    """
-    if value:
-        typer.echo(f"{APP_NAME} {__version__}")
-        raise typer.Exit(EXIT_OK)
-
-
-def _fail(message: str) -> typer.Exit:
+def _fail(message: str) -> SystemExit:
     """Print an error and build the exit to raise.
     Args:
         message: What went wrong.
@@ -3675,7 +3662,7 @@ def _fail(message: str) -> typer.Exit:
         The exception to raise, carrying :data:`EXIT_ERROR`.
     """
     Console(stderr=True).print(Text(f"error: {message}", style="bold red"), soft_wrap=True)
-    return typer.Exit(EXIT_ERROR)
+    return SystemExit(EXIT_ERROR)
 
 
 def _emit(text: str, output_format: OutputFormat) -> None:
@@ -3688,7 +3675,7 @@ def _emit(text: str, output_format: OutputFormat) -> None:
     if output_format is OutputFormat.TERM:
         Console().print(Markdown(text))
     else:
-        typer.echo(text.rstrip("\n"))
+        print(text.rstrip("\n"))
 
 
 def _run_api_diff(repo: Path, spec: str, paths: Sequence[str], output_format: OutputFormat) -> None:
@@ -3716,7 +3703,7 @@ def _run_api_diff(repo: Path, spec: str, paths: Sequence[str], output_format: Ou
             "changes": [change.to_dict() for change in changes],
             "skipped": skipped,
         }
-        typer.echo(json.dumps(payload, indent=2, ensure_ascii=False))
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
     elif output_format is OutputFormat.TERM and changes:
         Console().print(api_table(changes, old_ref, new_ref))
     else:
@@ -3743,7 +3730,7 @@ def _run_check(notes: ReleaseNotes, output_format: OutputFormat) -> int:
             "missing_migration_notes": [change.to_dict() for change in missing],
             "undeclared_api_breaks": [change.to_dict() for change in undeclared],
         }
-        typer.echo(json.dumps(payload, indent=2, ensure_ascii=False))
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
         return EXIT_CHECK_FAILED if missing else EXIT_OK
     console = Console()
     if undeclared:
@@ -3769,124 +3756,174 @@ def _run_check(notes: ReleaseNotes, output_format: OutputFormat) -> int:
     return EXIT_CHECK_FAILED
 
 
-@app.command()
+def _non_negative_int(value: str) -> int:
+    num = int(value)
+    if num < 0:
+        msg = "must be >= 0"
+        raise argparse.ArgumentTypeError(msg)
+    return num
+
+
+def _env_truthy(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def build_parser() -> argparse.ArgumentParser:
+    """Build the command-line argument parser."""
+    parser = argparse.ArgumentParser(
+        prog=APP_NAME,
+        description=(
+            "Release notes for the people who use the software. "
+            "Without --from/--to the notes cover everything since the latest version tag. "
+            "Exit codes: 0 success, 1 --check failed, 2 error."
+        ),
+    )
+    parser.add_argument(
+        "-C",
+        "--repo",
+        type=Path,
+        default=Path(),
+        help="Repository to read. (default: current directory)",
+    )
+    parser.add_argument(
+        "--from",
+        dest="from_ref",
+        default=None,
+        help="Start of the range (exclusive). (default: previous version tag)",
+    )
+    parser.add_argument(
+        "--to",
+        dest="to_ref",
+        default=None,
+        help="End of the range (inclusive). (default: HEAD)",
+    )
+    parser.add_argument(
+        "--unreleased",
+        action="store_true",
+        help="Everything after the latest release tag.",
+    )
+    parser.add_argument(
+        "--audience",
+        type=str.lower,
+        choices=[a.value for a in Audience],
+        default=Audience.USERS.value,
+        help="Who the notes are for.",
+    )
+    parser.add_argument(
+        "--format",
+        dest="output_format",
+        type=str.lower,
+        choices=[o.value for o in OutputFormat],
+        default=OutputFormat.MD.value,
+        help="Output format.",
+    )
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="Exit 1 when a breaking change lacks a migration note (for CI).",
+    )
+    parser.add_argument(
+        "--api-diff",
+        dest="api_diff_range",
+        default=None,
+        metavar="OLD..NEW",
+        help="Only diff the public Python API.",
+    )
+    parser.add_argument(
+        "--write",
+        type=Path,
+        default=None,
+        metavar="FILE",
+        help=f"Insert the notes into FILE below '{CHANGELOG_MARKER}' instead of printing them.",
+    )
+    parser.add_argument(
+        "--replace",
+        action="store_true",
+        help="With --write: regenerate an entry that already exists.",
+    )
+    parser.add_argument(
+        "--max-items",
+        type=_non_negative_int,
+        default=None,
+        help=(
+            f"Noise budget: maximum number of bullets (0 = unlimited). "
+            f"(default: {DEFAULT_USER_BUDGET} for users, unlimited for maintainers)"
+        ),
+    )
+    parser.add_argument(
+        "--offline",
+        action="store_true",
+        default=_env_truthy("GIT_CHANGELOG_OFFLINE"),
+        help="Never call `gh` for pull-request descriptions.",
+    )
+    parser.add_argument(
+        "--pr-limit",
+        type=_non_negative_int,
+        default=DEFAULT_PR_LOOKUPS,
+        help="Read at most this many pull-request descriptions, most important changes first.",
+    )
+    parser.add_argument(
+        "--api",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Include the public API diff in the notes.",
+    )
+    parser.add_argument(
+        "--api-path",
+        action="append",
+        default=None,
+        metavar="PATH",
+        help="Limit the API diff to PATH, relative to the repository root (repeatable).",
+    )
+    parser.add_argument(
+        "--migration-file",
+        action="append",
+        default=None,
+        metavar="NAME",
+        help=(
+            "File whose additions count as migration notes (repeatable). "
+            f"(default: {', '.join(DEFAULT_MIGRATION_FILES)})"
+        ),
+    )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="count",
+        default=0,
+        help="Log to stderr (-v info, -vv debug).",
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"{APP_NAME} {__version__}",
+        help="Show the version.",
+    )
+    return parser
+
+
 def changelog(
-    repo: Annotated[
-        Path,
-        typer.Option("--repo", "-C", help="Repository to read.", show_default="current directory"),
-    ] = Path(),
-    from_ref: Annotated[
-        str | None,
-        typer.Option(
-            "--from",
-            help="Start of the range (exclusive).",
-            show_default="previous version tag",
-        ),
-    ] = None,
-    to_ref: Annotated[
-        str | None,
-        typer.Option("--to", help="End of the range (inclusive).", show_default="HEAD"),
-    ] = None,
-    unreleased: Annotated[
-        bool,
-        typer.Option("--unreleased", help="Everything after the latest release tag."),
-    ] = False,
-    audience: Annotated[
-        Audience,
-        typer.Option("--audience", case_sensitive=False, help="Who the notes are for."),
-    ] = Audience.USERS,
-    output_format: Annotated[
-        OutputFormat,
-        typer.Option("--format", case_sensitive=False, help="Output format."),
-    ] = OutputFormat.MD,
-    check: Annotated[
-        bool,
-        typer.Option(
-            "--check",
-            help="Exit 1 when a breaking change lacks a migration note (for CI).",
-        ),
-    ] = False,
-    api_diff_range: Annotated[
-        str | None,
-        typer.Option("--api-diff", metavar="OLD..NEW", help="Only diff the public Python API."),
-    ] = None,
-    write: Annotated[
-        Path | None,
-        typer.Option(
-            "--write",
-            metavar="FILE",
-            help=f"Insert the notes into FILE below '{CHANGELOG_MARKER}' instead of printing them.",
-        ),
-    ] = None,
-    replace: Annotated[
-        bool,
-        typer.Option("--replace", help="With --write: regenerate an entry that already exists."),
-    ] = False,
-    max_items: Annotated[
-        int | None,
-        typer.Option(
-            "--max-items",
-            min=0,
-            help="Noise budget: maximum number of bullets (0 = unlimited).",
-            show_default=f"{DEFAULT_USER_BUDGET} for users, unlimited for maintainers",
-        ),
-    ] = None,
-    offline: Annotated[
-        bool,
-        typer.Option(
-            "--offline",
-            envvar="GIT_CHANGELOG_OFFLINE",
-            help="Never call `gh` for pull-request descriptions.",
-        ),
-    ] = False,
-    pr_limit: Annotated[
-        int,
-        typer.Option(
-            "--pr-limit",
-            min=0,
-            help="Read at most this many pull-request descriptions, most important changes first.",
-        ),
-    ] = DEFAULT_PR_LOOKUPS,
-    api: Annotated[
-        bool,
-        typer.Option("--api/--no-api", help="Include the public API diff in the notes."),
-    ] = True,
-    api_path: Annotated[
-        list[str] | None,
-        typer.Option(
-            "--api-path",
-            metavar="PATH",
-            help="Limit the API diff to PATH, relative to the repository root (repeatable).",
-        ),
-    ] = None,
-    migration_file: Annotated[
-        list[str] | None,
-        typer.Option(
-            "--migration-file",
-            metavar="NAME",
-            help="File whose additions count as migration notes (repeatable).",
-            show_default=", ".join(DEFAULT_MIGRATION_FILES),
-        ),
-    ] = None,
-    verbose: Annotated[
-        int,
-        typer.Option("--verbose", "-v", count=True, help="Log to stderr (-v info, -vv debug)."),
-    ] = 0,
-    version: Annotated[
-        bool,
-        typer.Option(
-            "--version",
-            callback=_version_callback,
-            is_eager=True,
-            help="Show the version.",
-        ),
-    ] = False,
+    repo: Path = Path(),
+    from_ref: str | None = None,
+    to_ref: str | None = None,
+    unreleased: bool = False,
+    audience: Audience = Audience.USERS,
+    output_format: OutputFormat = OutputFormat.MD,
+    check: bool = False,
+    api_diff_range: str | None = None,
+    write: Path | None = None,
+    replace: bool = False,
+    max_items: int | None = None,
+    offline: bool = False,
+    pr_limit: int = DEFAULT_PR_LOOKUPS,
+    api: bool = True,
+    api_path: list[str] | None = None,
+    migration_file: list[str] | None = None,
+    verbose: int = 0,
 ) -> None:
     """Write release notes for a range of commits.
     Without --from/--to the notes cover everything since the latest version
     tag.  Exit codes: 0 success, 1 --check failed, 2 error.
     """
-    del version  # handled by the eager callback
     configure_logging(verbose)
     try:
         repo = repository_root(repo)
@@ -3905,7 +3942,7 @@ def changelog(
             migration_files=migration_file or DEFAULT_MIGRATION_FILES,
         )
         if check:
-            raise typer.Exit(_run_check(notes, output_format))
+            raise SystemExit(_run_check(notes, output_format))
         if write is not None:
             block_id = rev_range.title if rev_range.is_release else UNRELEASED_ID
             action = insert_into_changelog(write, block_id, render_markdown(notes), replace=replace)
@@ -3917,14 +3954,33 @@ def changelog(
     except GitError as exc:
         raise _fail(str(exc)) from exc
     if output_format is OutputFormat.JSON:
-        typer.echo(render_json(notes))
+        print(render_json(notes))
     else:
         _emit(render_markdown(notes), output_format)
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> None:
     """Entry point of the ``git-changelog`` command."""
-    app()
+    args = build_parser().parse_args(argv)
+    changelog(
+        repo=args.repo,
+        from_ref=args.from_ref,
+        to_ref=args.to_ref,
+        unreleased=args.unreleased,
+        audience=Audience(args.audience),
+        output_format=OutputFormat(args.output_format),
+        check=args.check,
+        api_diff_range=args.api_diff_range,
+        write=args.write,
+        replace=args.replace,
+        max_items=args.max_items,
+        offline=args.offline,
+        pr_limit=args.pr_limit,
+        api=args.api,
+        api_path=args.api_path,
+        migration_file=args.migration_file,
+        verbose=args.verbose,
+    )
 
 
 if __name__ == "__main__":

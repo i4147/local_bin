@@ -35,6 +35,14 @@ import stat
 import subprocess
 import sys
 from typing import Any, NoReturn
+from loguru import logger
+
+logger.remove()
+logger.add(
+    sys.stderr,
+    level=os.environ.get("LOGURU_LEVEL", "INFO"),
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+)
 
 
 def safe_addstr(scr: Any, y: int, x: int, s: str, attr: int = 0) -> None:
@@ -64,7 +72,7 @@ def safe_mtime(ts: float) -> str:
         return "?"
 
 
-def center_box(app: Any, height: int, width: int) -> tuple[int, int]:
+def center_box(app: Any, height: int, width: int) -> tuple[int, int, int, int]:
     h, w = app.stdscr.getmaxyx()
     width = max(20, min(width, w - 4))
     height = max(4, min(height, h - 4))
@@ -255,10 +263,10 @@ class Dialog:
                 pass
         return self.result
 
-    def draw(self) -> NoReturn:
+    def draw(self) -> None:
         raise NotImplementedError
 
-    def handle_key(self, key: str) -> NoReturn:
+    def handle_key(self, key: int) -> None:
         """Handle key."""
         raise NotImplementedError
 
@@ -266,7 +274,7 @@ class Dialog:
 class InputDialog(Dialog):
     needs_cursor = True
 
-    def __init__(self, app: Any, title: str, prompt: str, default: Sequence[Any] = "") -> None:
+    def __init__(self, app: Any, title: str, prompt: str, default: str = "") -> None:
         """Initialize the instance state from the supplied arguments."""
         super().__init__(app, title)
         self.prompt = prompt
@@ -292,7 +300,7 @@ class InputDialog(Dialog):
             pass
         self.app.stdscr.refresh()
 
-    def handle_key(self, key: str) -> None:
+    def handle_key(self, key: int) -> None:
         """Handle key."""
         if key == 27:
             self.result = None
@@ -346,7 +354,7 @@ class ConfirmDialog(Dialog):
         safe_addstr(self.app.stdscr, y + hh - 2, x + 12, "[ No ]", no)
         self.app.stdscr.refresh()
 
-    def handle_key(self, key: str) -> None:
+    def handle_key(self, key: int) -> None:
         """Handle key."""
         if key == 27:
             self.result = False
@@ -378,7 +386,7 @@ class MessageDialog(Dialog):
         safe_addstr(self.app.stdscr, y + hh - 2, x + 2, "[ OK ]", curses.A_REVERSE)
         self.app.stdscr.refresh()
 
-    def handle_key(self, key: str) -> None:
+    def handle_key(self, key: int) -> None:
         """Handle key."""
         if key in (27, curses.KEY_ENTER, 10, 13, ord(" "), ord("q")):
             self.result = True
@@ -417,11 +425,11 @@ class ViewerDialog(Dialog):
         )
         self.app.stdscr.refresh()
 
-    def handle_key(self, key: str) -> None:
+    def handle_key(self, key: int) -> None:
         """Handle key."""
         page = max(1, self.app.stdscr.getmaxyx()[0] - 6)
         n = len(self.content)
-        if key in (ord("q"), 27, curses.KEY_F(3), curses.KEY_F(10)):
+        if key in (ord("q"), 27, curses.KEY_F3, curses.KEY_F10):
             self.result = True
         elif key in (curses.KEY_UP, ord("k")):
             self.scroll = max(0, self.scroll - 1)
@@ -561,9 +569,11 @@ class FileManager:
             name = name[: name_w - 1] + "~"
         return f"{name:<{name_w}} {e.size_str:>6} {safe_mtime(e.mtime):>16}"
 
-    def handle_key(self, key: str) -> bool:
+    def handle_key(self, key: int) -> bool:
         """Handle key."""
-        F = curses.KEY_F
+
+        def F(n: int) -> int:
+            return curses.KEY_F0 + n
         if key == F(10) or key == ord("q"):
             return False
         if key in (F(1), ord("?")):

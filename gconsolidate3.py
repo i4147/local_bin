@@ -15,9 +15,18 @@ import re
 import sys
 import tempfile
 import tomllib
+from collections.abc import Sequence
 from typing import Any
 
 import libcst as cst
+from loguru import logger
+
+logger.remove()
+logger.add(
+    sys.stderr,
+    level=os.environ.get("LOGURU_LEVEL", "INFO"),
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+)
 
 
 BINARY_EXTENSIONS: frozenset[str] = frozenset({
@@ -109,11 +118,6 @@ def _is_preserved_comment(comment_value: str) -> bool:
 
 class CommentAndDocstringStripper(cst.CSTTransformer):
     """Strip non-directive comments and docstrings using LibCST."""
-
-    def leave_Comment(self, original_node: cst.Comment, updated_node: cst.Comment) -> cst.Comment | cst.RemovalSentinel:
-        if _is_preserved_comment(updated_node.value):
-            return updated_node
-        return cst.RemoveFromParent()
 
     def leave_EmptyLine(
         self, original_node: cst.EmptyLine, updated_node: cst.EmptyLine
@@ -351,10 +355,18 @@ def _is_type_checking_if(node: cst.If) -> bool:
     return test_code in {"TYPE_CHECKING", "typing.TYPE_CHECKING", "t.TYPE_CHECKING"}
 
 
-def _extract_import_specs(stmt: cst.BaseStatement, in_type_checking: bool = False) -> list[ImportSpec]:
+def _extract_import_specs(
+    stmt: cst.BaseStatement | cst.BaseSmallStatement,
+    in_type_checking: bool = False,
+) -> list[ImportSpec]:
     specs: list[ImportSpec] = []
-    if isinstance(stmt, cst.SimpleStatementLine):
-        for small in stmt.body:
+    smalls: Sequence[cst.BaseSmallStatement] = (
+        stmt.body
+        if isinstance(stmt, cst.SimpleStatementLine)
+        else ([stmt] if isinstance(stmt, cst.BaseSmallStatement) else ())
+    )
+    if smalls:
+        for small in smalls:
             if isinstance(small, cst.Import):
                 names: list[tuple[str, str | None]] = []
                 for alias in small.names:

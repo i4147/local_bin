@@ -20,11 +20,20 @@ import math
 import os
 from pathlib import Path
 import re
+import stat
 import sys
-from typing import Any
+from typing import Any, ClassVar, Literal, NoReturn
 from xml.parsers import expat
 
 from dh import atomic_write
+from loguru import logger
+
+logger.remove()
+logger.add(
+    sys.stderr,
+    level=os.environ.get("LOGURU_LEVEL", "INFO"),
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+)
 
 
 EXIT_SUCCESS: int = 0
@@ -95,7 +104,7 @@ class SvgoConfigError(SvgoError):
     pass
 
 
-def _js_round(value: float) -> float:
+def _js_round(value: float) -> int:
     return math.floor(value + 0.5)
 
 
@@ -2184,6 +2193,7 @@ class PathDataItem:
     args: list[float] = field(default_factory=list)
     base: list[float] = field(default_factory=lambda: [0.0, 0.0])
     coords: list[float] = field(default_factory=lambda: [0.0, 0.0])
+    _sdata: list[float] | None = field(default=None, repr=False, compare=False)
 
 
 def parse_path_data(string: str) -> list[PathDataItem]:
@@ -3386,33 +3396,36 @@ VISIT_SKIP = object()
 
 
 class Node:
-    type: str = "node"
+    @property
+    def type(self) -> str:
+        return "node"
 
 
 class Document(Node):
-    type = "root"
+    type: ClassVar[Literal["root"]] = "root"
 
     def __init__(self) -> None:
-        self.children: list[Node] = []
+        self.children: list[AnyNode] = []
 
     def __repr__(self) -> str:
         return "Document()"
 
 
 class Element(Node):
-    type = "element"
+    type: ClassVar[Literal["element"]] = "element"
 
     def __init__(self, name: str, attributes: dict[str, str] | None = None) -> None:
         self.name: str = name
         self.attributes: dict[str, str] = attributes if attributes is not None else {}
-        self.children: list[Node] = []
+        self.children: list[AnyNode] = []
+        self._path_js: list[PathDataItem] | None = None
 
     def __repr__(self) -> str:
         return f"Element({self.name!r}, attrs={list(self.attributes)!r})"
 
 
 class TextNode(Node):
-    type = "text"
+    type: ClassVar[Literal["text"]] = "text"
 
     def __init__(self, value: str) -> None:
         self.value: str = value
@@ -3422,32 +3435,36 @@ class TextNode(Node):
 
 
 class CdataNode(Node):
-    type = "cdata"
+    type: ClassVar[Literal["cdata"]] = "cdata"
 
     def __init__(self, value: str) -> None:
         self.value: str = value
 
 
 class CommentNode(Node):
-    type = "comment"
+    type: ClassVar[Literal["comment"]] = "comment"
 
     def __init__(self, value: str) -> None:
         self.value: str = value
 
 
 class DoctypeNode(Node):
-    type = "doctype"
+    type: ClassVar[Literal["doctype"]] = "doctype"
 
     def __init__(self, data: str) -> None:
         self.data: dict[str, str] = {"doctype": data}
 
 
 class InstructionNode(Node):
-    type = "instruction"
+    type: ClassVar[Literal["instruction"]] = "instruction"
 
     def __init__(self, name: str, value: str) -> None:
         self.name: str = name
         self.value: str = value
+
+
+ParentNode = Document | Element
+AnyNode = Document | Element | TextNode | CdataNode | CommentNode | DoctypeNode | InstructionNode
 
 
 _REG_ENTITY_REF = re.compile(r"&([A-Za-z_:][\w.:-]*);")
@@ -3834,7 +3851,7 @@ ExitCallback = Callable[[Node, Node], Any]
 Visitor = Mapping[str, Any]
 
 
-def visit(node: Node, visitor: Visitor, parent_node: Node | None = None) -> None:
+def visit(node: AnyNode, visitor: Visitor, parent_node: ParentNode | None = None) -> None:
     callbacks = visitor.get(node.type)
     enter = callbacks.get("enter") if isinstance(callbacks, Mapping) else None
     exit_ = callbacks.get("exit") if isinstance(callbacks, Mapping) else None
@@ -3854,7 +3871,7 @@ def visit(node: Node, visitor: Visitor, parent_node: Node | None = None) -> None
         exit_(node, parent_node)
 
 
-def detach_node_from_parent(node: Node, parent_node: Node) -> None:
+def detach_node_from_parent(node: Node, parent_node: ParentNode) -> None:
     parent_node.children = [c for c in parent_node.children if c is not node]
 
 
@@ -4424,12 +4441,15 @@ _REG_REFERENCES_BEGIN = re.compile(r"(\w+)\.[a-zA-Z]")
 def _decode_uri(value: str) -> str:
     import urllib.parse
 
+    reserved = frozenset("#$&+,/:;=?@")
+
+    def _replace(match: re.Match[str]) -> str:
+        seq = match.group(0)
+        decoded = urllib.parse.unquote(seq, errors="surrogateescape")
+        return seq if decoded in reserved else decoded
+
     try:
-        return urllib.parse.unquote(
-            value,
-            errors="surrogateescape",
-            safe="#$&+,;:=?@/'!*()-~",
-        )
+        return re.sub(r"%[0-9A-Fa-f]{2}", _replace, value)
     except Exception:
         return value
 
@@ -4552,7 +4572,7 @@ def collect_stylesheet(root: Document) -> Stylesheet:
 
 def _collect_style_element(
     node: Element,
-    parent: Node,
+    parent: ParentNode,
     rules: list[CssRule],
     parents: dict[Node, Document | Element],
 ) -> None:
@@ -4564,7 +4584,7 @@ def _collect_style_element(
         return
     dynamic = node.attributes.get("media") not in (None, "all")
     for child in node.children:
-        if child.type in ("text", "cdata"):
+        if isinstance(child, (TextNode, CdataNode)):
             rules.extend(parse_stylesheet(child.value, dynamic))
 
 
@@ -4646,7 +4666,7 @@ class BuiltinPlugin:
 
 
 def _remove_doctype(root: Document, params: dict[str, Any], info: dict[str, Any]) -> dict[str, Any]:
-    def enter(node: Node, parent: Node) -> None:
+    def enter(node: DoctypeNode, parent: ParentNode) -> None:
         if node.type == "doctype":
             detach_node_from_parent(node, parent)
 
@@ -4654,7 +4674,7 @@ def _remove_doctype(root: Document, params: dict[str, Any], info: dict[str, Any]
 
 
 def _remove_xml_proc_inst(root: Document, params: dict[str, Any], info: dict[str, Any]) -> dict[str, Any]:
-    def enter(node: Node, parent: Node) -> None:
+    def enter(node: InstructionNode, parent: ParentNode) -> None:
         if node.type == "instruction" and node.name == "xml":
             detach_node_from_parent(node, parent)
 
@@ -4664,7 +4684,7 @@ def _remove_xml_proc_inst(root: Document, params: dict[str, Any], info: dict[str
 def _remove_comments(root: Document, params: dict[str, Any], info: dict[str, Any]) -> dict[str, Any]:
     preserve_patterns: Any = params.get("preservePatterns", [re.compile(r"^!")])
 
-    def enter(node: Node, parent: Node) -> None:
+    def enter(node: CommentNode, parent: ParentNode) -> None:
         if node.type != "comment":
             return
         if preserve_patterns:
@@ -4719,7 +4739,7 @@ def _remove_deprecated_attrs(root: Document, params: dict[str, Any], info: dict[
                         continue
                     node.attributes.pop(name, None)
 
-    def enter(node: Node, parent: Node) -> None:
+    def enter(node: Element, parent: ParentNode) -> None:
         if node.type != "element":
             return
         element = node
@@ -4742,7 +4762,7 @@ def _remove_deprecated_attrs(root: Document, params: dict[str, Any], info: dict[
 
 
 def _remove_metadata(root: Document, params: dict[str, Any], info: dict[str, Any]) -> dict[str, Any]:
-    def enter(node: Node, parent: Node) -> None:
+    def enter(node: Element, parent: ParentNode) -> None:
         if node.type == "element" and node.name == "metadata":
             detach_node_from_parent(node, parent)
 
@@ -4756,7 +4776,7 @@ def _remove_editors_ns_data(root: Document, params: dict[str, Any], info: dict[s
         namespaces.extend(additional)
     prefixes: list[str] = []
 
-    def enter(node: Node, parent: Node) -> None:
+    def enter(node: Element, parent: ParentNode) -> None:
         if node.type != "element":
             return
         element = node
@@ -4788,7 +4808,7 @@ def _cleanup_attrs(root: Document, params: dict[str, Any], info: dict[str, Any])
     trim = params.get("trim", True)
     spaces = params.get("spaces", True)
 
-    def enter(node: Node, parent: Node) -> None:
+    def enter(node: Element, parent: ParentNode) -> None:
         if node.type != "element":
             return
         element = node
@@ -4807,9 +4827,9 @@ def _cleanup_attrs(root: Document, params: dict[str, Any], info: dict[str, Any])
 
 
 def _merge_styles(root: Document, params: dict[str, Any], info: dict[str, Any]) -> dict[str, Any]:
-    state = {"first": None, "collected": "", "content_type": "text"}
+    state: dict[str, Any] = {"first": None, "collected": "", "content_type": "text"}
 
-    def enter(node: Node, parent: Node) -> Any:
+    def enter(node: Element, parent: ParentNode) -> Any:
         if node.type != "element":
             return None
         if node.name == "foreignObject":
@@ -4855,10 +4875,10 @@ def _inline_styles(root: Document, params: dict[str, Any], info: dict[str, Any])
     preserved_pseudos: set[str] = set()
     for group in ("functional", "treeStructural"):
         preserved_pseudos.update(PSEUDO_CLASSES.get(group, ()))
-    styles: list[tuple[Element, Node, list[CssRule]]] = []
+    styles: list[tuple[Element, ParentNode, list[CssRule]]] = []
     selectors: list[dict[str, Any]] = []
 
-    def enter(node: Node, parent: Node) -> Any:
+    def enter(node: Element, parent: ParentNode) -> Any:
         if node.type != "element":
             return None
         if node.name == "foreignObject":
@@ -4868,7 +4888,7 @@ def _inline_styles(root: Document, params: dict[str, Any], info: dict[str, Any])
         style_type = node.attributes.get("type")
         if style_type not in (None, "", "text/css"):
             return None
-        css_text = "".join(child.value for child in node.children if child.type in ("text", "cdata"))
+        css_text = "".join(child.value for child in node.children if isinstance(child, (TextNode, CdataNode)))
         rules = parse_stylesheet(css_text)
         styles.append((node, parent, rules))
         return None
@@ -4954,10 +4974,7 @@ def _inline_styles(root: Document, params: dict[str, Any], info: dict[str, Any])
                 detach_node_from_parent(style_node, style_parent)
             else:
                 css = _render_rules(kept)
-                if style_node.children and style_node.children[0].type in (
-                    "text",
-                    "cdata",
-                ):
+                if style_node.children and isinstance(style_node.children[0], (TextNode, CdataNode)):
                     style_node.children[0].value = css
 
     return {
@@ -5115,7 +5132,7 @@ def minify_css_block(css: str) -> str:
 def _minify_styles(root: Document, params: dict[str, Any], info: dict[str, Any]) -> dict[str, Any]:
     usage = params.get("usage")
     {k: v for k, v in params.items() if k != "usage"}
-    style_elements: list[tuple[Element, Node]] = []
+    style_elements: list[tuple[Element, ParentNode]] = []
     elements_with_style: list[Element] = []
     tags_usage: set[str] = set()
     ids_usage: set[str] = set()
@@ -5131,7 +5148,7 @@ def _minify_styles(root: Document, params: dict[str, Any], info: dict[str, Any])
         force_usage = usage.get("force", False)
     deoptimized = False
 
-    def enter(node: Node, parent: Node) -> None:
+    def enter(node: Element, parent: ParentNode) -> None:
         nonlocal deoptimized
         if node.type != "element":
             return
@@ -5162,14 +5179,15 @@ def _minify_styles(root: Document, params: dict[str, Any], info: dict[str, Any])
             if not style_node.children:
                 continue
             first = style_node.children[0]
-            if first.type not in ("text", "cdata"):
+            if not isinstance(first, (TextNode, CdataNode)):
                 continue
             minified = minify_css(first.value, csso_usage)
             if not minified:
                 detach_node_from_parent(style_node, style_parent)
                 continue
+            replacement: AnyNode
             if ">" in minified or "<" in minified:
-                replacement: Node = CdataNode(minified)
+                replacement = CdataNode(minified)
             else:
                 replacement = TextNode(minified)
             style_node.children = [replacement]
@@ -5230,7 +5248,7 @@ def _cleanup_ids(root: Document, params: dict[str, Any], info: dict[str, Any]) -
     def is_id_preserved(id_value: str) -> bool:
         return id_value in preserve_ids or _has_string_prefix(id_value, prefixes)
 
-    def enter(node: Node, parent: Node) -> Any:
+    def enter(node: Element, parent: ParentNode) -> Any:
         nonlocal deoptimized
         if node.type != "element":
             return None
@@ -5301,7 +5319,7 @@ def _collect_useful_nodes(node: Element, useful: list[Element]) -> None:
 
 
 def _remove_useless_defs(root: Document, params: dict[str, Any], info: dict[str, Any]) -> dict[str, Any]:
-    def enter(node: Node, parent: Node) -> None:
+    def enter(node: Element, parent: ParentNode) -> None:
         if node.type != "element":
             return
         element = node
@@ -5312,7 +5330,7 @@ def _remove_useless_defs(root: Document, params: dict[str, Any], info: dict[str,
             _collect_useful_nodes(element, useful)
             if not useful:
                 detach_node_from_parent(element, parent)
-            element.children = useful
+            element.children = list(useful)
 
     return {"element": {"enter": enter}}
 
@@ -5359,7 +5377,7 @@ def _cleanup_numeric_values(root: Document, params: dict[str, Any], info: dict[s
     default_px = params.get("defaultPx", True)
     convert_to_px = params.get("convertToPx", True)
 
-    def enter(node: Node, parent: Node) -> None:
+    def enter(node: Element, parent: ParentNode) -> None:
         if node.type != "element":
             return
         element = node
@@ -5408,7 +5426,7 @@ def _convert_colors(root: Document, params: dict[str, Any], info: dict[str, Any]
     shortname = params.get("shortname", True)
     mask_counter = 0
 
-    def enter(node: Node, parent: Node) -> None:
+    def enter(node: Element, parent: ParentNode) -> None:
         nonlocal mask_counter
         if node.type != "element":
             return
@@ -5473,7 +5491,7 @@ def _convert_colors(root: Document, params: dict[str, Any], info: dict[str, Any]
                     val = COLORS_SHORT_NAMES[color_name]
             element.attributes[name] = val
 
-    def exit(node: Node, parent: Node) -> None:
+    def exit(node: Element, parent: ParentNode) -> None:
         nonlocal mask_counter
         if node.type == "element" and node.name == "mask":
             mask_counter -= 1
@@ -5489,7 +5507,7 @@ def _apply_transforms_plugin(root: Document, params: dict[str, Any], info: dict[
     apply_transforms_stroked = params.get("applyTransformsStroked", True)
     stylesheet = collect_stylesheet(root)
 
-    def enter(node: Node, parent: Node) -> None:
+    def enter(node: Element, parent: ParentNode) -> None:
         if node.type != "element":
             return
         element = node
@@ -5555,12 +5573,13 @@ def _apply_transforms_plugin(root: Document, params: dict[str, Any], info: dict[
 
 
 def _scale_numeric_attr(value: str, scale: float) -> str:
-    return _REG_NUMERIC_IN_ATTR.sub(
-        lambda m: remove_leading_zero(
-            js_parse_float(m.group()) * scale if js_parse_float(m.group()) is not None else js_parse_float(m.group())
-        ),
-        value.strip(),
-    )
+    def _replace(m: re.Match[str]) -> str:
+        parsed = js_parse_float(m.group())
+        if parsed is None:
+            return m.group()
+        return remove_leading_zero(parsed * scale)
+
+    return _REG_NUMERIC_IN_ATTR.sub(_replace, value.strip())
 
 
 def _get_intersection(coords: Sequence[float]) -> list[float] | None:
@@ -6329,7 +6348,7 @@ def _convert_path_data(root: Document, params: dict[str, Any], info: dict[str, A
             visit(root, visitor)
     stylesheet = collect_stylesheet(root)
 
-    def enter(node: Node, parent: Node) -> None:
+    def enter(node: Element, parent: ParentNode) -> None:
         if node.type != "element":
             return
         element = node
@@ -6458,7 +6477,7 @@ def _remove_unknowns_and_defaults(root: Document, params: dict[str, Any], info: 
     def attribute_used_in_stylesheet(name: str) -> bool:
         return any(includes_attr_selector(rule.selector, name) for rule in stylesheet.rules)
 
-    def enter(node: Node, parent: Node) -> Any:
+    def enter(node: InstructionNode | Element, parent: ParentNode) -> Any:
         if node.type == "instruction":
             if default_markup_declarations and node.name == "xml":
                 node.value = re.sub(r"\s*standalone\s*=\s*([\"'])no\1", "", node.value)
@@ -6524,7 +6543,7 @@ def _remove_unknowns_and_defaults(root: Document, params: dict[str, Any], info: 
 
 
 def _remove_non_inheritable_group_attrs(root: Document, params: dict[str, Any], info: dict[str, Any]) -> dict[str, Any]:
-    def enter(node: Node, parent: Node) -> None:
+    def enter(node: Element, parent: ParentNode) -> None:
         if node.type != "element" or node.name != "g":
             return
         for name in list(node.attributes):
@@ -6546,7 +6565,7 @@ def _remove_useless_stroke_and_fill(
     remove_none = params.get("removeNone", False)
     has_style_or_script = False
 
-    def detect(node: Node, parent: Node) -> None:
+    def detect(node: Element, parent: ParentNode) -> None:
         nonlocal has_style_or_script
         if node.type == "element" and (node.name == "style" or has_scripts(node)):
             has_style_or_script = True
@@ -6556,7 +6575,7 @@ def _remove_useless_stroke_and_fill(
         return None
     stylesheet = collect_stylesheet(root)
 
-    def enter(node: Node, parent: Node) -> Any:
+    def enter(node: Element, parent: ParentNode) -> Any:
         if node.type != "element":
             return None
         element = node
@@ -6626,7 +6645,7 @@ _REG_ENABLE_BACKGROUND = re.compile(
 def _cleanup_enable_background(root: Document, params: dict[str, Any], info: dict[str, Any]) -> dict[str, Any]:
     has_filter = False
 
-    def detect(node: Node, parent: Node) -> None:
+    def detect(node: Element, parent: ParentNode) -> None:
         nonlocal has_filter
         if node.type == "element" and node.name == "filter":
             has_filter = True
@@ -6639,7 +6658,7 @@ def _cleanup_enable_background(root: Document, params: dict[str, Any], info: dic
             return None if node_name == "svg" else "new"
         return value
 
-    def enter(node: Node, parent: Node) -> None:
+    def enter(node: Element, parent: ParentNode) -> None:
         if node.type != "element":
             return
         element = node
@@ -6709,11 +6728,11 @@ def _remove_hidden_elems(root: Document, params: dict[str, Any], info: dict[str,
     polygon_empty_points = params.get("polygonEmptyPoints", True)
     is_hidden = params.get("isHidden", True)
     stylesheet = collect_stylesheet(root)
-    non_rendered_nodes: list[tuple[Element, Node]] = []
+    non_rendered_nodes: list[tuple[Element, ParentNode]] = []
     removed_def_ids: set[str] = set()
-    all_defs: list[tuple[Element, Node]] = []
+    all_defs: list[tuple[Element, ParentNode]] = []
     all_references: set[str] = set()
-    references_by_id: dict[str, list[tuple[Element, Node]]] = {}
+    references_by_id: dict[str, list[tuple[Element, ParentNode]]] = {}
     deoptimized = False
 
     def can_remove_non_rendering_node(node: Element) -> bool:
@@ -6724,12 +6743,12 @@ def _remove_hidden_elems(root: Document, params: dict[str, Any], info: dict[str,
                 return False
         return True
 
-    def remove_element(node: Element, parent: Node) -> None:
+    def remove_element(node: Element, parent: ParentNode) -> None:
         if node.attributes.get("id") is not None and isinstance(parent, Element) and parent.name == "defs":
             removed_def_ids.add(node.attributes["id"])
         detach_node_from_parent(node, parent)
 
-    def pre_pass(node: Node, parent: Node) -> Any:
+    def pre_pass(node: Element, parent: ParentNode) -> Any:
         if node.type != "element":
             return None
         element = node
@@ -6747,7 +6766,7 @@ def _remove_hidden_elems(root: Document, params: dict[str, Any], info: dict[str,
 
     visit(root, {"element": {"enter": pre_pass}})
 
-    def enter(node: Node, parent: Node) -> Any:
+    def enter(node: Element, parent: ParentNode) -> Any:
         nonlocal deoptimized
         if node.type != "element":
             return None
@@ -6865,7 +6884,7 @@ def _remove_empty_text(root: Document, params: dict[str, Any], info: dict[str, A
     tspan = params.get("tspan", True)
     tref = params.get("tref", True)
 
-    def enter(node: Node, parent: Node) -> None:
+    def enter(node: Element, parent: ParentNode) -> None:
         if node.type != "element":
             return
         element = node
@@ -6886,7 +6905,7 @@ def _convert_shape_to_path(root: Document, params: dict[str, Any], info: dict[st
     convert_arcs = params.get("convertArcs", False)
     precision = params.get("floatPrecision")
 
-    def enter(node: Node, parent: Node) -> None:
+    def enter(node: Element, parent: ParentNode) -> None:
         if node.type != "element":
             return
         element = node
@@ -6995,7 +7014,7 @@ def _any_nan(*values: float) -> bool:
 
 
 def _convert_ellipse_to_circle(root: Document, params: dict[str, Any], info: dict[str, Any]) -> dict[str, Any]:
-    def enter(node: Node, parent: Node) -> None:
+    def enter(node: Element, parent: ParentNode) -> None:
         if node.type != "element" or node.name != "ellipse":
             return
         rx = node.attributes.get("rx", "0")
@@ -7013,14 +7032,14 @@ def _convert_ellipse_to_circle(root: Document, params: dict[str, Any], info: dic
 def _move_elems_attrs_to_group(root: Document, params: dict[str, Any], info: dict[str, Any]) -> dict[str, Any]:
     deoptimized_with_styles = False
 
-    def detect(node: Node, parent: Node) -> None:
+    def detect(node: Element, parent: ParentNode) -> None:
         nonlocal deoptimized_with_styles
         if node.type == "element" and node.name == "style":
             deoptimized_with_styles = True
 
     visit(root, {"element": {"enter": detect}})
 
-    def exit(node: Node, parent: Node) -> None:
+    def exit(node: Element, parent: ParentNode) -> None:
         if node.type != "element" or node.name != "g":
             return
         if len(node.children) <= 1 or deoptimized_with_styles:
@@ -7068,7 +7087,7 @@ def _move_elems_attrs_to_group(root: Document, params: dict[str, Any], info: dic
 def _move_group_attrs_to_elems(root: Document, params: dict[str, Any], info: dict[str, Any]) -> dict[str, Any]:
     allowed_children = set(PATH_ELEMS) | {"g", "text"}
 
-    def enter(node: Node, parent: Node) -> None:
+    def enter(node: Element, parent: ParentNode) -> None:
         if node.type != "element" or node.name != "g":
             return
         element = node
@@ -7111,7 +7130,7 @@ def _has_animated_attr(node: Node, name: str) -> bool:
 def _collapse_groups(root: Document, params: dict[str, Any], info: dict[str, Any]) -> dict[str, Any]:
     stylesheet = collect_stylesheet(root)
 
-    def exit(node: Node, parent: Node) -> None:
+    def exit(node: Element, parent: ParentNode) -> None:
         if parent is None or parent.type == "root":
             return
         if parent.type == "element" and parent.name == "switch":
@@ -7310,7 +7329,7 @@ def _convert_transform(root: Document, params: dict[str, Any], info: dict[str, A
         else:
             item.attributes.pop(attr_name, None)
 
-    def enter(node: Node, parent: Node) -> None:
+    def enter(node: Element, parent: ParentNode) -> None:
         if node.type != "element":
             return
         element = node
@@ -7322,7 +7341,7 @@ def _convert_transform(root: Document, params: dict[str, Any], info: dict[str, A
 
 
 def _remove_empty_attrs(root: Document, params: dict[str, Any], info: dict[str, Any]) -> dict[str, Any]:
-    def enter(node: Node, parent: Node) -> None:
+    def enter(node: Element, parent: ParentNode) -> None:
         if node.type != "element":
             return
         for name, value in list(node.attributes.items()):
@@ -7335,9 +7354,9 @@ def _remove_empty_attrs(root: Document, params: dict[str, Any], info: dict[str, 
 def _remove_empty_containers(root: Document, params: dict[str, Any], info: dict[str, Any]) -> dict[str, Any]:
     stylesheet = collect_stylesheet(root)
     removed_ids: set[str] = set()
-    uses_by_id: dict[str, list[tuple[Element, Node]]] = {}
+    uses_by_id: dict[str, list[tuple[Element, ParentNode]]] = {}
 
-    def enter(node: Node, parent: Node) -> None:
+    def enter(node: Element, parent: ParentNode) -> None:
         if node.type != "element":
             return
         if node.name == "use":
@@ -7345,7 +7364,7 @@ def _remove_empty_containers(root: Document, params: dict[str, Any], info: dict[
                 for id_value in find_references(name, value):
                     uses_by_id.setdefault(id_value, []).append((node, parent))
 
-    def exit(node: Node, parent: Node) -> None:
+    def exit(node: Element, parent: ParentNode) -> None:
         if node.type != "element":
             return
         element = node
@@ -7392,7 +7411,7 @@ def _merge_paths(root: Document, params: dict[str, Any], info: dict[str, Any]) -
             return includes_url_reference(style.get("value", ""))
         return False
 
-    def enter(node: Node, parent: Node) -> None:
+    def enter(node: Element, parent: ParentNode) -> None:
         if node.type != "element" or len(node.children) <= 1:
             return
         elements_to_remove: list[Node] = []
@@ -7461,14 +7480,14 @@ def _merge_paths(root: Document, params: dict[str, Any], info: dict[str, Any]) -
                 continue
             has_prev_path = prev_path_data is not None
             current_path_data = path2js(child)
-            if prev_path_data is None:
-                prev_path_data = path2js(prev_child)
-            if force or not paths_intersect(prev_path_data, current_path_data):
-                prev_path_data.extend(current_path_data)
+            cur_prev_path_data = prev_path_data if prev_path_data is not None else path2js(prev_child)
+            prev_path_data = cur_prev_path_data
+            if force or not paths_intersect(cur_prev_path_data, current_path_data):
+                cur_prev_path_data.extend(current_path_data)
                 elements_to_remove.append(child)
                 continue
             if has_prev_path:
-                update_previous_path(prev_child, prev_path_data)
+                update_previous_path(prev_child, cur_prev_path_data)
             prev_child = child
             prev_path_data = None
         if prev_path_data is not None and isinstance(prev_child, Element):
@@ -7481,7 +7500,7 @@ def _merge_paths(root: Document, params: dict[str, Any], info: dict[str, Any]) -
 def _remove_unused_ns(root: Document, params: dict[str, Any], info: dict[str, Any]) -> dict[str, Any]:
     unused_namespaces: set[str] = set()
 
-    def enter(node: Node, parent: Node) -> None:
+    def enter(node: Element, parent: ParentNode) -> None:
         if node.type != "element":
             return
         if node.name == "svg" and parent.type == "root":
@@ -7496,7 +7515,7 @@ def _remove_unused_ns(root: Document, params: dict[str, Any], info: dict[str, An
                 if ":" in name:
                     unused_namespaces.discard(name.split(":", 1)[0])
 
-    def exit(node: Node, parent: Node) -> None:
+    def exit(node: Element, parent: ParentNode) -> None:
         if node.type != "element":
             return
         if node.name == "svg" and parent.type == "root":
@@ -7560,7 +7579,7 @@ def _sort_attrs(root: Document, params: dict[str, Any], info: dict[str, Any]) ->
             return -1
         return 1
 
-    def enter(node: Node, parent: Node) -> None:
+    def enter(node: Element, parent: ParentNode) -> None:
         if node.type != "element":
             return
         attrs = sorted(node.attributes.items(), key=functools.cmp_to_key(compare))
@@ -7570,29 +7589,30 @@ def _sort_attrs(root: Document, params: dict[str, Any], info: dict[str, Any]) ->
 
 
 def _sort_defs_children(root: Document, params: dict[str, Any], info: dict[str, Any]) -> dict[str, Any]:
-    def compare(a: Node, b: Node) -> int:
-        if not isinstance(a, Element) or not isinstance(b, Element):
-            return 0
-        a_frequency = frequencies.get(a.name)
-        b_frequency = frequencies.get(b.name)
-        if a_frequency is not None and b_frequency is not None:
-            frequency_comparison = b_frequency - a_frequency
-            if frequency_comparison != 0:
-                return frequency_comparison
-        length_comparison = len(b.name) - len(a.name)
-        if length_comparison != 0:
-            return length_comparison
-        if a.name != b.name:
-            return -1 if a.name > b.name else 1
-        return 0
-
-    def enter(node: Node, parent: Node) -> None:
+    def enter(node: Element, parent: ParentNode) -> None:
         if node.type != "element" or node.name != "defs":
             return
         frequencies: dict[str, int] = {}
         for child in node.children:
             if isinstance(child, Element):
                 frequencies[child.name] = frequencies.get(child.name, 0) + 1
+
+        def compare(a: Node, b: Node) -> int:
+            if not isinstance(a, Element) or not isinstance(b, Element):
+                return 0
+            a_frequency = frequencies.get(a.name)
+            b_frequency = frequencies.get(b.name)
+            if a_frequency is not None and b_frequency is not None:
+                frequency_comparison = b_frequency - a_frequency
+                if frequency_comparison != 0:
+                    return frequency_comparison
+            length_comparison = len(b.name) - len(a.name)
+            if length_comparison != 0:
+                return length_comparison
+            if a.name != b.name:
+                return -1 if a.name > b.name else 1
+            return 0
+
         node.children.sort(key=functools.cmp_to_key(compare))
 
     return {"element": {"enter": enter}}
@@ -7604,7 +7624,7 @@ _REG_STANDARD_DESCS = re.compile(r"^(Created with|Created using)")
 def _remove_desc(root: Document, params: dict[str, Any], info: dict[str, Any]) -> dict[str, Any]:
     remove_any = params.get("removeAny", False)
 
-    def enter(node: Node, parent: Node) -> None:
+    def enter(node: Element, parent: ParentNode) -> None:
         if node.type != "element" or node.name != "desc":
             return
         if (
@@ -7618,7 +7638,7 @@ def _remove_desc(root: Document, params: dict[str, Any], info: dict[str, Any]) -
 
 
 def _remove_title(root: Document, params: dict[str, Any], info: dict[str, Any]) -> dict[str, Any]:
-    def enter(node: Node, parent: Node) -> None:
+    def enter(node: Element, parent: ParentNode) -> None:
         if node.type == "element" and node.name == "title":
             detach_node_from_parent(node, parent)
 
@@ -7626,7 +7646,7 @@ def _remove_title(root: Document, params: dict[str, Any], info: dict[str, Any]) 
 
 
 def _remove_style_element(root: Document, params: dict[str, Any], info: dict[str, Any]) -> dict[str, Any]:
-    def enter(node: Node, parent: Node) -> None:
+    def enter(node: Element, parent: ParentNode) -> None:
         if node.type == "element" and node.name == "style":
             detach_node_from_parent(node, parent)
 
@@ -7634,7 +7654,7 @@ def _remove_style_element(root: Document, params: dict[str, Any], info: dict[str
 
 
 def _remove_raster_images(root: Document, params: dict[str, Any], info: dict[str, Any]) -> dict[str, Any]:
-    def enter(node: Node, parent: Node) -> None:
+    def enter(node: Element, parent: ParentNode) -> None:
         if node.type != "element" or node.name != "image":
             return
         href = node.attributes.get("xlink:href")
@@ -7661,7 +7681,7 @@ def _remove_scripts(root: Document, params: dict[str, Any], info: dict[str, Any]
                 return namespace in target_namespaces
         return False
 
-    def enter(node: Node, parent: Node) -> None:
+    def enter(node: Element, parent: ParentNode) -> None:
         nonlocal foreign_object_depth
         if node.type != "element":
             return
@@ -7688,7 +7708,7 @@ def _remove_scripts(root: Document, params: dict[str, Any], info: dict[str, Any]
             if is_event_attr or is_embedded_document_attr or is_executable_html_url:
                 del node.attributes[attr]
 
-    def exit(node: Node, parent: Node) -> None:
+    def exit(node: Element, parent: ParentNode) -> None:
         nonlocal foreign_object_depth
         if node.type != "element":
             return
@@ -7716,7 +7736,7 @@ def _remove_scripts(root: Document, params: dict[str, Any], info: dict[str, Any]
 
 
 def _remove_view_box(root: Document, params: dict[str, Any], info: dict[str, Any]) -> dict[str, Any]:
-    def enter(node: Node, parent: Node) -> None:
+    def enter(node: Element, parent: ParentNode) -> None:
         if node.type != "element":
             return
         if node.name not in ("pattern", "svg", "symbol"):
@@ -7743,7 +7763,7 @@ def _remove_view_box(root: Document, params: dict[str, Any], info: dict[str, Any
 
 
 def _remove_dimensions(root: Document, params: dict[str, Any], info: dict[str, Any]) -> dict[str, Any]:
-    def enter(node: Node, parent: Node) -> None:
+    def enter(node: Element, parent: ParentNode) -> None:
         if node.type != "element" or node.name != "svg":
             return
         if node.attributes.get("viewBox") is not None:
@@ -7762,7 +7782,7 @@ def _remove_dimensions(root: Document, params: dict[str, Any], info: dict[str, A
 
 
 def _remove_xmlns(root: Document, params: dict[str, Any], info: dict[str, Any]) -> dict[str, Any]:
-    def enter(node: Node, parent: Node) -> None:
+    def enter(node: Element, parent: ParentNode) -> None:
         if node.type == "element" and node.name == "svg":
             node.attributes.pop("xmlns", None)
 
@@ -7820,7 +7840,7 @@ def _add_attributes_to_svg_element(
         return None
     attribute_list = attributes if isinstance(attributes, list) else [attribute]
 
-    def enter(node: Node, parent: Node) -> None:
+    def enter(node: Element, parent: ParentNode) -> None:
         if node.type != "element" or node.name != "svg":
             return
         if parent.type != "root":
@@ -7870,7 +7890,7 @@ def _add_classes_to_svg_element(root: Document, params: dict[str, Any], info: di
         return None
     names = class_names if isinstance(class_names, list) else [class_name]
 
-    def enter(node: Node, parent: Node) -> None:
+    def enter(node: Element, parent: ParentNode) -> None:
         if node.type != "element" or node.name != "svg":
             return
         if parent.type != "root":
@@ -7921,7 +7941,7 @@ def _cleanup_list_of_values(root: Document, params: dict[str, Any], info: dict[s
                 rounded.append(elem)
         return " ".join(rounded)
 
-    def enter(node: Node, parent: Node) -> None:
+    def enter(node: Element, parent: ParentNode) -> None:
         if node.type != "element":
             return
         for name in (
@@ -7943,11 +7963,11 @@ def _cleanup_list_of_values(root: Document, params: dict[str, Any], info: dict[s
 def _convert_one_stop_gradients(root: Document, params: dict[str, Any], info: dict[str, Any]) -> dict[str, Any]:
     stylesheet = collect_stylesheet(root)
     effected_defs: set[Element] = set()
-    all_defs: list[tuple[Element, Node]] = []
-    gradients_to_detach: list[tuple[Element, Node]] = []
+    all_defs: list[tuple[Element, ParentNode]] = []
+    gradients_to_detach: list[tuple[Element, ParentNode]] = []
     xlink_href_count = 0
 
-    def enter(node: Node, parent: Node) -> None:
+    def enter(node: Element, parent: ParentNode) -> None:
         nonlocal xlink_href_count
         if node.type != "element":
             return
@@ -7995,7 +8015,7 @@ def _convert_one_stop_gradients(root: Document, params: dict[str, Any], info: di
                 color or ATTRS_GROUPS_DEFAULTS["presentation"]["stop-color"],
             )
 
-    def exit(node: Node, parent: Node) -> None:
+    def exit(node: Element, parent: ParentNode) -> None:
         nonlocal xlink_href_count
         if node.type != "element" or node.name != "svg":
             return
@@ -8017,7 +8037,7 @@ def _convert_style_to_attrs(root: Document, params: dict[str, Any], info: dict[s
     styling_props = ATTRS_GROUPS["presentation"]
     reg_declaration = re.compile(r"\s*([A-Za-z_:][-A-Za-z0-9_:.]*)\s*:\s*" r"([^;]*?)\s*(\s*!important\s*)?(;|$)")
 
-    def enter(node: Node, parent: Node) -> None:
+    def enter(node: Element, parent: ParentNode) -> None:
         if node.type != "element":
             return
         element = node
@@ -8090,13 +8110,13 @@ def _prefix_ids(root: Document, params: dict[str, Any], info: dict[str, Any]) ->
             return "#" + prefix_id(reference[1:])
         return None
 
-    def enter(node: Node, parent: Node) -> None:
+    def enter(node: Element, parent: ParentNode) -> None:
         if node.type != "element":
             return
         element = node
         if element.name == "style" and element.children:
             for child in element.children:
-                if child.type not in ("text", "cdata"):
+                if not isinstance(child, (TextNode, CdataNode)):
                     continue
                 text = child.value
                 if prefix_ids_enabled:
@@ -8159,10 +8179,15 @@ def _remove_attributes_by_selector(
         selectors if isinstance(selectors, list) else [{"selector": single_selector, "attributes": attributes}]
     )
     for item in selector_list:
-        nodes = query_selector_all(root, item["selector"])
+        sel = item["selector"]
+        if not isinstance(sel, str):
+            continue
+        nodes = query_selector_all(root, sel)
         attribute_list = item["attributes"]
         if isinstance(attribute_list, str):
             attribute_list = [attribute_list]
+        if not isinstance(attribute_list, (list, tuple, set)):
+            continue
         for node in nodes:
             for name in attribute_list:
                 node.attributes.pop(name, None)
@@ -8187,7 +8212,7 @@ def _remove_attrs(root: Document, params: dict[str, Any], info: dict[str, Any]) 
     if not isinstance(attrs, list):
         attrs = [attrs]
 
-    def enter(node: Node, parent: Node) -> None:
+    def enter(node: Element, parent: ParentNode) -> None:
         if node.type != "element":
             return
         for pattern in attrs:
@@ -8227,7 +8252,7 @@ def _remove_elements_by_attr(root: Document, params: dict[str, Any], info: dict[
     id_list = ids if isinstance(ids, list) else ([ids] if ids else [])
     class_list = classes if isinstance(classes, list) else ([classes] if classes else [])
 
-    def enter(node: Node, parent: Node) -> None:
+    def enter(node: Element, parent: ParentNode) -> None:
         if node.type != "element":
             return
         if node.attributes.get("id") is not None and id_list and node.attributes["id"] in id_list:
@@ -8245,7 +8270,7 @@ def _remove_elements_by_attr(root: Document, params: dict[str, Any], info: dict[
 def _remove_off_canvas_paths(root: Document, params: dict[str, Any], info: dict[str, Any]) -> dict[str, Any]:
     view_box_data: dict[str, float] | None = None
 
-    def enter(node: Node, parent: Node) -> Any:
+    def enter(node: Element, parent: ParentNode) -> Any:
         nonlocal view_box_data
         if node.type != "element":
             return None
@@ -8322,7 +8347,7 @@ def _remove_xlink(root: Document, params: dict[str, Any], info: dict[str, Any]) 
     def find_prefixed_attrs(element: Element, attr: str) -> list[str]:
         return [f"{prefix}:{attr}" for prefix in xlink_prefixes if f"{prefix}:{attr}" in element.attributes]
 
-    def enter(node: Node, parent: Node) -> None:
+    def enter(node: Element, parent: ParentNode) -> None:
         if node.type != "element":
             return
         element = node
@@ -8376,7 +8401,7 @@ def _remove_xlink(root: Document, params: dict[str, Any], info: dict[str, Any]) 
             element.attributes["href"] = value or ""
             element.attributes.pop(attr, None)
 
-    def exit(node: Node, parent: Node) -> None:
+    def exit(node: Element, parent: ParentNode) -> None:
         if node.type != "element":
             return
         element = node
@@ -8412,7 +8437,7 @@ def _reuse_paths(root: Document, params: dict[str, Any], info: dict[str, Any]) -
     svg_defs: Element | None = None
     hrefs: set[str] = set()
 
-    def enter(node: Node, parent: Node) -> None:
+    def enter(node: Element, parent: ParentNode) -> None:
         nonlocal svg_defs
         if node.type != "element":
             return
@@ -8431,7 +8456,7 @@ def _reuse_paths(root: Document, params: dict[str, Any], info: dict[str, Any]) -
                 if href and href.startswith("#") and len(href) > 1:
                     hrefs.add(href[1:])
 
-    def exit(node: Node, parent: Node) -> None:
+    def exit(node: Element, parent: ParentNode) -> None:
         nonlocal svg_defs
         if node.type != "element" or node.name != "svg":
             return
@@ -9242,7 +9267,7 @@ def _suggest_similar(word: str, candidates: Sequence[str]) -> str:
     return ""
 
 
-def _unknown_option(token: str) -> None:
+def _unknown_option(token: str) -> NoReturn:
     suggestion = ""
     if token.startswith("--"):
         suggestion = _suggest_similar(token, [f"--{name}" for name in _LONG_FLAG_NAMES])
@@ -9410,7 +9435,7 @@ def _show_available_plugins(color: bool) -> None:
 
 def _check_is_dir(path: str) -> bool:
     try:
-        return Path(path).lstat().is_dir()
+        return stat.S_ISDIR(Path(path).lstat().st_mode)
     except OSError:
         return path.endswith(os.sep)
 
@@ -9467,7 +9492,7 @@ def _optimize_file_task(
     except OSError as exc:
         return input_path, output_path, 0, 0, _format_os_error(input_path, exc), 0, None
     except UnicodeDecodeError as exc:
-        return input_path, output_path, 0, 0, f"Error: {exc}", 0
+        return input_path, output_path, 0, 0, f"Error: {exc}", 0, None
     try:
         config["path"] = input_path
         result = optimize(data, config)

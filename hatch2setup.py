@@ -46,6 +46,14 @@ from typing import Any
 
 import tomlkit
 from tomlkit.items import Table
+from loguru import logger
+
+logger.remove()
+logger.add(
+    sys.stderr,
+    level=os.environ.get("LOGURU_LEVEL", "INFO"),
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+)
 
 
 # ---------------------------------------------------------------------------

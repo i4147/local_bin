@@ -19,6 +19,14 @@ import struct
 import sys
 import time
 import zlib
+from loguru import logger
+
+logger.remove()
+logger.add(
+    sys.stderr,
+    level=os.environ.get("LOGURU_LEVEL", "INFO"),
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+)
 
 
 DEFAULT_PRUNE: frozenset[str] = frozenset((
@@ -95,10 +103,10 @@ def _tune_for_path_count(total_paths: int) -> IndexTuning:
 def _default_db() -> str:
     env = os.environ.get("LOCATE_DB")
     if env:
-        return os.path.expanduser(env)
+        return str(Path(env).expanduser())
     xdg = os.environ.get("XDG_DATA_HOME")
-    base = xdg or os.path.expanduser("~/.local/share")
-    return os.path.join(base, "locate", "locatedb.sqlite")
+    base = Path(xdg) if xdg else Path.home() / ".local" / "share"
+    return str(base / "locate" / "locatedb.sqlite")
 
 
 def _pick_roots(cli_roots: list[str]) -> list[str]:
@@ -109,19 +117,19 @@ def _pick_roots(cli_roots: list[str]) -> list[str]:
         if env:
             raw = shlex.split(env)
         else:
-            raw = [os.path.expanduser("~")]
+            raw = [str(Path.home())]
             prefix = os.environ.get("PREFIX")
             if prefix:
                 raw.append(prefix)
             for extra in ("/sdcard", "/storage/emulated/0"):
-                if os.path.isdir(extra):
+                if Path(extra).is_dir():
                     raw.append(extra)
 
     candidates: list[str] = []
     for item in raw:
-        normalized = os.path.abspath(os.path.expanduser(item))
-        if os.path.isdir(normalized):
-            candidates.append(normalized)
+        normalized = Path(item).expanduser().absolute()
+        if normalized.is_dir():
+            candidates.append(str(normalized))
         else:
             print(f"locate: skipping non-directory root: {normalized}", file=sys.stderr)
 
@@ -295,7 +303,7 @@ def cmd_updatedb(args: argparse.Namespace) -> None:
             Path(f"{tmp_path}{suffix}").unlink()
 
     roots = _pick_roots(args.roots)
-    extra_prune = (os.path.abspath(os.path.expanduser(p)) for p in args.prune)
+    extra_prune = (str(Path(p).expanduser().absolute()) for p in args.prune)
     prune = DEFAULT_PRUNE | frozenset(extra_prune)
 
     t0 = time.monotonic()
@@ -361,7 +369,7 @@ def _build_predicate(cfg: MatcherConfig) -> Callable[[str], bool]:
         compiled = [re.compile(pat, flags) for pat in cfg.patterns]
 
         def match_regex(path: str) -> bool:
-            target = os.path.basename(path) if cfg.basename_only else path
+            target = Path(path).name if cfg.basename_only else path
             return any(regex.search(target) is not None for regex in compiled)
 
         return match_regex
@@ -369,7 +377,7 @@ def _build_predicate(cfg: MatcherConfig) -> Callable[[str], bool]:
     needles = [pat.casefold() for pat in cfg.patterns] if cfg.ignore_case else list(cfg.patterns)
 
     def match_substring(path: str) -> bool:
-        target = os.path.basename(path) if cfg.basename_only else path
+        target = Path(path).name if cfg.basename_only else path
         if cfg.ignore_case:
             target = target.casefold()
         return any(needle in target for needle in needles)
@@ -401,8 +409,8 @@ def _iter_candidate_paths(conn: sqlite3.Connection, cfg: MatcherConfig) -> Itera
 
 def cmd_locate(args: argparse.Namespace) -> None:
     """Run the locate subcommand."""
-    db_file = os.path.expanduser(args.db)
-    if not os.path.isfile(db_file):
+    db_file = Path(args.db).expanduser()
+    if not db_file.is_file():
         prog = Path(sys.argv[0]).name
         sys.exit(f"locate: database not found: {db_file} (run `{prog} updatedb` first)")
 
@@ -421,15 +429,16 @@ def cmd_locate(args: argparse.Namespace) -> None:
     conn = sqlite3.connect(f"file:{db_file}?mode=ro", uri=True)
     try:
         conn.execute("PRAGMA query_only = ON")
-        out = sys.stdout.buffer if args.null else sys.stdout
         emitted = 0
         count = 0
 
         for path in _iter_candidate_paths(conn, cfg):
             if not predicate(path):
                 continue
-            if args.existing and not os.path.lexists(path):
-                continue
+            if args.existing:
+                p_obj = Path(path)
+                if not (p_obj.exists() or p_obj.is_symlink()):
+                    continue
             if args.count:
                 count += 1
                 continue
@@ -437,9 +446,9 @@ def cmd_locate(args: argparse.Namespace) -> None:
                 break
 
             if args.null:
-                out.write(os.fsencode(path) + b"\0")
+                sys.stdout.buffer.write(os.fsencode(path) + b"\0")
             else:
-                out.write(f"{path}\n")
+                sys.stdout.write(f"{path}\n")
             emitted += 1
 
         if args.count:

@@ -50,7 +50,7 @@ from __future__ import annotations
 import argparse
 import ast as _pyast
 import base64
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 import dataclasses
 from dataclasses import dataclass, field
 import keyword
@@ -63,6 +63,15 @@ import subprocess
 import sys
 import tempfile
 import textwrap
+from typing import Any
+from loguru import logger
+
+logger.remove()
+logger.add(
+    sys.stderr,
+    level=os.environ.get("LOGURU_LEVEL", "INFO"),
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+)
 
 
 try:
@@ -83,6 +92,7 @@ try:
         ComprehensionScope,
         FunctionScope,
         GlobalScope,
+        Scope,
     )
 except ImportError:  # pragma: no cover
     sys.stderr.write("consolidate.py requires libcst:  pip install libcst\n")
@@ -93,6 +103,10 @@ __version__ = "1.0.0"
 # --------------------------------------------------------------------------- #
 # Small helpers
 # --------------------------------------------------------------------------- #
+
+
+def _asname_str(asname: cst.AsName) -> str:
+    return asname.name.value if isinstance(asname.name, cst.Name) else ""
 
 STDLIB_NAMES = frozenset(getattr(sys, "stdlib_module_names", ())) | {
     "__future__",
@@ -335,9 +349,9 @@ class ModuleInfo:
     dotted: str  # "mypkg.utils.text"
     path: Path
     rel_posix_path: str  # "utils/text.py" relative to package dir
-    tree: cst.Module = None  # type: ignore[assignment]
-    wrapper: MetadataWrapper = None  # type: ignore[assignment]
-    scope: GlobalScope = None  # type: ignore[assignment]
+    tree: cst.Module = field(default_factory=lambda: cst.Module(body=[]))
+    wrapper: MetadataWrapper = field(default_factory=lambda: MetadataWrapper(cst.Module(body=[])))
+    scope: Mapping[cst.CSTNode, Scope | None] = field(default_factory=dict)
     # names bound by module-level imports that resolve to stdlib/3rd-party
     ext_imports: list[dict] = field(default_factory=list)
     has_main_guard: bool = False
@@ -579,7 +593,7 @@ class StmtInfo:
     """A top-level (or flattened-out) statement of one module."""
 
     module: ModuleInfo
-    node: cst.CSTNode  # the statement (SimpleStatementLine / BaseCompoundStatement)
+    node: cst.CSTNode | _StmtBundle  # the statement (SimpleStatementLine / BaseCompoundStatement)
     order: int  # original index within the flattened stream
     stores: set[str] = field(default_factory=set)  # global names it binds
     loads: set[str] = field(default_factory=set)  # global names it reads
@@ -593,7 +607,7 @@ class StmtInfo:
         return f"{self.module.dotted}#{self.order}"
 
 
-def _iter_flat(stmts: list[cst.CSTNode], out: list[tuple[cst.CSTNode, int]], counter: list[int]):
+def _iter_flat(stmts: Sequence[cst.CSTNode], out: list[Any], counter: list[int]):
     """Flatten if/try/for/while bodies at module level into the main stream.
 
     ``if`` statements whose branches are both live become sequential code
@@ -749,39 +763,11 @@ def _classify_statement(info: StmtInfo, warnings: list[str]) -> None:
             info.loads.update(_loads_of_expression(small.value))
             info.loads_at_exec.update(_names_of_target(small.target))
             info.loads_at_exec.update(_loads_of_expression(small.value))
-        elif isinstance(small, cst.FunctionDef):
-            info.stores.add(small.name.value)
-            info.deferred = True
-            # decorators & defaults evaluate now
-            for d in small.decorator_list:
-                info.loads.update(_loads_of_expression(d.decorator))
-                info.loads_at_exec.update(_loads_of_expression(d.decorator))
-            for p in small.params.params + small.params.posonly_params + small.params.kwonly_params:
-                if p.default is not None:
-                    info.loads.update(_loads_of_expression(p.default))
-                    info.loads_at_exec.update(_loads_of_expression(p.default))
-            if small.returns is not None:
-                info.loads.update(_loads_of_annotation(small.returns))
-        elif isinstance(small, cst.ClassDef):
-            info.stores.add(small.name.value)
-            info.deferred = True
-            for d in small.decorator_list:
-                info.loads.update(_loads_of_expression(d.decorator))
-                info.loads_at_exec.update(_loads_of_expression(d.decorator))
-            for b in small.bases:
-                info.loads.update(_loads_of_expression(b.value))
-                info.loads_at_exec.update(_loads_of_expression(b.value))
-            for kw in small.keywords or []:
-                info.loads.update(_loads_of_expression(kw.value))
-                info.loads_at_exec.update(_loads_of_expression(kw.value))
-            # class body names that reference module globals
-            info.loads.update(_loads_inside_class_body(small))
         elif isinstance(small, (cst.Import, cst.ImportFrom)):
             _classify_import(info, small, warnings)
         elif isinstance(small, cst.Del):
             info.is_del = True
-            for t in small.targets if isinstance(small.targets, list) else [small.target]:
-                info.stores.update(_names_of_target(t.target if hasattr(t, "target") else t))
+            info.stores.update(_names_of_target(small.target))
             info.loads.update(n for n in info.stores)
         elif isinstance(small, (cst.Global, cst.Nonlocal)):
             pass  # local-only concerns at top level
@@ -805,10 +791,35 @@ def _classify_statement(info: StmtInfo, warnings: list[str]) -> None:
         # leading_comments don't affect semantics
         return
 
-    if isinstance(node, (cst.FunctionDef, cst.ClassDef)):
-        # standalone (dedented) def/class -- shouldn't normally occur at top level
+    if isinstance(node, cst.FunctionDef):
         info.stores.add(node.name.value)
         info.deferred = True
+        # decorators & defaults evaluate now
+        for d in node.decorators:
+            info.loads.update(_loads_of_expression(d.decorator))
+            info.loads_at_exec.update(_loads_of_expression(d.decorator))
+        for p in (*node.params.params, *node.params.posonly_params, *node.params.kwonly_params):
+            if p.default is not None:
+                info.loads.update(_loads_of_expression(p.default))
+                info.loads_at_exec.update(_loads_of_expression(p.default))
+        if node.returns is not None:
+            info.loads.update(_loads_of_annotation(node.returns))
+        return
+
+    if isinstance(node, cst.ClassDef):
+        info.stores.add(node.name.value)
+        info.deferred = True
+        for d in node.decorators:
+            info.loads.update(_loads_of_expression(d.decorator))
+            info.loads_at_exec.update(_loads_of_expression(d.decorator))
+        for b in node.bases:
+            info.loads.update(_loads_of_expression(b.value))
+            info.loads_at_exec.update(_loads_of_expression(b.value))
+        for kw in node.keywords or []:
+            info.loads.update(_loads_of_expression(kw.value))
+            info.loads_at_exec.update(_loads_of_expression(kw.value))
+        # class body names that reference module globals
+        info.loads.update(_loads_inside_class_body(node))
         return
 
     if isinstance(node, cst.If):
@@ -838,8 +849,9 @@ def _classify_statement(info: StmtInfo, warnings: list[str]) -> None:
 
     if isinstance(node, cst.Match):
         info.loads.update(_loads_of_expression(node.subject))
-        info.loads.update(_loads_inside_body(node.cases[0].body) if node.cases else set())
-        info.stores.update(_stores_inside_body(node.cases[0].body) if node.cases else set())
+        for case in node.cases:
+            info.loads.update(_loads_inside_body(case.body.body))
+            info.stores.update(_stores_inside_body(case.body.body))
         return
 
     # unknown: assume it loads and stores everything it mentions
@@ -1026,9 +1038,9 @@ def _stores_inside_body(body: Sequence[cst.CSTNode]) -> set[str]:
                 if stmt.orelse is not None:
                     out.update(_stores_inside_body(stmt.orelse.body.body))
                 if stmt.finalbody is not None:
-                    out.update(_stores_inside_body(stmt.finalbody.body))
+                    out.update(_stores_inside_body(stmt.finalbody.body.body))
             if isinstance(stmt, cst.For):
-                out.update(_names_of_target(stmt.target.target))
+                out.update(_names_of_target(stmt.target))
     return out
 
 
@@ -1215,7 +1227,7 @@ def rename_in_module(
             if isinstance(scope, (FunctionScope, ComprehensionScope)):
                 # name may be local to that scope -- only rename if it
                 # actually resolves to the module global
-                assign = scope.assignments.get(node.value, [])
+                assign = scope.assignments[node.value] if node.value in scope.assignments else ()
                 if assign:
                     return  # truly local binding, skip
                 # check enclosing scopes for a local binding
@@ -1236,11 +1248,11 @@ def rename_in_module(
     {id(n) for n, _, s in targets if s}
 
     class Renamer(cst.CSTTransformer):
-        def leave_Name(self, node, updated):
-            if id(node) in rename_ids:
-                new = new_names[id(node)]
-                return updated.with_changes(value=new)
-            return updated
+        def leave_Name(self, original_node: cst.Name, updated_node: cst.Name) -> cst.Name:
+            if id(original_node) in rename_ids:
+                new = new_names[id(original_node)]
+                return updated_node.with_changes(value=new)
+            return updated_node
 
     new_tree = tree.visit(Renamer())
     mod.tree = new_tree
@@ -1255,10 +1267,8 @@ def _shadowed_locally(scope, name: str) -> bool:
     while cur is not None and not isinstance(cur, GlobalScope):
         if name in cur.assignments:
             # if the assignment is a Global/Nonlocal declaration it does NOT shadow
-            from libcst.metadata.scope_provider import Global, Nonlocal
-
             assigns = cur.assignments[name]
-            if all(isinstance(a, (Global, Nonlocal)) for a in assigns):
+            if all(isinstance(getattr(a, "node", None), (cst.Global, cst.Nonlocal)) for a in assigns):
                 cur = cur.parent
                 continue
             return True
@@ -1320,8 +1330,8 @@ def classify_imports(
                         ExtImport(
                             "module",
                             dotted,
-                            alias.asname.name.value if alias.asname else dotted.split(".")[0],
-                            alias.asname.name.value if alias.asname else None,
+                            _asname_str(alias.asname) if alias.asname else dotted.split(".")[0],
+                            _asname_str(alias.asname) if alias.asname else None,
                             False,
                             mod.dotted,
                         )
@@ -1331,8 +1341,8 @@ def classify_imports(
                     ExtImport(
                         "module",
                         dotted,
-                        alias.asname.name.value if alias.asname else dotted.split(".")[0],
-                        alias.asname.name.value if alias.asname else None,
+                        _asname_str(alias.asname) if alias.asname else dotted.split(".")[0],
+                        _asname_str(alias.asname) if alias.asname else None,
                         False,
                         mod.dotted,
                     )
@@ -1362,14 +1372,6 @@ def classify_imports(
                         f"{mod.dotted}: cannot resolve relative import (level {len(node.relative)}) -- kept as-is"
                     )
             for alias in node.names:
-                if alias.asname:
-                    pass
-                else:
-                    (
-                        alias.name.value
-                        if not isinstance(alias.name, cst.Attribute)
-                        else _dotted_name(alias.name).split(".")[0]
-                    )
                 target = _dotted_name(alias.name)
                 if target is None:
                     continue
@@ -1378,7 +1380,7 @@ def classify_imports(
                         "from",
                         resolved or "",
                         target,
-                        alias.asname.name.value if alias.asname else None,
+                        _asname_str(alias.asname) if alias.asname else None,
                         is_rel,
                         mod.dotted,
                         is_future=(resolved == "__future__"),
@@ -1486,7 +1488,7 @@ def _render_module_imports(module: str, imports: list[ExtImport]) -> list[str]:
 
 @dataclass
 class RewriteResult:
-    stmt: cst.CSTNode | None  # rewritten statement (None if dropped)
+    stmt: cst.CSTNode | _StmtBundle | None  # rewritten statement (None if dropped)
     note: str = ""  # "dropped" | "kept" | "replaced-with-assign"
 
 
@@ -1553,7 +1555,7 @@ class IntraPkgImportRewriter(cst.CSTTransformer):
             # handled per-alias below
             pass
 
-        assigns: list[cst.SimpleStatementLine] = []
+        assigns: list[cst.BaseStatement] = []
         unresolved: list[cst.ImportAlias] = []
 
         for alias in node.names:
@@ -1561,7 +1563,7 @@ class IntraPkgImportRewriter(cst.CSTTransformer):
             if target is None:
                 unresolved.append(alias)
                 continue
-            asname = alias.asname.name.value if alias.asname else None
+            asname = _asname_str(alias.asname) if alias.asname else None
             local_name = asname or target.split(".")[-1]
             # the rename pass renames references to this binding; the binding
             # itself must carry the renamed (final) name
@@ -1647,7 +1649,7 @@ class IntraPkgImportRewriter(cst.CSTTransformer):
             if dotted is None:
                 keep.append(alias)
                 continue
-            asname = alias.asname.name.value if alias.asname else None
+            asname = _asname_str(alias.asname) if alias.asname else None
             top = dotted.split(".")[0]
             if top == ctx.pkg_name:
                 if dotted == ctx.pkg_name or asname is None:
@@ -1670,7 +1672,7 @@ class IntraPkgImportRewriter(cst.CSTTransformer):
         return RewriteResult(node, "kept")
 
 
-def _join_statements(stmts: Sequence[cst.CSTNode]) -> cst.CSTNode:
+def _join_statements(stmts: Sequence[cst.CSTNode]) -> _StmtBundle:
     """Wrap several statements so they can occupy one slot: an IndentedBlock is
     invalid at top level, so emit them via a Module-level list later.  We use a
     temporary container node; the scheduler flattens it."""
@@ -2019,7 +2021,7 @@ class Consolidator:
                         dotted = _dotted_name(alias.name) or ""
                         if not dotted or dotted.split(".")[0] == self.pkg_name:
                             continue
-                        bound = alias.asname.name.value if alias.asname else dotted.split(".")[0]
+                        bound = _asname_str(alias.asname) if alias.asname else dotted.split(".")[0]
                         external_names.setdefault(bound, set()).add(info.module.dotted)
                 elif isinstance(imp, cst.ImportFrom):
                     resolved = self._resolve_relative(
@@ -2035,7 +2037,7 @@ class Consolidator:
                         continue
                     for alias in imp.names:
                         bound = (
-                            alias.asname.name.value if alias.asname else (_dotted_name(alias.name) or "").split(".")[0]
+                            _asname_str(alias.asname) if alias.asname else (_dotted_name(alias.name) or "").split(".")[0]
                         )
                         if bound:
                             external_names.setdefault(bound, set()).add(info.module.dotted)
@@ -2209,7 +2211,7 @@ class Consolidator:
             # rewriters may return bare small statements for "kept")
             normalized: list[cst.CSTNode] = []
             for s in out_stmts:
-                if not isinstance(s, cst.SimpleStatementLine):
+                if isinstance(s, cst.BaseSmallStatement):
                     s = cst.SimpleStatementLine(
                         body=[s],
                         trailing_whitespace=cst.TrailingWhitespace(newline=cst.Newline(value=None)),
@@ -2242,9 +2244,11 @@ class Consolidator:
             def __init__(self, mod_info):
                 self.mod_info = mod_info
 
-            def leave_SimpleStatementLine(self, orig, updated):
-                return rewrite_small_line(updated, self.mod_info.module)
+            def leave_SimpleStatementLine(self, original_node, updated_node):
+                return rewrite_small_line(updated_node, self.mod_info.module)
 
+        if not isinstance(node, cst.CSTNode):
+            return node, False
         try:
             new_node = node.visit(T(info))
         except _UnsupportedRewrite:
@@ -2275,11 +2279,11 @@ def _find_import_nodes(node) -> list[cst.CSTNode]:
     out: list[cst.CSTNode] = []
 
     class V(cst.CSTVisitor):
-        def visit_Import(self, n):
-            out.append(n)
+        def visit_Import(self, node):
+            out.append(node)
 
-        def visit_ImportFrom(self, n):
-            out.append(n)
+        def visit_ImportFrom(self, node):
+            out.append(node)
 
     def _visit(n):
         if isinstance(n, cst.FlattenSentinel):
@@ -2424,24 +2428,6 @@ class Scheduler:
         # ---- greedy emit with clamping ----
         sections: dict[str, list[StmtInfo]] = {s: [] for s in SECTION_ORDER}
         emitted: set[tuple[str, int]] = set()
-
-        def emit_item(info: StmtInfo, reason: str, pull_stack: tuple[str, ...] = ()) -> None:
-            key = (info.module.dotted, info.order)
-            if key in emitted:
-                return
-            emitted.add(key)
-            # emit dependencies first (clamping: pull defs into this section)
-            for dkey in sorted(deps.get(key, ())):
-                if dkey in emitted:
-                    continue
-                dep = self.by_key.get(dkey)
-                if dep is None:
-                    continue
-                emit_item(dep, "clamped-dep", pull_stack + (info.display,))
-            # place the item: clamped deps inherit the *current target section*
-            # unless the item is naturally a later-section def that nothing has
-            # forced earlier.
-            sections[current_section].append(info)
 
         # order of emission: CONST first, but we must walk ALL items in stream
         # order and, for each, decide its final section.
@@ -2656,19 +2642,20 @@ class Emitter:
         for df in ctx.data_files:
             key = df.rel_posix_path
             if df.kind == "text":
-                lit = repr(df.text.encode("utf-8"))
+                text = df.text or ""
+                lit = repr(text.encode("utf-8"))
                 if len(lit) < 12000:
                     lines.append(f"    {key!r}: {lit},")
                 else:
                     lines.append(f"    {key!r}: _b64_to_text(")
-                    b64 = base64.b64encode(df.text.encode("utf-8")).decode("ascii")
+                    b64 = base64.b64encode(text.encode("utf-8")).decode("ascii")
                     for i, l in enumerate(wrap_base64(b64).split("\n")):
                         q = '"' if i == 0 else '    "'
                         lines.append(f'{q}{l}"')
                     lines.append("    ),")
             else:
                 lines.append(f"    {key!r}: _b64_to_bytes(")
-                wrapped = wrap_base64(df.b64).split("\n")
+                wrapped = wrap_base64(df.b64 or "").split("\n")
                 for i, l in enumerate(wrapped):
                     q = '"' if i == 0 else '    "'
                     lines.append(f'{q}{l}"')

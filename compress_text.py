@@ -27,9 +27,8 @@ import tempfile
 import time
 import traceback
 from types import SimpleNamespace
-from typing import Annotated, Any, Final, NoReturn, TypeAlias
+from typing import IO, Annotated, Any, Final, NoReturn, TypeAlias
 
-import click
 from dh import MAX_WORKERS, atomic_write
 from rich.console import Console
 from rich.panel import Panel
@@ -45,37 +44,15 @@ from rich.progress import (
 )
 from rich.table import Table
 from rich.text import Text
-import typer
+import sys
+from loguru import logger
 
-
-_STATE: dict[str, object] = {}
-
-
-class _Args(SimpleNamespace):
-    """argparse.Namespace look-alike: unknown attributes read as None."""
-
-    def __getattr__(self, name: str) -> None:
-        if name.startswith("__"):
-            raise AttributeError(name)
-
-
-class _ParserShim:
-    """Stand-in for the removed argparse parser; hands back what Typer parsed."""
-
-    def parse_args(self, args: list[Any] | None = None, namespace: Any = None) -> _Args:
-        "Parse args."
-        return _Args(**_STATE)
-
-    def error(self, message: str) -> NoReturn:
-        raise typer.BadParameter(message)
-
-    def print_help(self, file: Path | None = None) -> None:
-        "Print help."
-        typer.echo(click.get_current_context().get_help(), file=file)
-
-    def print_usage(self, file: Path | None = None) -> None:
-        "Print usage."
-        typer.echo(click.get_current_context().get_usage(), file=file)
+logger.remove()
+logger.add(
+    sys.stderr,
+    level=os.environ.get("LOGURU_LEVEL", "INFO"),
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+)
 
 
 CHUNK: Final[int] = 1 << 20
@@ -282,7 +259,7 @@ def ppmd_decoder(path: Path) -> Codec:
         msg = "invalid ppmd header"
         raise ValueError(msg)
     dec = pyppmd.Ppmd7Decoder(order, mem)
-    return Codec(dec.decode, dec.flush, skip=PPMD_HEADER.size)
+    return Codec(lambda chunk: dec.decode(chunk, -1), lambda: b"", skip=PPMD_HEADER.size)
 
 
 ENCODERS: Final[dict[str, Callable[[int, int], Codec]]] = {
@@ -575,10 +552,22 @@ def print_report(console: Console, results: list[Result], orig: int, wall: float
     console.print(f"Wall time: {wall:.1f}s")
 
 
+def _build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser()
+    parser.add_argument('path', type=Path)
+    parser.add_argument('-o', '--out-dir', type=Path, default=Path('output'))
+    parser.add_argument('-p', '--preset', choices=list(LEVELS), default='max')
+    parser.add_argument('-a', '--algos', action="append", default=ORDER, metavar='ALGO')
+    parser.add_argument('--verify', action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument('--force', action="store_true", default=False)
+    parser.add_argument('--keep-tar', action="store_true", default=False)
+    parser.add_argument('--tmp-dir', type=Path, default=Path(os.environ['TMPDIR']) if os.environ.get('TMPDIR') else None)
+    parser.add_argument('--json', dest='json_path', type=Path, default=None)
+    return parser
+
+
 def parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
-    "Parse args."
-    p = _ParserShim()
-    return p.parse_args(argv)
+    return _build_parser().parse_args(argv)
 
 
 def run(args: argparse.Namespace, console: Console) -> int:
@@ -667,47 +656,5 @@ def main(argv: Sequence[str] | None = None) -> int:
         console.print("[yellow]interrupted[/]")
         return 130
 
-
-def _run() -> None:
-    raise SystemExit(main())
-
-
-app = typer.Typer(
-    add_completion=False,
-    context_settings={"help_option_names": ["-h", "--help"]},
-    pretty_exceptions_show_locals=False,
-)
-
-
-@app.command()
-def cli(
-    path: Annotated[Path, typer.Argument()],
-    out_dir: Annotated[Path, typer.Option("-o", "--out-dir")] = "output",
-    preset: Annotated[str, typer.Option("-p", "--preset")] = "max",
-    algos: Annotated[list[str], typer.Option("-a", "--algos", metavar="ALGO")] = ORDER,
-    verify: Annotated[bool, typer.Option("--verify")] = True,
-    force: Annotated[bool, typer.Option("--force")] = False,
-    keep_tar: Annotated[bool, typer.Option("--keep-tar")] = False,
-    tmp_dir: Annotated[Path, typer.Option("--tmp-dir")] = os.environ.get("TMPDIR"),
-    json_path: Annotated[Path | None, typer.Option("--json")] = None,
-) -> None:
-    """Run the command-line interface."""
-    if preset is not None and preset not in list(LEVELS):
-        msg = f"invalid choice: {preset!r} (choose from {list(LEVELS)})"
-        raise typer.BadParameter(msg)
-    _STATE.update(
-        path=path,
-        out_dir=out_dir,
-        preset=preset,
-        algos=algos,
-        verify=verify,
-        force=force,
-        keep_tar=keep_tar,
-        tmp_dir=tmp_dir,
-        json_path=json_path,
-    )
-    _run()
-
-
 if __name__ == "__main__":
-    app()
+    raise SystemExit(main())

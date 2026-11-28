@@ -2,6 +2,8 @@
 "OCR CLI"
 
 from __future__ import annotations
+
+import argparse
 import codecs
 from collections.abc import Iterable, Sequence
 import contextlib
@@ -17,48 +19,17 @@ import subprocess
 import sys
 import tempfile
 from types import SimpleNamespace
-from typing import Annotated, Any, NoReturn, TextIO
+from typing import IO, Annotated, Any, NoReturn, TextIO
 import xml.dom.minidom
 
-import click
 from loguru import logger
-import typer
 
-
-def _version_callback(value: bool) -> None:
-    if value:
-        typer.echo("pyocr " + __version__)
-        raise typer.Exit
-
-
-_STATE: dict[str, object] = {}
-
-
-class _Args(SimpleNamespace):
-    """argparse.Namespace look-alike: unknown attributes read as None."""
-
-    def __getattr__(self, name: str) -> None:
-        if name.startswith("__"):
-            raise AttributeError(name)
-
-
-class _ParserShim:
-    """Stand-in for the removed argparse parser; hands back what Typer parsed."""
-
-    def parse_args(self, args: list[Any] | None = None, namespace: Any = None) -> _Args:
-        "Parse args."
-        return _Args(**_STATE)
-
-    def error(self, message: str) -> NoReturn:
-        raise typer.BadParameter(message)
-
-    def print_help(self, file: Path | None = None) -> None:
-        "Print help."
-        typer.echo(click.get_current_context().get_help(), file=file)
-
-    def print_usage(self, file: Path | None = None) -> None:
-        "Print usage."
-        typer.echo(click.get_current_context().get_usage(), file=file)
+logger.remove()
+logger.add(
+    sys.stderr,
+    level=os.environ.get("LOGURU_LEVEL", "INFO"),
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+)
 
 
 VERSION: tuple[int, int, int] = (0, 8, 5)
@@ -137,14 +108,15 @@ class Box:
         "Return the object's display string."
         return f"{self.content} {self.position[0][0]} {self.position[0][1]} {self.position[1][0]} {self.position[1][1]}"
 
-    def __box_cmp(self, other: None) -> int:
-        if other is None or getattr(other, "position", None) is None:
+    def __box_cmp(self, other: object) -> int:
+        other_pos = getattr(other, "position", None)
+        if other is None or other_pos is None:
             return -1
         for x, y in (
-            (self.position[0][1], other.position[0][1]),
-            (self.position[1][1], other.position[1][1]),
-            (self.position[0][0], other.position[0][0]),
-            (self.position[1][0], other.position[1][0]),
+            (self.position[0][1], other_pos[0][1]),
+            (self.position[1][1], other_pos[1][1]),
+            (self.position[0][0], other_pos[0][0]),
+            (self.position[1][0], other_pos[1][0]),
         ):
             if x < y:
                 return -1
@@ -238,14 +210,15 @@ class LineBox:
         """Return whether the supplied item is present."""
         return text in self.content
 
-    def __box_cmp(self, other: None) -> int:
-        if other is None or getattr(other, "position", None) is None:
+    def __box_cmp(self, other: object) -> int:
+        other_pos = getattr(other, "position", None)
+        if other is None or other_pos is None:
             return -1
         for x, y in (
-            (self.position[0][1], other.position[0][1]),
-            (self.position[1][1], other.position[1][1]),
-            (self.position[0][0], other.position[0][0]),
-            (self.position[1][0], other.position[1][0]),
+            (self.position[0][1], other_pos[0][1]),
+            (self.position[1][1], other_pos[1][1]),
+            (self.position[0][0], other_pos[0][0]),
+            (self.position[1][0], other_pos[1][0]),
         ):
             if x < y:
                 return -1
@@ -300,18 +273,19 @@ class BaseBuilder:
         self.tesseract_flags = tesseract_flags
         self.tesseract_configs = tesseract_configs
         self.cuneiform_args = cuneiform_args
+        self.tesseract_layout: int = 3
 
-    def read_file(self, file_descriptor: Any) -> None:
+    def read_file(self, file_descriptor: TextIO) -> Any:
         "Read file."
         msg = "Implement in subclasses"
         raise NotImplementedError(msg)
 
-    def write_file(self, file_descriptor: Any, output: Path) -> None:
+    def write_file(self, file_descriptor: TextIO, output: Any, /) -> None:
         "Write file."
         msg = "Implement in subclasses"
         raise NotImplementedError(msg)
 
-    def start_line(self, box: Any) -> NoReturn:
+    def start_line(self, box: Any) -> None:
         msg = "Implement in subclasses"
         raise NotImplementedError(msg)
 
@@ -320,11 +294,11 @@ class BaseBuilder:
         msg = "Implement in subclasses"
         raise NotImplementedError(msg)
 
-    def end_line(self) -> NoReturn:
+    def end_line(self) -> None:
         msg = "Implement in subclasses"
         raise NotImplementedError(msg)
 
-    def get_output(self) -> None:
+    def get_output(self) -> Any:
         "Return output."
         msg = "Implement in subclasses"
         raise NotImplementedError(msg)
@@ -476,7 +450,7 @@ class _WordHTMLParser(HTMLParser):
             box = Box(
                 self.__current_box_text,
                 self.__current_box_position,
-                self.__current_box_confidence,
+                self.__current_box_confidence or 0,
             )
             self.boxes.append(box)
             self.__current_line_content.append(box)
@@ -523,8 +497,10 @@ class _LineHTMLParser(HTMLParser):
             for attr in attrs:
                 if attr[0] == "title":
                     self.__char_positions = attr[1].split(" ")
+            if self.__char_positions is None:
+                return
             self.__char_positions = self.__char_positions[1:]
-            if self.__char_positions[-1] == "":
+            if self.__char_positions and self.__char_positions[-1] == "":
                 self.__char_positions = self.__char_positions[:-1]
             try:
                 while True:
@@ -540,7 +516,7 @@ class _LineHTMLParser(HTMLParser):
 
     def handle_endtag(self, tag: str) -> None:
         "Handle endtag."
-        if self.__line_text is None or self.__char_positions == []:
+        if self.__line_text is None or not self.__char_positions:
             return
         words = self.__line_text.split(" ")
         for word in words:
@@ -729,14 +705,15 @@ def _set_environment() -> None:
     if getattr(sys, "frozen", False):
         if "TESSDATA_PREFIX" in os.environ:
             return
-        tesspath = Path(sys._MEIPASS).joinpath("tesseract")
-        tessprefix = Path(sys._MEIPASS).joinpath("data")
+        meipass = getattr(sys, "_MEIPASS", "")
+        tesspath = Path(meipass).joinpath("tesseract")
+        tessprefix = Path(meipass).joinpath("data")
         logger.info("Running in packaged environment")
         if not Path(tesspath).exists():
             logger.warning(f"Running from container, but no tesseract ({tesspath}) found !")
         else:
             logger.info(f"[{tesspath}] added to PATH")
-            os.environ["PATH"] = tesspath + os.pathsep + os.environ["PATH"]
+            os.environ["PATH"] = str(tesspath) + os.pathsep + os.environ["PATH"]
         if not Path(Path(tessprefix).joinpath("tessdata")).exists():
             logger.warning(f"Running from container, but no tessdata ({tessprefix}) found !")
         else:
@@ -744,7 +721,7 @@ def _set_environment() -> None:
             if version[0] > 3:
                 tessprefix = Path(tessprefix).joinpath("tessdata")
             logger.info(f"TESSDATA_PREFIX set to [{tessprefix}]")
-            os.environ["TESSDATA_PREFIX"] = tessprefix
+            os.environ["TESSDATA_PREFIX"] = str(tessprefix)
 
 
 def psm_parameter() -> str:
@@ -789,6 +766,8 @@ def tess_detect_orientation(image: Any, lang: str | None = None) -> dict:
             stderr=subprocess.STDOUT,
         )
         with proc:
+            assert proc.stdin is not None
+            assert proc.stdout is not None
             proc.stdin.close()
             original_output = proc.stdout.read()
             proc.wait()
@@ -827,10 +806,10 @@ def tess_get_available_builders() -> list:
 def tess_run_tesseract(
     input_filename: Any,
     output_filename_base: Any,
-    cwd: Path | None = None,
+    cwd: str | Path | None = None,
     lang: str | None = None,
-    flags: None | None = None,
-    configs: dict[str, Any] | None = None,
+    flags: list[str] | None = None,
+    configs: list[str] | None = None,
 ) -> tuple:
     _set_environment()
     command = [TESSERACT_CMD, input_filename, output_filename_base]
@@ -849,6 +828,7 @@ def tess_run_tesseract(
         stderr=subprocess.STDOUT,
     )
     with proc:
+        assert proc.stdout is not None
         errors = proc.stdout.read()
         ret = proc.wait()
     return (ret, errors)
@@ -880,7 +860,7 @@ class ReOpenableTempfile:
             self.name = None
 
 
-def tess_image_to_string(image: Any, lang: str | None = None, builder: None | None = None) -> str:
+def tess_image_to_string(image: Any, lang: str | None = None, builder: BaseBuilder | None = None) -> Any:
     if builder is None:
         builder = TextBuilder()
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -905,7 +885,7 @@ def tess_image_to_string(image: Any, lang: str | None = None, builder: None | No
             )
             tested_files.append(output_file_name)
             try:
-                with codecs.open(output_file_name, "r", encoding="utf-8", errors="replace") as file_desc:
+                with open(output_file_name, encoding="utf-8", errors="replace") as file_desc:
                     return builder.read_file(file_desc)
             except FileNotFoundError:
                 continue
@@ -930,6 +910,7 @@ def tess_get_available_languages() -> list:
         stderr=subprocess.STDOUT,
     )
     with proc:
+        assert proc.stdout is not None
         langs = proc.stdout.read().decode("utf-8").splitlines(False)
         ret = proc.wait()
         if ret != 0:
@@ -937,7 +918,7 @@ def tess_get_available_languages() -> list:
     return [lang for lang in langs if lang and lang[-1] != ":"]
 
 
-def tess_get_version(set_env: bool = True) -> None:
+def tess_get_version(set_env: bool = True) -> tuple[int, int, int]:
     global g_version
     if g_version is not None:
         return g_version
@@ -950,6 +931,7 @@ def tess_get_version(set_env: bool = True) -> None:
         stdout=subprocess.PIPE,
     )
     with proc:
+        assert proc.stdout is not None
         ver_string = proc.stdout.read().decode("utf-8")
         ret = proc.wait()
         if ret not in (0, 1):
@@ -1091,7 +1073,7 @@ if g_libtesseract:
     g_libtesseract.TessBaseAPICreate.argtypes = []
     g_libtesseract.TessBaseAPICreate.restype = ctypes.c_void_p
     g_libtesseract.TessBaseAPIDelete.argtypes = [ctypes.c_void_p]
-    g_libtesseract.TessBaseAPIDelete.argtypes = None
+    g_libtesseract.TessBaseAPIDelete.restype = None
     g_libtesseract.TessBaseAPIGetDatapath.argtypes = [ctypes.c_void_p]
     g_libtesseract.TessBaseAPIGetDatapath.restype = ctypes.POINTER(ctypes.c_char)
     g_libtesseract.TessBaseAPIInit1.argtypes = [
@@ -1188,7 +1170,7 @@ if g_libtesseract:
     g_libtesseract.TessPageIteratorIsAtFinalElement.restype = ctypes.c_bool
     g_libtesseract.TessPageIteratorBlockType.argtypes = [ctypes.c_void_p]
     g_libtesseract.TessPageIteratorBlockType.restype = ctypes.c_int
-    g_libtesseract.TessPageIteratorBoundingBox.args = [
+    g_libtesseract.TessPageIteratorBoundingBox.argtypes = [
         ctypes.c_void_p,
         ctypes.c_int,
         ctypes.POINTER(ctypes.c_int),
@@ -1234,12 +1216,11 @@ def raw_init(lang: str | None = None):
         locale.setlocale(locale.LC_ALL, "C")
     handle = g_libtesseract.TessBaseAPICreate()
     try:
-        if lang:
-            lang = lang.encode("utf-8")
-        prefix = None
-        if TESSDATA_PREFIX:
-            prefix = TESSDATA_PREFIX.encode("utf-8")
-        g_libtesseract.TessBaseAPIInit3(ctypes.c_void_p(handle), ctypes.c_char_p(prefix), ctypes.c_char_p(lang))
+        lang_bytes = lang.encode("utf-8") if lang else None
+        prefix = os.fsencode(TESSDATA_PREFIX) if TESSDATA_PREFIX else None
+        g_libtesseract.TessBaseAPIInit3(
+            ctypes.c_void_p(handle), ctypes.c_char_p(prefix), ctypes.c_char_p(lang_bytes)
+        )
         g_libtesseract.TessBaseAPISetVariable(ctypes.c_void_p(handle), b"tessedit_zero_rejection", b"F")
     except Exception:
         g_libtesseract.TessBaseAPIDelete(ctypes.c_void_p(handle))
@@ -1273,20 +1254,19 @@ def raw_get_available_languages(handle: Any):
     return langs
 
 
-def raw_set_is_numeric(handle: Any, mode: str) -> None:
+def raw_set_is_numeric(handle: Any, mode: bool) -> None:
     assert g_libtesseract is not None
     wl = b"0123456789." if mode else b""
     g_libtesseract.TessBaseAPISetVariable(ctypes.c_void_p(handle), b"tessedit_char_whitelist", wl)
 
 
-def raw_set_debug_file(handle: Any, filename: str) -> None:
+def raw_set_debug_file(handle: Any, filename: str | bytes) -> None:
     assert g_libtesseract is not None
-    if not isinstance(filename, bytes):
-        filename = filename.encode("utf-8")
-    g_libtesseract.TessBaseAPISetVariable(ctypes.c_void_p(handle), b"debug_file", filename)
+    filename_bytes = filename if isinstance(filename, bytes) else filename.encode("utf-8")
+    g_libtesseract.TessBaseAPISetVariable(ctypes.c_void_p(handle), b"debug_file", filename_bytes)
 
 
-def raw_set_page_seg_mode(handle: Any, mode: str) -> None:
+def raw_set_page_seg_mode(handle: Any, mode: int) -> None:
     assert g_libtesseract is not None
     g_libtesseract.TessBaseAPISetPageSegMode(ctypes.c_void_p(handle), ctypes.c_int(mode))
 
@@ -1326,37 +1306,38 @@ def raw_analyse_layout(handle: Any):
 def raw_get_utf8_text(handle: Any) -> str:
     assert g_libtesseract is not None
     ptr = g_libtesseract.TessBaseAPIGetUTF8Text(ctypes.c_void_p(handle))
-    val = ctypes.cast(ptr, ctypes.c_char_p).value.decode("utf-8")
+    raw_val = ctypes.cast(ptr, ctypes.c_char_p).value
+    val = raw_val.decode("utf-8") if raw_val is not None else ""
     g_libtesseract.TessDeleteText(ptr)
     return val
 
 
-def raw_page_iterator_delete(iterator: Iterable[Any]):
+def raw_page_iterator_delete(iterator: Any):
     assert g_libtesseract is not None
     return g_libtesseract.TessPageIteratorDelete(ctypes.c_void_p(iterator))
 
 
-def raw_page_iterator_next(iterator: Iterable[Any], level: int):
+def raw_page_iterator_next(iterator: Any, level: int):
     assert g_libtesseract is not None
     return g_libtesseract.TessPageIteratorNext(ctypes.c_void_p(iterator), level)
 
 
-def raw_page_iterator_is_at_beginning_of(iterator: Iterable[Any], level: int):
+def raw_page_iterator_is_at_beginning_of(iterator: Any, level: int):
     assert g_libtesseract is not None
     return g_libtesseract.TessPageIteratorIsAtBeginningOf(ctypes.c_void_p(iterator), level)
 
 
-def raw_page_iterator_is_at_final_element(iterator: Iterable[Any], level: int, element: Any):
+def raw_page_iterator_is_at_final_element(iterator: Any, level: int, element: Any):
     assert g_libtesseract is not None
     return g_libtesseract.TessPageIteratorIsAtFinalElement(ctypes.c_void_p(iterator), level, element)
 
 
-def raw_page_iterator_block_type(iterator: Iterable[Any]):
+def raw_page_iterator_block_type(iterator: Any):
     assert g_libtesseract is not None
     return g_libtesseract.TessPageIteratorBlockType(ctypes.c_void_p(iterator))
 
 
-def raw_page_iterator_bounding_box(iterator: Iterable[Any], level: int) -> tuple:
+def raw_page_iterator_bounding_box(iterator: Any, level: int) -> tuple:
     assert g_libtesseract is not None
     left = ctypes.c_int(0)
     top = ctypes.c_int(0)
@@ -1375,7 +1356,7 @@ def raw_page_iterator_bounding_box(iterator: Iterable[Any], level: int) -> tuple
     return (True, (left.value, top.value, right.value, bottom.value))
 
 
-def raw_page_iterator_orientation(iterator: Iterable[Any]) -> dict:
+def raw_page_iterator_orientation(iterator: Any) -> dict:
     assert g_libtesseract is not None
     orientation = ctypes.c_int(0)
     writing_direction = ctypes.c_int(0)
@@ -1406,17 +1387,18 @@ def raw_result_iterator_get_page_iterator(res_iterator: Any):
     return g_libtesseract.TessResultIteratorGetPageIterator(ctypes.c_void_p(res_iterator))
 
 
-def raw_result_iterator_get_utf8_text(iterator: Iterable[Any], level: int) -> str | None:
+def raw_result_iterator_get_utf8_text(iterator: Any, level: int) -> str | None:
     assert g_libtesseract is not None
     ptr = g_libtesseract.TessResultIteratorGetUTF8Text(ctypes.c_void_p(iterator), level)
     if ptr is None:
         return None
-    val = ctypes.cast(ptr, ctypes.c_char_p).value.decode("utf-8")
+    raw_val = ctypes.cast(ptr, ctypes.c_char_p).value
+    val = raw_val.decode("utf-8") if raw_val is not None else ""
     g_libtesseract.TessDeleteText(ptr)
     return val
 
 
-def raw_result_iterator_get_confidence(iterator: Iterable[Any], level: int):
+def raw_result_iterator_get_confidence(iterator: Any, level: int):
     assert g_libtesseract is not None
     ptr = g_libtesseract.TessResultIteratorConfidence(ctypes.c_void_p(iterator), level)
     if ptr is None:
@@ -1458,15 +1440,15 @@ def raw_detect_os(handle: Any) -> dict:
         }
 
 
-def raw_set_input_name(handle: Any, input_file: Path) -> None:
+def raw_set_input_name(handle: Any, input_file: str | Path) -> None:
     assert g_libtesseract is not None
-    g_libtesseract.TessBaseAPISetInputName(ctypes.c_void_p(handle), input_file.encode())
+    g_libtesseract.TessBaseAPISetInputName(ctypes.c_void_p(handle), os.fsencode(input_file))
 
 
-def raw_init_pdf_renderer(handle: Any, output_file: Path, textonly: Any):
+def raw_init_pdf_renderer(handle: Any, output_file: str | Path, textonly: Any):
     assert g_libtesseract is not None
     tessdata_dir = g_libtesseract.TessBaseAPIGetDatapath(handle)
-    return g_libtesseract.TessPDFRendererCreate(output_file.encode(), tessdata_dir, ctypes.c_bool(textonly))
+    return g_libtesseract.TessPDFRendererCreate(os.fsencode(output_file), tessdata_dir, ctypes.c_bool(textonly))
 
 
 def raw_begin_document(renderer: Any, doc_name: str) -> None:
@@ -1527,7 +1509,7 @@ def _tess_box_to_pyocr_box(box: Sequence[Any]) -> tuple:
     return ((box[0], box[1]), (box[2], box[3]))
 
 
-def libtess_image_to_string(image: Any, lang: str | None = None, builder: None | None = None) -> str:
+def libtess_image_to_string(image: Any, lang: str | None = None, builder: BaseBuilder | None = None) -> Any:
     if builder is None:
         builder = TextBuilder()
     handle = raw_init(lang=lang)
@@ -1591,12 +1573,12 @@ class LibtesseractPdfBuilder:
         self.lang = None
         self.text_only = False
 
-    def set_lang(self, lang: str):
+    def set_lang(self, lang: str | None):
         "Set lang."
         self.lang = lang
         return self
 
-    def set_output_file(self, output_file: Path):
+    def set_output_file(self, output_file: str | Path):
         "Set output file."
         self.output_file = output_file
         return self
@@ -1621,6 +1603,7 @@ class LibtesseractPdfBuilder:
 
     def build(self) -> None:
         self.__validate()
+        assert self.output_file is not None
         handle = raw_init(lang=self.lang)
         renderer = None
         try:
@@ -1696,7 +1679,7 @@ def _cun_temp_file(suffix: str):
     return tempfile.NamedTemporaryFile(prefix="cuneiform_", suffix=suffix)
 
 
-def cun_image_to_string(image: Any, lang: str | None = None, builder: None | None = None) -> str:
+def cun_image_to_string(image: Any, lang: str | None = None, builder: BaseBuilder | None = None) -> Any:
     if builder is None:
         builder = TextBuilder()
     if "digits" in builder.tesseract_configs:
@@ -1714,13 +1697,15 @@ def cun_image_to_string(image: Any, lang: str | None = None, builder: None | Non
         img_data = BytesIO()
         image.save(img_data, format="BMP")
         proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        assert proc.stdin is not None
+        assert proc.stdout is not None
         proc.stdin.write(img_data.getvalue())
         proc.stdin.close()
         output = proc.stdout.read().decode("utf-8")
         retcode = proc.wait()
         if retcode:
             raise CuneiformError(retcode, output)
-        with codecs.open(output_file.name, "r", encoding="utf-8", errors="replace") as file_desc:
+        with open(output_file.name, encoding="utf-8", errors="replace") as file_desc:
             return builder.read_file(file_desc)
 
 
@@ -1731,6 +1716,7 @@ def cun_is_available() -> bool:
 
 def cun_get_available_languages():
     proc = subprocess.Popen([CUNEIFORM_CMD, "-l"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    assert proc.stdout is not None
     output = proc.stdout.read().decode("utf-8")
     proc.wait()
     languages = []
@@ -1745,8 +1731,9 @@ def cun_get_available_languages():
     return languages
 
 
-def cun_get_version() -> None:
+def cun_get_version() -> tuple[int, int, int] | None:
     proc = subprocess.Popen([CUNEIFORM_CMD], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    assert proc.stdout is not None
     output = proc.stdout.read().decode("utf-8")
     proc.wait()
     for line in output.split("\n"):
@@ -1813,7 +1800,7 @@ _TOOLS_BY_NAME: dict[str, Any] = {
 }
 
 
-def _load_image(path: Path) -> TextIO:
+def _load_image(path: str | Path) -> Any:
     try:
         from PIL import Image
     except ImportError:
@@ -1822,7 +1809,7 @@ def _load_image(path: Path) -> TextIO:
     return Image.open(path)
 
 
-def _print_result(result: str) -> None:
+def _print_result(result: Any) -> None:
     if isinstance(result, str):
         sys.stdout.write(result)
         if not result.endswith("\n"):
@@ -1832,7 +1819,7 @@ def _print_result(result: str) -> None:
         sys.stdout.write(str(item) + "\n")
 
 
-def _cmd_tools(args: list[Any]) -> None:
+def _cmd_tools(args: argparse.Namespace) -> None:
     for tool in TOOLS:
         status = "available" if tool.is_available() else "unavailable"
         try:
@@ -1844,7 +1831,7 @@ def _cmd_tools(args: list[Any]) -> None:
         print(f"{name}\t{status}\t{ver}")
 
 
-def _cmd_langs(args: list[Any]) -> None:
+def _cmd_langs(args: argparse.Namespace) -> None:
     tool = _TOOLS_BY_NAME[args.tool]
     if not tool.is_available():
         msg = f"tool {args.tool} is not available"
@@ -1853,7 +1840,7 @@ def _cmd_langs(args: list[Any]) -> None:
         print(lang)
 
 
-def _cmd_orientation(args: list[Any]) -> None:
+def _cmd_orientation(args: argparse.Namespace) -> None:
     tool = _TOOLS_BY_NAME[args.tool]
     if not tool.is_available():
         msg = f"tool {args.tool} is not available"
@@ -1867,7 +1854,7 @@ def _cmd_orientation(args: list[Any]) -> None:
     print(f"confidence: {result['confidence']}")
 
 
-def _cmd_ocr(args: list[Any]) -> None:
+def _cmd_ocr(args: argparse.Namespace) -> None:
     tool = _TOOLS_BY_NAME[args.tool]
     if not tool.is_available():
         msg = f"tool {args.tool} is not available"
@@ -1878,9 +1865,32 @@ def _cmd_ocr(args: list[Any]) -> None:
     _print_result(result)
 
 
+def _build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description='OCR CLI')
+    parser.add_argument('-v', '--version', action="version", version='pyocr ' + __version__, help="show program's version number and exit")
+    subparsers = parser.add_subparsers(dest='command')
+    sub_0 = subparsers.add_parser('tools', help='list OCR tools')
+    sub_0.set_defaults(func=_cmd_tools)
+    sub_1 = subparsers.add_parser('langs', help='list available languages')
+    sub_1.add_argument('-t', '--tool', choices=list(_TOOLS_BY_NAME), default='tesseract')
+    sub_1.set_defaults(func=_cmd_langs)
+    sub_2 = subparsers.add_parser('orientation', help='detect image orientation')
+    sub_2.add_argument('image')
+    sub_2.add_argument('-t', '--tool', choices=list(_TOOLS_BY_NAME), default='tesseract')
+    sub_2.add_argument('-l', '--lang', default=None)
+    sub_2.set_defaults(func=_cmd_orientation)
+    sub_3 = subparsers.add_parser('ocr', help='run OCR on an image')
+    sub_3.add_argument('image')
+    sub_3.add_argument('-t', '--tool', choices=list(_TOOLS_BY_NAME), default='tesseract')
+    sub_3.add_argument('-l', '--lang', default=None)
+    sub_3.add_argument('-b', '--builder', choices=list(_BUILDERS), default='text', help='output builder: text, digit, word, line, digit_line, char')
+    sub_3.set_defaults(func=_cmd_ocr)
+    return parser
+
+
 def main(argv: list[str] | None = None) -> int:
     "Run the command-line interface."
-    parser = _ParserShim()
+    parser = _build_parser()
     args = parser.parse_args(argv)
     if not getattr(args, "command", None):
         parser.print_help()
@@ -1892,92 +1902,5 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     return 0
 
-
-def _run() -> None:
-    raise SystemExit(main())
-
-
-app = typer.Typer(
-    help="OCR CLI",
-    add_completion=False,
-    context_settings={"help_option_names": ["-h", "--help"]},
-    pretty_exceptions_show_locals=False,
-)
-
-
-@app.callback()
-def _root(
-    version: Annotated[
-        bool,
-        typer.Option(
-            "-v",
-            "--version",
-            callback=_version_callback,
-            is_eager=True,
-            help="show program's version number and exit",
-        ),
-    ] = False,
-) -> None:
-    pass
-
-
-@app.command("tools", help="list OCR tools")
-def cmd_tools() -> None:
-    """Run the tools subcommand."""
-    _STATE.update(command="tools", func=_cmd_tools)
-    _run()
-
-
-@app.command("langs", help="list available languages")
-def cmd_langs(
-    tool: Annotated[str, typer.Option("-t", "--tool")] = "tesseract",
-) -> None:
-    """Run the langs subcommand."""
-    if tool is not None and tool not in list(_TOOLS_BY_NAME):
-        msg_0 = f"invalid choice: {tool!r} (choose from {list(_TOOLS_BY_NAME)})"
-        raise typer.BadParameter(msg_0)
-    _STATE.update(tool=tool, command="langs", func=_cmd_langs)
-    _run()
-
-
-@app.command("orientation", help="detect image orientation")
-def cmd_orientation(
-    image: Annotated[str, typer.Argument()],
-    tool: Annotated[str, typer.Option("-t", "--tool")] = "tesseract",
-    lang: Annotated[str | None, typer.Option("-l", "--lang")] = None,
-) -> None:
-    """Run the orientation subcommand."""
-    if tool is not None and tool not in list(_TOOLS_BY_NAME):
-        msg_0 = f"invalid choice: {tool!r} (choose from {list(_TOOLS_BY_NAME)})"
-        raise typer.BadParameter(msg_0)
-    _STATE.update(image=image, tool=tool, lang=lang, command="orientation", func=_cmd_orientation)
-    _run()
-
-
-@app.command("ocr", help="run OCR on an image")
-def cmd_ocr(
-    image: Annotated[str, typer.Argument()],
-    tool: Annotated[str, typer.Option("-t", "--tool")] = "tesseract",
-    lang: Annotated[str | None, typer.Option("-l", "--lang")] = None,
-    builder: Annotated[
-        str,
-        typer.Option(
-            "-b",
-            "--builder",
-            help="output builder: text, digit, word, line, digit_line, char",
-        ),
-    ] = "text",
-) -> None:
-    """Run the ocr subcommand."""
-    if tool is not None and tool not in list(_TOOLS_BY_NAME):
-        msg_0 = f"invalid choice: {tool!r} (choose from {list(_TOOLS_BY_NAME)})"
-        raise typer.BadParameter(msg_0)
-    if builder is not None and builder not in list(_BUILDERS):
-        msg_0 = f"invalid choice: {builder!r} (choose from {list(_BUILDERS)})"
-        raise typer.BadParameter(msg_0)
-    _STATE.update(image=image, tool=tool, lang=lang, builder=builder, command="ocr", func=_cmd_ocr)
-    _run()
-
-
 if __name__ == "__main__":
-    app()
+    raise SystemExit(main())

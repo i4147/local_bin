@@ -118,7 +118,6 @@ import urllib.parse
 from urllib.parse import urlsplit
 import urllib.request
 
-import click
 from loguru import logger
 from lxml import (
     etree,
@@ -127,7 +126,6 @@ from lxml import (
 from lxml_html_clean import Cleaner
 import tinycss2
 from tinycss2.ast import StringToken
-import typer
 
 
 # ---------------------------------------------------------------------------
@@ -135,43 +133,6 @@ import typer
 # ---------------------------------------------------------------------------
 
 __version__: str = "1.0.0"
-
-
-def _version_callback(value: bool) -> None:
-    "Print the version and exit when Typer invokes the --version flag."
-    if value:
-        typer.echo(f"mhtml_converter {__version__}")
-        raise typer.Exit
-
-
-_STATE: dict[str, object] = {}
-
-
-class _Args(SimpleNamespace):
-    """argparse.Namespace look-alike: unknown attributes read as None."""
-
-    def __getattr__(self, name: str) -> None:
-        if name.startswith("__"):
-            raise AttributeError(name)
-
-
-class _ParserShim:
-    """Stand-in for the removed argparse parser; hands back what Typer parsed."""
-
-    def parse_args(self, args: list[Any] | None = None, namespace: Any = None) -> _Args:
-        "Parse args."
-        return _Args(**_STATE)
-
-    def error(self, message: str) -> NoReturn:
-        raise typer.BadParameter(message)
-
-    def print_help(self, file: Path | None = None) -> None:
-        "Print help."
-        typer.echo(click.get_current_context().get_help(), file=file)
-
-    def print_usage(self, file: Path | None = None) -> None:
-        "Print usage."
-        typer.echo(click.get_current_context().get_usage(), file=file)
 
 
 class MhtmlError(Exception):
@@ -974,26 +935,6 @@ def _format_srcset_density(d: float) -> str:
     if d == int(d):
         return str(int(d))
     return repr(d)
-
-
-class Resource_handling(StrEnum):
-    "Enumerate the supported Resource handling values."
-
-    inline = "inline"
-    external = "external"
-    mixed = "mixed"
-
-
-class Log_level(StrEnum):
-    "Enumerate the supported Log level values."
-
-    TRACE = "TRACE"
-    DEBUG = "DEBUG"
-    INFO = "INFO"
-    SUCCESS = "SUCCESS"
-    WARNING = "WARNING"
-    ERROR = "ERROR"
-    CRITICAL = "CRITICAL"
 
 
 class ConversionProfile(str, Enum):
@@ -2153,7 +2094,7 @@ class RobustMHTMLParser:
         def convert_embedded_mhtml(index_end: int) -> str | None:
             "Convert embedded mhtml."
             nonlocal index_mhtml
-            inner_context = {
+            inner_context: dict[str, Any] = {
                 "resources": resources,
                 "frames": frames,
                 "anomalies": anomalies,
@@ -2210,6 +2151,8 @@ class RobustMHTMLParser:
         def process_stylesheet_charset(charset: str | None, bom_charset: str | None) -> None:
             "Process stylesheet charset."
             assert resource is not None
+            assert isinstance(resource.data, str)
+            assert resource.raw_data is not None
             match = CSS_CHARSET_REGEXP.search(resource.data)
             if match is None:
                 return
@@ -2225,6 +2168,7 @@ class RobustMHTMLParser:
         def process_document_charset(charset: str | None, bom_charset: str | None) -> str | None:
             "Process document charset."
             assert resource is not None
+            assert resource.raw_data is not None
             document_charset = charset
             try:
                 dom = lxml_html.fromstring(resource.data)
@@ -2252,6 +2196,7 @@ class RobustMHTMLParser:
             anomalies.append(Anomaly(MISLABELED_DOCUMENT_ANOMALY))
             headers["content-type"] = "text/html"
             init_resource(headers)
+            assert resource is not None
             append_data(mhtml)
             resource.data = flatten_data()
             process_resource()
@@ -2304,6 +2249,7 @@ class RobustMHTMLParser:
                         split_headers(next_line, content)
                     else:
                         init_resource(content)
+                        assert resource is not None
                         if not resource.content_type or not is_multipart_alternative(resource.content_type):
                             index_start_embedded_mhtml = None
                         state = MHTML_DATA
@@ -2314,6 +2260,7 @@ class RobustMHTMLParser:
                     init_resource(read_body_headers() if missing_delimiters else headers)
                     state = MHTML_DATA
             elif state == MHTML_DATA:
+                assert resource is not None
                 index_end_data = parse_resource_data()
                 resource.data = flatten_data()
                 if index_start_embedded_mhtml is not None and index_end_data is not None:
@@ -3172,7 +3119,7 @@ class _MHTMLCleaner(Cleaner):
         scheme-like substring can match.
         """
         masked = _INLINED_DATA_URI_REGEXP.sub("mhtml-inlined-asset", style)
-        return super()._has_sneaky_javascript(masked)
+        return cast(Any, super())._has_sneaky_javascript(masked)
 
     def allow_element(self, el: Any) -> bool:
         """Keep only enabled stylesheets when lxml checks embedded links."""
@@ -3249,7 +3196,7 @@ class HTMLProcessor:
     def to_string(self, element: Any, doctype: str | None = None) -> str:
         """Serialize an lxml element, preserving the source doctype."""
         method = "xml" if self.config.output_format == "xhtml" else "html"
-        serialized = cast("str", lxml_html.tostring(element, encoding="unicode", method=method))
+        serialized = lxml_html.tostring(element, encoding="unicode", method=method)
         if doctype:
             return f"{doctype}\n{serialized}"
         return serialized
@@ -3341,7 +3288,7 @@ class HTMLProcessor:
         except (ValueError, etree.LxmlError):
             return content
         method = "xml" if self.config.output_format == "xhtml" else "html"
-        serialized = cast("str", lxml_html.tostring(tree, encoding="unicode", method=method))
+        serialized = lxml_html.tostring(tree, encoding="unicode", method=method)
         doctype = self._document_doctype(tree)
         return f"{doctype}\n{serialized}" if doctype else serialized
 
@@ -4317,7 +4264,7 @@ def _default_output_path(input_path: Path) -> Path:
     return candidate
 
 
-def _resolve_log_level(arguments: _Args) -> str:
+def _resolve_log_level(arguments: argparse.Namespace) -> str:
     """Pick the log level from --log-level, -v and -q."""
     if arguments.log_level is not None:
         return str(arguments.log_level).upper()
@@ -4330,7 +4277,28 @@ def _resolve_log_level(arguments: _Args) -> str:
 
 def _build_argument_parser() -> argparse.ArgumentParser:
     """Create the standalone script's command-line argument parser."""
-    parser = _ParserShim()
+    parser = argparse.ArgumentParser(description='Convert MHTML/MHT archives into single self-contained HTML files (consolidation of mhtml.py and mhtml_to_html.py).')
+    parser.add_argument('inputs', nargs="*", metavar='INPUT', help='input .mht/.mhtml files, directories (searched recursively) or glob patterns; defaults to a recursive search of the current directory')
+    parser.add_argument('-o', '--output', type=Path, default=None, help='Output HTML path (single input only; default: beside the input with a .html suffix)')
+    parser.add_argument('--profile', default=ConversionProfile.STANDARD.value, help='Conversion preset (minimal/standard/full/secure/optimized)')
+    parser.add_argument('--fetch-external', action=argparse.BooleanOptionalAction, default=False, help='Fetch referenced public HTTP(S) assets missing from the archive (SSRF-guarded)')
+    parser.add_argument('--enable-scripts', dest='enable_scripts', action="store_true", default=True, help='Keep scripts and event handlers (--no-scripts strips them)')
+    parser.add_argument('--no-scripts', dest='enable_scripts', action="store_false")
+    parser.add_argument('--csp', action=argparse.BooleanOptionalAction, default=True, dest='inject_csp', help='Inject a Content-Security-Policy meta tag into the output')
+    parser.add_argument('--allow-domain', action="append", default=[], metavar='DOMAIN', help='Restrict external fetches to this domain; may be repeated')
+    parser.add_argument('--block-domain', action="append", default=[], metavar='DOMAIN', help='Block external fetches to this domain; may be repeated')
+    parser.add_argument('--allow-private-network', action="store_true", default=False, help='Allow external fetches from loopback/private addresses (blocked by default)')
+    parser.add_argument('--resource-handling', choices=['inline', 'external', 'mixed'], default=None, help="Override the profile's resource handling strategy")
+    parser.add_argument('--minify', action="store_true", default=False, help='Minify HTML and CSS output')
+    parser.add_argument('--timeout', type=float, default=None, metavar='SECONDS', help='Connect/read timeout for external fetches (seconds)')
+    parser.add_argument('--max-size', type=int, default=None, metavar='BYTES', help='Maximum size of externally fetched resources (bytes)')
+    parser.add_argument('--no-clobber', action="store_true", default=False, help='Never overwrite an existing output file')
+    parser.add_argument('--fail-fast', action="store_true", default=False, help='Abort the batch on the first conversion failure')
+    parser.add_argument('--progress', action="store_true", default=False, help='Print conversion progress to standard error')
+    parser.add_argument('--log-level', choices=['TRACE', 'DEBUG', 'INFO', 'SUCCESS', 'WARNING', 'ERROR', 'CRITICAL'], default=None, help='Set the minimum log level (overrides -v/-q)')
+    parser.add_argument('-v', '--verbose', action="store_true", default=False, help='Verbose (DEBUG) logging')
+    parser.add_argument('-q', '--quiet', action="store_true", default=False, help='Suppress per-file logs')
+    parser.add_argument('--version', action="version", version=f'mhtml_converter {__version__}', help='Show the version number and exit')
     return parser
 
 
@@ -4431,181 +4399,5 @@ def main(argv: Sequence[str] | None = None) -> int:
         return CONVERSION_FAILURE_EXIT
     return 0
 
-
-def _run() -> None:
-    raise SystemExit(main())
-
-
-app = typer.Typer(
-    add_completion=False,
-    context_settings={"help_option_names": ["-h", "--help"]},
-    pretty_exceptions_show_locals=False,
-)
-
-
-@app.command(
-    help=(
-        "Convert MHTML/MHT archives into single self-contained HTML files "
-        "(consolidation of mhtml.py and mhtml_to_html.py)."
-    ),
-    epilog=(
-        "examples:\n"
-        "  mhtml_converter page.mht\n"
-        "  mhtml_converter page.mht --output out.html\n"
-        "  mhtml_converter folder/            # recursive batch conversion\n"
-        "  mhtml_converter *.mht *.mhtml\n"
-    ),
-)
-def cli(
-    inputs: Annotated[
-        list[str] | None,
-        typer.Argument(
-            help=(
-                "input .mht/.mhtml files, directories (searched recursively) or glob "
-                "patterns; defaults to a recursive search of the current directory"
-            ),
-            metavar="INPUT",
-        ),
-    ] = None,
-    output: Annotated[
-        Path | None,
-        typer.Option(
-            "-o",
-            "--output",
-            help="Output HTML path (single input only; default: beside the input with a .html suffix)",
-        ),
-    ] = None,
-    profile: Annotated[
-        str,
-        typer.Option(
-            "--profile",
-            help="Conversion preset (minimal/standard/full/secure/optimized)",
-        ),
-    ] = ConversionProfile.STANDARD.value,
-    fetch_external: Annotated[
-        bool,
-        typer.Option(
-            "--fetch-external/--no-fetch-external",
-            help="Fetch referenced public HTTP(S) assets missing from the archive (SSRF-guarded)",
-        ),
-    ] = False,
-    enable_scripts: Annotated[
-        bool,
-        typer.Option(
-            "--enable-scripts/--no-scripts",
-            help="Keep scripts and event handlers (--no-scripts strips them)",
-        ),
-    ] = True,
-    inject_csp: Annotated[
-        bool,
-        typer.Option(
-            "--csp/--no-csp",
-            help="Inject a Content-Security-Policy meta tag into the output",
-        ),
-    ] = True,
-    allow_domain: Annotated[
-        list[str] | None,
-        typer.Option(
-            "--allow-domain",
-            help="Restrict external fetches to this domain; may be repeated",
-            metavar="DOMAIN",
-        ),
-    ] = None,
-    block_domain: Annotated[
-        list[str] | None,
-        typer.Option(
-            "--block-domain",
-            help="Block external fetches to this domain; may be repeated",
-            metavar="DOMAIN",
-        ),
-    ] = None,
-    allow_private_network: Annotated[
-        bool,
-        typer.Option(
-            "--allow-private-network",
-            help="Allow external fetches from loopback/private addresses (blocked by default)",
-        ),
-    ] = False,
-    resource_handling: Annotated[
-        Resource_handling | None,
-        typer.Option(
-            "--resource-handling",
-            help="Override the profile's resource handling strategy",
-        ),
-    ] = None,
-    minify: Annotated[bool, typer.Option("--minify", help="Minify HTML and CSS output")] = False,
-    timeout: Annotated[
-        float | None,
-        typer.Option(
-            "--timeout",
-            help="Connect/read timeout for external fetches (seconds)",
-            metavar="SECONDS",
-        ),
-    ] = None,
-    max_size: Annotated[
-        int | None,
-        typer.Option(
-            "--max-size",
-            help="Maximum size of externally fetched resources (bytes)",
-            metavar="BYTES",
-        ),
-    ] = None,
-    no_clobber: Annotated[
-        bool,
-        typer.Option("--no-clobber", help="Never overwrite an existing output file"),
-    ] = False,
-    fail_fast: Annotated[
-        bool,
-        typer.Option("--fail-fast", help="Abort the batch on the first conversion failure"),
-    ] = False,
-    progress: Annotated[
-        bool,
-        typer.Option("--progress", help="Print conversion progress to standard error"),
-    ] = False,
-    log_level: Annotated[
-        Log_level | None,
-        typer.Option("--log-level", help="Set the minimum log level (overrides -v/-q)"),
-    ] = None,
-    verbose: Annotated[bool, typer.Option("-v", "--verbose", help="Verbose (DEBUG) logging")] = False,
-    quiet: Annotated[bool, typer.Option("-q", "--quiet", help="Suppress per-file logs")] = False,
-    version: Annotated[
-        bool,
-        typer.Option(
-            "--version",
-            callback=_version_callback,
-            is_eager=True,
-            help="Show the version number and exit",
-        ),
-    ] = False,
-) -> None:
-    """Convert MHTML archives into self-contained HTML files."""
-    if block_domain is None:
-        block_domain = []
-    if allow_domain is None:
-        allow_domain = []
-    _STATE.update(
-        inputs=list(inputs or []),
-        output=output,
-        profile=profile,
-        fetch_external=fetch_external,
-        enable_scripts=enable_scripts,
-        inject_csp=inject_csp,
-        allow_domain=allow_domain,
-        block_domain=block_domain,
-        allow_private_network=allow_private_network,
-        resource_handling=resource_handling,
-        minify=minify,
-        timeout=timeout,
-        max_size=max_size,
-        no_clobber=no_clobber,
-        fail_fast=fail_fast,
-        progress=progress,
-        log_level=log_level,
-        verbose=verbose,
-        quiet=quiet,
-    )
-    _run()
-
-
 if __name__ == "__main__":
-    app()
+    raise SystemExit(main())

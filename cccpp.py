@@ -9,6 +9,14 @@ from loguru import logger
 from tree_sitter import Language, Parser
 import tree_sitter_c
 import tree_sitter_cpp
+import os
+
+logger.remove()
+logger.add(
+    sys.stderr,
+    level=os.environ.get("LOGURU_LEVEL", "INFO"),
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+)
 
 
 CPP_EXTS = frozenset({

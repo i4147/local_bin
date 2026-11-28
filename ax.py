@@ -26,6 +26,15 @@ from metadate import parse_date
 import requests
 from tldextract import tldextract
 import ujson as json
+import os
+from loguru import logger
+
+logger.remove()
+logger.add(
+    sys.stderr,
+    level=os.environ.get("LOGURU_LEVEL", "INFO"),
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+)
 
 
 __project__ = "auto_extract"
@@ -33,7 +42,7 @@ __version__: str = "0.1.3"
 
 
 class lazy_property:
-    def __init__(self, func: Callable) -> None:
+    def __init__(self, func: Callable[..., Any]) -> None:
         "Initialize the instance state from the supplied arguments."
         self.__doc__ = func.__doc__
         self.func = func
@@ -41,7 +50,7 @@ class lazy_property:
     def __get__(self, obj: Any, cls: Any) -> Any:
         if obj is None:
             return self
-        value = obj.__dict__[self.func.__name__] = self.func(obj)
+        value = obj.__dict__[getattr(self.func, "__name__", "")] = self.func(obj)
         return value
 
 
@@ -74,7 +83,7 @@ def get_full_text(tree: Any) -> str:
 def extract_domain(url: str) -> tuple[str, str]:
     "Extract domain."
     tld = tldextract.extract(url)
-    name = ".".join([x for x in tld if x])
+    name = ".".join([x for x in (tld.subdomain, tld.domain, tld.suffix) if x])
     protocol = url.split("//", 1)[0]
     return name, protocol + "//" + name
 
@@ -490,7 +499,9 @@ class Article:
 
     @lazy_property
     def response_hash(self) -> str:
-        return hashlib.md5(self.response_body.encode("utf-8")).hexdigest()
+        body: bytes | str = self.response_body
+        raw = body if isinstance(body, bytes) else body.encode("utf-8")
+        return hashlib.md5(raw).hexdigest()
 
     @lazy_property
     def microdata(self) -> Any:
@@ -658,7 +669,7 @@ class Storage:
         project_name: str,
         send_initially: bool = False,
         root: str = "~/.tradex",
-        notify: Callable[[list[Article]], None] = lambda articles: None,
+        notify: Callable[[list[Article]], None] | None = lambda articles: None,
     ) -> None:
         "Initialize the instance state from the supplied arguments."
         self.root = root
@@ -666,9 +677,9 @@ class Storage:
         self._articles = None
         self._seen = None
         self.send_initially = send_initially
-        self.notify = notify
+        self.notify: Callable[[list[Article]], None] | None = notify
         if not send_initially and not self.index_path_exists:
-            self.notify = False
+            self.notify = None
 
     def __len__(self) -> int:
         "Return the number of items represented by the object."
@@ -679,17 +690,17 @@ class Storage:
         return f'{self.__class__.__name__}(path="{self.path}", num_articles={len(self)})'
 
     @property
-    def path(self) -> str:
+    def path(self) -> Path:
         """Return the path."""
         return Path(self.root).joinpath(self.project_name)
 
     @property
-    def index_path(self) -> str:
+    def index_path(self) -> Path:
         """Return the index path."""
         return Path(self.path).joinpath("index.jsonl")
 
     @property
-    def articles_path(self) -> str:
+    def articles_path(self) -> Path:
         """Return the articles path."""
         return Path(self.path).joinpath("articles.jsonl")
 
@@ -728,13 +739,13 @@ class Storage:
         return self._articles
 
     def clear(self) -> None:
-        just.remove(self.path, recursive=True)
+        just.remove(self.path, allow_recursive=True)
         self._seen = None
         self._articles = None
         print(f"Removed {self.path}")
 
     def drop_one(self) -> None:
-        article_id = self._seen.pop()
+        article_id = self.seen.pop()
         if self._articles is not None:
             self._articles = [x for x in self._articles if x.id != article_id]
 
@@ -748,7 +759,9 @@ file_extensions: set[str] = {".jpg", ".png", ".zip", ".dmg", ".exe", ".gz"}
 
 
 class UpfrontRobotFileParser(urllib.robotparser.RobotFileParser):
-    def read(self, as_user_agent: str) -> None:
+    url: str
+
+    def read(self, as_user_agent: str = "*") -> None:
         try:
             r = requests.get(self.url, headers={"User-Agent": as_user_agent}, timeout=1)
             if r.status_code in (401, 403):
@@ -815,7 +828,7 @@ class Crawler:
     def get_robo_parser_domain(self, domain: str) -> Any:
         "Return robo parser domain."
         rp = UpfrontRobotFileParser()
-        robot_url = urllib.request.urljoin(domain, "robots.txt")
+        robot_url = urljoin(domain, "robots.txt")
         rp.set_url(robot_url)
         try:
             rp.read(self.user_agent)
@@ -863,7 +876,9 @@ class Crawler:
         from requests_viewer import view_tree
 
         for seed_url in self.seed_urls:
-            view_tree(lxml.html.fromstring(self.get(seed_url)))
+            content = self.get(seed_url)
+            if content is not None:
+                view_tree(lxml.html.fromstring(content))
 
     def return_seed_url_with_query_nonce(self, seed_url: str) -> str:
         semi_random_nonce = str(int(time.time()))

@@ -34,7 +34,15 @@ import stat
 import sys
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, Literal
+from loguru import logger
+
+logger.remove()
+logger.add(
+    sys.stderr,
+    level=os.environ.get("LOGURU_LEVEL", "INFO"),
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+)
 
 __version__ = "1.0.0"
 DEFAULT_READ_SIZE = 65536
@@ -203,7 +211,7 @@ class MagicRule:
     mask: int | None = None
     children: list[MagicRule] = field(default_factory=list)
     size: int = field(init=False)
-    byteorder: str = field(init=False, default=sys.byteorder)
+    byteorder: Literal["little", "big"] = field(init=False, default=sys.byteorder)
 
     def __post_init__(self) -> None:
         if self.offset < 0:
@@ -219,10 +227,16 @@ class MagicRule:
         if not match:
             raise ValueError(f"unsupported type: {self.kind!r}")
         self.size = _SIZES[match["kind"]]
-        self.byteorder = {"le": "little", "be": "big", None: sys.byteorder}[match["endian"]]
+        endian_map: dict[str | None, Literal["little", "big"]] = {
+            "le": "little",
+            "be": "big",
+            None: sys.byteorder,
+        }
+        self.byteorder = endian_map[match["endian"]]
         limit = (1 << (8 * self.size)) - 1
-        if self.value is not None and not 0 <= self.value <= limit:
-            raise ValueError(f"value outside unsigned {8 * self.size}-bit range")
+        if self.value is not None:
+            if not isinstance(self.value, int) or not 0 <= self.value <= limit:
+                raise ValueError(f"value outside unsigned {8 * self.size}-bit range")
         if self.mask is not None and not 0 <= self.mask <= limit:
             raise ValueError("mask outside numeric type range")
         if self.operator not in {"=", "!=", "<", ">", "&", "^", "x"}:
@@ -238,30 +252,33 @@ class MagicRule:
         if self.offset + self.size > len(data):
             return None
         if self.kind == "string":
+            assert isinstance(self.value, bytes)
             equal = data.startswith(self.value, self.offset)
             matched = equal if self.operator == "=" else not equal
         else:
             actual = int.from_bytes(data[self.offset : self.offset + self.size], self.byteorder)
             if self.mask is not None:  # A zero mask is meaningful.
                 actual &= self.mask
-            value = self.value
-            match self.operator:
-                case "x":
-                    matched = True
-                case "=":
-                    matched = actual == value
-                case "!=":
-                    matched = actual != value
-                case "<":
-                    matched = actual < value
-                case ">":
-                    matched = actual > value
-                case "&":
-                    matched = actual & value == value
-                case "^":
-                    matched = actual & value != value
-                case _:
-                    raise AssertionError("unvalidated operator")
+            if self.operator == "x":
+                matched = True
+            else:
+                assert isinstance(self.value, int)
+                value = self.value
+                match self.operator:
+                    case "=":
+                        matched = actual == value
+                    case "!=":
+                        matched = actual != value
+                    case "<":
+                        matched = actual < value
+                    case ">":
+                        matched = actual > value
+                    case "&":
+                        matched = actual & value == value
+                    case "^":
+                        matched = actual & value != value
+                    case _:
+                        raise AssertionError("unvalidated operator")
         if not matched:
             return None
         messages = [self.message] if self.message else []

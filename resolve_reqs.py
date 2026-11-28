@@ -38,6 +38,14 @@ from typing import Any, Literal
 import urllib.request
 
 from dh import atomic_write
+from loguru import logger
+
+logger.remove()
+logger.add(
+    sys.stderr,
+    level=os.environ.get("LOGURU_LEVEL", "INFO"),
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+)
 
 
 # ---------------------------------------------------------------------------
@@ -52,15 +60,15 @@ except ImportError:  # pragma: no cover
     _HAVE_PACKAGING = False
 
 try:
-    import tomllib as _tomllib  # type: ignore
+    import tomllib as _tomllib
 except ImportError:  # pragma: no cover
     try:
-        import tomli as _tomllib  # type: ignore
+        import tomli as _tomllib
     except ImportError:
-        _tomllib = None  # type: ignore
+        _tomllib = None
 
 try:
-    from jinja2 import Template as _JinjaTemplate  # type: ignore
+    from jinja2 import Template as _JinjaTemplate
 
     _HAVE_JINJA = True
 except ImportError:  # pragma: no cover

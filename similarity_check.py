@@ -12,6 +12,7 @@ from collections.abc import Iterable, Sequence
 from concurrent.futures import ProcessPoolExecutor
 import datetime as dt
 import difflib
+import argparse
 import hashlib
 import html
 import io
@@ -28,7 +29,15 @@ from typing import Annotated, Any
 import zlib
 
 from dh import atomic_write, should_skip
-import typer
+import sys
+from loguru import logger
+
+logger.remove()
+logger.add(
+    sys.stderr,
+    level=os.environ.get("LOGURU_LEVEL", "INFO"),
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+)
 
 
 ROOT = Path.cwd().resolve()
@@ -741,7 +750,7 @@ def extract(path: Path, lexicon: set[str]) -> dict[str, Any]:
                 add("word", w, 1.5 + 1.5 * math.log(c))
 
             skeleton: list[str] = []
-            stack = [tree]
+            stack: list[ast.AST] = [tree]
             while stack:
                 node = stack.pop()
                 skeleton.append(type(node).__name__)
@@ -909,7 +918,7 @@ def containment(a: set[int], b: set[int]) -> float:
 
 
 def approx_containment_pairs(sets: list[set[int]], min_score: float, max_df: int = 180) -> dict[tuple[int, int], float]:
-    postings: dict[str, list[int]] = collections.defaultdict(list)
+    postings: dict[int, list[int]] = collections.defaultdict(list)
     for i, s in enumerate(sets):
         for sh in s:
             postings[sh].append(i)
@@ -1226,7 +1235,7 @@ def build_report(root: Path, threshold: float, workers: int) -> dict[str, Any]:
         for tok in set(inf["stem_core"]):
             if len(tok) >= 3 and tok not in GENERIC_STEM_TOKENS:
                 domains[tok].append(inf["name"])
-    functional_families = [
+    functional_families: list[dict[str, Any]] = [
         {
             "keyword": tok,
             "scripts": len(v),
@@ -1236,7 +1245,7 @@ def build_report(root: Path, threshold: float, workers: int) -> dict[str, Any]:
         for tok, v in domains.items()
         if len(v) >= 5
     ]
-    functional_families.sort(key=lambda d: (-d["scripts"], d["keyword"]))
+    functional_families.sort(key=lambda d: (-int(d["scripts"]), str(d["keyword"])))
 
     python_files = [i for i in infos if i["is_python"]]
     non_python_files = [i for i in infos if not i["is_python"]]
@@ -1927,37 +1936,32 @@ def render_svg(rep: dict[str, Any], out: Path) -> None:
     atomic_write(out, "\n".join(svg) + "\n", encoding="utf-8")
 
 
-app = typer.Typer(
-    add_completion=False,
-    context_settings={"help_option_names": ["-h", "--help"]},
-    pretty_exceptions_show_locals=False,
-)
-
-
-@app.command()
-def main(
-    root: Annotated[Path, typer.Option("--root", help="root directory to walk recursively")] = ROOT,
-    out_dir: Annotated[Path, typer.Option("--out-dir")] = Path.cwd().resolve(),
-    threshold: Annotated[
-        float,
-        typer.Option("--threshold", help="minimum score for two files to share a group"),
-    ] = 0.25,
-    workers: Annotated[
-        int,
-        typer.Option("--workers", "-j", help="number of worker processes (default: cpu count)"),
-    ] = 0,
-    no_svg: Annotated[bool, typer.Option("--no-svg")] = False,
-    no_md: Annotated[bool, typer.Option("--no-md")] = True,
-) -> None:
-    """Run the command-line interface."""
-    args = SimpleNamespace(
-        root=root,
-        out_dir=out_dir,
-        threshold=threshold,
-        workers=workers,
-        no_svg=no_svg,
-        no_md=no_md,
+def build_parser() -> argparse.ArgumentParser:
+    """Build the command-line argument parser."""
+    parser = argparse.ArgumentParser(description="Analyze similarity across files in a repository.")
+    parser.add_argument("--root", type=Path, default=ROOT, help="root directory to walk recursively")
+    parser.add_argument("--out-dir", type=Path, default=Path.cwd().resolve())
+    parser.add_argument(
+        "--threshold",
+        type=float,
+        default=0.25,
+        help="minimum score for two files to share a group",
     )
+    parser.add_argument(
+        "-j",
+        "--workers",
+        type=int,
+        default=0,
+        help="number of worker processes (default: cpu count)",
+    )
+    parser.add_argument("--no-svg", action="store_true", default=False)
+    parser.add_argument("--no-md", action=argparse.BooleanOptionalAction, default=True)
+    return parser
+
+
+def main(argv: list[str] | None = None) -> None:
+    """Run the command-line interface."""
+    args = build_parser().parse_args(argv)
 
     out_dir: Path = args.out_dir
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -1986,4 +1990,4 @@ def main(
 
 
 if __name__ == "__main__":
-    app()
+    main()

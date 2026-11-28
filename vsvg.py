@@ -47,16 +47,23 @@ import re
 import select
 import signal
 import struct
+import argparse
 import sys
 import termios
 import time
 import tty
 from types import SimpleNamespace
-from typing import Annotated, Any
+from typing import Any
 import xml.etree.ElementTree as ET
 import zlib
+from loguru import logger
 
-import typer
+logger.remove()
+logger.add(
+    sys.stderr,
+    level=os.environ.get("LOGURU_LEVEL", "INFO"),
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+)
 
 
 class Renderer(StrEnum):
@@ -85,12 +92,6 @@ class Color(StrEnum):
     v_256 = "256"
 
 
-def _version_callback(value: bool) -> None:
-    if value:
-        typer.echo(f"svgview.py {__version__}")
-        raise typer.Exit
-
-
 __version__: str = "1.0.0"
 
 # Die quietly on SIGPIPE (e.g. `svgview.py big.svg | head`).
@@ -106,7 +107,7 @@ XLINK_HREF: str = "{http://www.w3.org/1999/xlink}href"
 NUM_RE = re.compile(r"[+-]?(?:\d*\.\d+|\d+\.?)(?:[eE][+-]?\d+)?")
 
 
-def _f(value: float, default: float = 0.0) -> float:
+def _f(value: Any, default: float = 0.0) -> float:
     """float() with fallback."""
     try:
         return float(value)
@@ -154,7 +155,7 @@ _tok = _NAMED_RAW.split()
 NAMED_COLORS: dict[str, str] = {_tok[i]: _tok[i + 1] for i in range(0, len(_tok), 2)}
 
 
-def _hsl_to_rgb(h: float, s: int, l: int) -> tuple:
+def _hsl_to_rgb(h: float, s: float, l: float) -> tuple[int, int, int]:
     """h in degrees, s/l in 0..1 -> (r, g, b) 0..255."""
     if s <= 0:
         v = round(l * 255)
@@ -173,10 +174,14 @@ def _hsl_to_rgb(h: float, s: int, l: int) -> tuple:
             return p + (q - p) * (2 / 3 - t) * 6
         return p
 
-    return tuple(round(c * 255) for c in (cu(h + 1 / 3), cu(h), cu(h - 1 / 3)))
+    return (
+        round(cu(h + 1 / 3) * 255),
+        round(cu(h) * 255),
+        round(cu(h - 1 / 3) * 255),
+    )
 
 
-def parse_color(value: str, current: tuple = (0, 0, 0)) -> None:
+def parse_color(value: str | None, current: tuple[int, int, int] = (0, 0, 0)) -> tuple[int, int, int, float] | None:
     """Parse a CSS/SVG color -> (r, g, b, a) with a in 0..1.
 
     Returns None for 'none'.  Raises ValueError on garbage.
@@ -274,7 +279,7 @@ _UNITS: dict[str, float] = {
 }
 
 
-def parse_length(value: str, pct_base: None | None = None, default: Any = None):
+def parse_length(value: str | None, pct_base: float | None = None, default: Any = None):
     """Parse an SVG length -> pixels (float), or `default` if absent/invalid."""
     if value is None:
         return default
@@ -340,7 +345,7 @@ IDENT = M()
 _TRANSFORM_RE = re.compile(r"([a-zA-Z]+)\s*\(([^)]*)\)")
 
 
-def parse_transform(text: str):
+def parse_transform(text: str | None):
     """Parse an SVG transform attribute -> M (identity if absent/broken)."""
     if not text:
         return IDENT
@@ -389,7 +394,7 @@ class _PP:
 
     __slots__ = ("d", "i", "n")
 
-    def __init__(self, d: Sequence[Any]) -> None:
+    def __init__(self, d: str) -> None:
         "Initialize the instance state from the supplied arguments."
         self.d = d
         self.i = 0
@@ -444,7 +449,7 @@ class _PP:
         raise PathError(msg)
 
 
-def _cubic(p0: Any, p1: Any, p2: Any, p3: Any, tol: Any, out: Path, depth: int = 0) -> None:
+def _cubic(p0: Any, p1: Any, p2: Any, p3: Any, tol: Any, out: list[tuple[float, float]], depth: int = 0) -> None:
     """Adaptively flatten a cubic bezier, appending points (excluding p0)."""
     x0, y0 = p0
     x1, y1 = p1
@@ -478,7 +483,7 @@ def _cubic(p0: Any, p1: Any, p2: Any, p3: Any, tol: Any, out: Path, depth: int =
     _cubic((xm, ym), (xb, yb), (x23, y23), p3, tol, out, depth + 1)
 
 
-def _quad(p0: Any, p1: Any, p2: Any, tol: Any, out: Path, depth: int = 0) -> None:
+def _quad(p0: Any, p1: Any, p2: Any, tol: Any, out: list[tuple[float, float]], depth: int = 0) -> None:
     """Adaptively flatten a quadratic bezier."""
     x0, y0 = p0
     x1, y1 = p1
@@ -598,9 +603,11 @@ def flatten_path(d: Any, tol: Any):
         start = (px, py)
         closed = False
 
-    def ensure() -> None:
+    def ensure() -> list[tuple[float, float]]:
         if cur is None:
             newsub(x, y)
+        assert cur is not None
+        return cur
 
     while True:
         c = pp.cmd()
@@ -620,8 +627,7 @@ def flatten_path(d: Any, tol: Any):
                     newsub(nx, ny)
                     first = False
                 else:
-                    ensure()
-                    cur.append((nx, ny))
+                    ensure().append((nx, ny))
                 x, y = nx, ny
             last_c = "M"
         elif C == "L":
@@ -631,8 +637,7 @@ def flatten_path(d: Any, tol: Any):
                 if rel:
                     nx += x
                     ny += y
-                ensure()
-                cur.append((nx, ny))
+                ensure().append((nx, ny))
                 x, y = nx, ny
             last_c = "L"
         elif C == "H":
@@ -640,8 +645,7 @@ def flatten_path(d: Any, tol: Any):
                 nx = pp.num()
                 if rel:
                     nx += x
-                ensure()
-                cur.append((nx, y))
+                ensure().append((nx, y))
                 x = nx
             last_c = "H"
         elif C == "V":
@@ -649,8 +653,7 @@ def flatten_path(d: Any, tol: Any):
                 ny = pp.num()
                 if rel:
                     ny += y
-                ensure()
-                cur.append((x, ny))
+                ensure().append((x, ny))
                 y = ny
             last_c = "V"
         elif C == "C":
@@ -668,8 +671,7 @@ def flatten_path(d: Any, tol: Any):
                     y2 += y
                     nx += x
                     ny += y
-                ensure()
-                _cubic((x, y), (x1, y1), (x2, y2), (nx, ny), tol, cur)
+                _cubic((x, y), (x1, y1), (x2, y2), (nx, ny), tol, ensure())
                 lcx, lcy = x2, y2
                 x, y = nx, ny
             last_c = "C"
@@ -688,8 +690,7 @@ def flatten_path(d: Any, tol: Any):
                     x1, y1 = 2 * x - lcx, 2 * y - lcy
                 else:
                     x1, y1 = x, y
-                ensure()
-                _cubic((x, y), (x1, y1), (x2, y2), (nx, ny), tol, cur)
+                _cubic((x, y), (x1, y1), (x2, y2), (nx, ny), tol, ensure())
                 lcx, lcy = x2, y2
                 x, y = nx, ny
             last_c = "S"
@@ -704,8 +705,7 @@ def flatten_path(d: Any, tol: Any):
                     y1 += y
                     nx += x
                     ny += y
-                ensure()
-                _quad((x, y), (x1, y1), (nx, ny), tol, cur)
+                _quad((x, y), (x1, y1), (nx, ny), tol, ensure())
                 qcx, qcy = x1, y1
                 x, y = nx, ny
             last_c = "Q"
@@ -720,8 +720,7 @@ def flatten_path(d: Any, tol: Any):
                     x1, y1 = 2 * x - qcx, 2 * y - qcy
                 else:
                     x1, y1 = x, y
-                ensure()
-                _quad((x, y), (x1, y1), (nx, ny), tol, cur)
+                _quad((x, y), (x1, y1), (nx, ny), tol, ensure())
                 qcx, qcy = x1, y1
                 x, y = nx, ny
             last_c = "T"
@@ -737,8 +736,7 @@ def flatten_path(d: Any, tol: Any):
                 if rel:
                     nx += x
                     ny += y
-                ensure()
-                cur.extend(_arc(x, y, rx, ry, rot, laf, sf, nx, ny, tol))
+                ensure().extend(_arc(x, y, rx, ry, rot, laf, sf, nx, ny, tol))
                 x, y = nx, ny
             last_c = "A"
         elif C == "Z":
@@ -810,7 +808,7 @@ def _rounded_rect_pts(x: Any, y: Any, w: float, h: float, rx: float, ry: float, 
     return pts
 
 
-def shape_subpaths(tag: str, el: dict[str, Any], tol: Any):
+def shape_subpaths(tag: str, el: ET.Element, tol: Any):
     """Elementary shape -> [(points, closed)] in user units (empty if N/A)."""
     if tag == "rect":
         x = _f(el.get("x"))
@@ -875,7 +873,7 @@ def _disc(cx: Any, cy: Any, r: int, n: int = 12) -> list:
     return [(cx + r * math.cos(2 * math.pi * i / n), cy + r * math.sin(2 * math.pi * i / n)) for i in range(n + 1)]
 
 
-def _dashes(pts: Sequence[Any], closed: Any, pattern: str, offset: Any) -> list[tuple[Sequence[Any], Any]]:
+def _dashes(pts: Sequence[Any], closed: Any, pattern: Sequence[float], offset: float) -> list[tuple[Sequence[Any], Any]]:
     """Split a polyline into dash runs -> [(points, False)]."""
     segs = []
     n = len(pts)
@@ -978,6 +976,8 @@ def _stroke_run(pts: Sequence[Any], closed: Any, hw: Any, cap: str, join: str, m
         v = pts[(i + 1) % n]
         n1 = norms[i % len(norms)]
         n2 = norms[(i + 1) % len(norms)]
+        if n1 is None or n2 is None:
+            continue
         if join == "round":
             polys.append(_disc(v[0], v[1], hw))
             continue
@@ -1128,7 +1128,7 @@ def _local(tag: str) -> str | None:
     return None
 
 
-def _style(el: dict[str, Any], inherited: Any):
+def _style(el: ET.Element, inherited: Any):
     st = dict(inherited)
     for k in _PRESENTATION:
         v = el.get(k)
@@ -1184,7 +1184,7 @@ def _parse_view_box(v: Any) -> list[float] | None:
     return nums  # minx, miny, w, h
 
 
-def root_matrix(root: Path, pw: Any, ph: Any) -> M:
+def root_matrix(root: ET.Element, pw: Any, ph: Any) -> M:
     """Map root user space onto the (pw, ph) pixel canvas."""
     par = (root.get("preserveAspectRatio") or "xMidYMid meet").strip()
     vb = _parse_view_box(root.get("viewBox"))
@@ -1223,7 +1223,7 @@ def root_matrix(root: Path, pw: Any, ph: Any) -> M:
     return M(s, 0, 0, s, tx, ty)
 
 
-def intrinsic_size(root: Path) -> tuple:
+def intrinsic_size(root: ET.Element) -> tuple[float, float]:
     """(w, h) in user units, for aspect + PNG export sizing."""
     vb = _parse_view_box(root.get("viewBox"))
     if vb:
@@ -1266,12 +1266,12 @@ class Doc:
 
     def _walk(
         self,
-        el: Iterable[Any],
+        el: ET.Element,
         mat: Any,
         st: dict[str, Any],
         items: list[Any],
         warn: Any,
-        use_stack: bool,
+        use_stack: frozenset[int],
     ) -> None:
         tag = _local(el.tag)
         if tag is None:
@@ -1343,7 +1343,7 @@ class Doc:
         else:
             try:
                 cur = parse_color(st.get("color", "black"), (0, 0, 0))
-                fill = parse_color(fillv, cur[:3])
+                fill = parse_color(fillv, cur[:3] if cur is not None else (0, 0, 0))
             except ValueError:
                 fill = (0, 0, 0, 1.0)
         if fill is not None:
@@ -1359,7 +1359,7 @@ class Doc:
         else:
             try:
                 cur = parse_color(st.get("color", "black"), (0, 0, 0))
-                stroke = parse_color(strokev, cur[:3])
+                stroke = parse_color(strokev, cur[:3] if cur is not None else (0, 0, 0))
             except ValueError:
                 stroke = None
         hw = 0.0
@@ -1476,7 +1476,7 @@ def _sweep(W: Any, H: int, edges: list[Any], y_lo: int, y_hi: int, on_span: Any)
             e[0] += e[2]
 
 
-def _fill_evenodd(buf: bytes, W: int, H: Any, polys: Any, cr: Any, cg: Any, cb: Any, ca: float) -> None:
+def _fill_evenodd(buf: array[float], W: int, H: Any, polys: Any, cr: Any, cg: Any, cb: Any, ca: float) -> None:
     """Fill polys even-odd with (cr,cg,cb,ca) into premultiplied buffer."""
     minx, miny, maxx, maxy = _bbox(polys)
     if minx > W or maxx < 0 or miny > H or maxy < 0:
@@ -1515,7 +1515,7 @@ def _fill_evenodd(buf: bytes, W: int, H: Any, polys: Any, cr: Any, cg: Any, cb: 
     _sweep(W, H, edges, miny, maxy, span)
 
 
-def _fill_nonzero(buf: bytes, W: int, H: int, polys: Any, cr: Any, cg: Any, cb: Any, ca: float) -> None:
+def _fill_nonzero(buf: array[float], W: int, H: int, polys: Any, cr: Any, cg: Any, cb: Any, ca: float) -> None:
     """Fill polys with the nonzero winding rule."""
     minx, miny, maxx, maxy = _bbox(polys)
     if minx > W or maxx < 0 or miny > H or maxy < 0:
@@ -1586,7 +1586,7 @@ def _fill_nonzero(buf: bytes, W: int, H: int, polys: Any, cr: Any, cg: Any, cb: 
             e[0] += e[2]
 
 
-def _mask_polys(mask: Sequence[Any], W: int, H: Any, polys: Any) -> None:
+def _mask_polys(mask: bytearray, W: int, H: Any, polys: Any) -> None:
     """OR-fill polygons into a byte mask (1 = covered)."""
     minx, miny, maxx, maxy = _bbox(polys)
     if minx > W or maxx < 0 or miny > H or maxy < 0:
@@ -1607,7 +1607,7 @@ def _mask_polys(mask: Sequence[Any], W: int, H: Any, polys: Any) -> None:
     _sweep(W, H, _edges_of(polys, closed_ring=True), miny, maxy, span)
 
 
-def _blend_mask(buf: bytes, W: Any, H: Any, mask: Any, cr: Any, cg: Any, cb: Any, ca: float) -> None:
+def _blend_mask(buf: array[float], W: Any, H: Any, mask: Any, cr: Any, cg: Any, cb: Any, ca: float) -> None:
     """Blend a color where mask==1 (used for strokes)."""
     inv = 1.0 - ca
     crp, cgp, cbp = cr * ca, cg * ca, cb * ca
@@ -1629,7 +1629,7 @@ def _blend_mask(buf: bytes, W: Any, H: Any, mask: Any, cr: Any, cg: Any, cb: Any
         pos = e
 
 
-def _downsample(buf: bytes, W: Any, H: Any, ss: int, pw: int, ph: int) -> bytes:
+def _downsample(buf: array[float], W: Any, H: Any, ss: int, pw: int, ph: int) -> bytes:
     """Average ss x ss blocks of the premultiplied buffer -> RGBA bytes."""
     out = bytearray(pw * ph * 4)
     n = ss * ss
@@ -1710,10 +1710,10 @@ def rasterize(items: list[Any], pw: Any, ph: Any, ss: int = 3) -> tuple:
 _PNG_SIG: bytes = b"\x89PNG\r\n\x1a\n"
 
 
-def encode_png(w: int, h: int, rgba: Sequence[Any]):
+def encode_png(w: int, h: int, rgba: bytes | bytearray | memoryview) -> bytes:
     """RGBA bytes (w*h*4) -> PNG file bytes."""
 
-    def chunk(tag: str, data: Sequence[Any]) -> str:
+    def chunk(tag: bytes, data: bytes) -> bytes:
         return struct.pack(">I", len(data)) + tag + data + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF)
 
     raw = bytearray()
@@ -1740,7 +1740,7 @@ def _paeth(a: Any, b: int, c: int) -> int:
     return c
 
 
-def decode_png(data: Sequence[Any]) -> tuple:
+def decode_png(data: bytes | bytearray) -> tuple[int, int, bytes]:
     """PNG bytes (8-bit, non-interlaced, ct 0/2/3/4/6) -> (w, h, rgba)."""
     if data[:8] != _PNG_SIG:
         msg = "not a PNG"
@@ -2051,7 +2051,7 @@ def render_sixel(w: int, h: int, rgb: Any) -> bytes:
     if len(cnt) <= 250:
         pal = list(cnt.keys())
     else:
-        pal = sorted(cnt, key=cnt.get, reverse=True)[:250]
+        pal = sorted(cnt, key=lambda c: cnt[c], reverse=True)[:250]
         palset = {c: i for i, c in enumerate(pal)}
         qcache = {}
 
@@ -2114,7 +2114,7 @@ def render_sixel(w: int, h: int, rgb: Any) -> bytes:
     return bytes(out)
 
 
-def render_kitty(w: Any, h: Any, rgba: Any, cols: Any, rows: Iterable[Any]) -> str:
+def render_kitty(w: Any, h: Any, rgba: Any, cols: int, rows: int) -> bytes:
     """RGBA -> kitty graphics protocol escape sequence (PNG upload)."""
     png = encode_png(w, h, rgba)
     b64 = base64.b64encode(png)
@@ -2164,7 +2164,7 @@ def paste_center(img: Any, pw: Any, ph: Any) -> tuple:
 def load_cairosvg():
     "Load cairosvg."
     try:
-        import cairosvg  # type: ignore
+        import cairosvg
 
         return cairosvg
     except Exception:
@@ -2217,7 +2217,7 @@ def _auto_ss(pw: Any, ph: Any, ss: Any) -> int:
 
 
 def render_file(
-    args: list[Any],
+    args: argparse.Namespace,
     term: Any,
     renderer: str,
     data: bytes,
@@ -2280,7 +2280,7 @@ def emit(renderer: str, img: Any, term: Any, bg: Any, truecolor: Any):
     return render_blocks(w, h, composite_rgb(w, h, rgba, bg), bg, truecolor).encode("utf-8")
 
 
-def export_png(args: list[Any], status: dict[str, Any], data: bytes, name: str):
+def export_png(args: argparse.Namespace, status: dict[str, Any], data: bytes, name: str):
     """PNG bytes for auto-save / --png (best engine available)."""
     cs = status["cairosvg"]
     if cs is not None:
@@ -2310,91 +2310,80 @@ def export_png(args: list[Any], status: dict[str, Any], data: bytes, name: str):
     return encode_png(tw, th, rgba)
 
 
-app = typer.Typer(
-    add_completion=False,
-    context_settings={"help_option_names": ["-h", "--help"]},
-    pretty_exceptions_show_locals=False,
-)
-
-
-@app.command(help="One-shot terminal SVG viewer with PNG auto-save.")
-def main(
-    files: Annotated[
-        list[str],
-        typer.Argument(help="SVG file(s), glob patterns allowed", metavar="SVG"),
-    ],
-    renderer: Annotated[
-        Renderer,
-        typer.Option("--renderer", help="terminal output backend (default: auto-detect)"),
-    ] = Renderer.auto,
-    engine: Annotated[
-        Engine,
-        typer.Option("--engine", help="rendering engine (default: cairosvg if importable)"),
-    ] = Engine.auto,
-    bg: Annotated[
-        str | None,
-        typer.Option(
-            "--bg",
-            help="background color for transparency (name or hex); 'none' keeps alpha in saved PNGs only",
-            metavar="COLOR",
-        ),
-    ] = None,
-    png: Annotated[
-        str | None,
-        typer.Option(
-            "--png",
-            help="save PNG to exactly this path (single input only)",
-            metavar="PATH",
-        ),
-    ] = None,
-    png_width: Annotated[
-        int | None,
-        typer.Option(
-            "--png-width",
-            help="width of saved PNGs (default: intrinsic, capped at 512 px on the long side)",
-            metavar="PX",
-        ),
-    ] = None,
-    no_save: Annotated[bool, typer.Option("--no-save", help="do not auto-save <file>.svg.png")] = False,
-    ss: Annotated[
-        int,
-        typer.Option("--ss", help="supersampling factor for the built-in engine", metavar="1-5"),
-    ] = 3,
-    width: Annotated[
-        int | None,
-        typer.Option("--width", help="maximum terminal columns to use", metavar="COLS"),
-    ] = None,
-    color: Annotated[Color, typer.Option("--color", help="color depth for half-block output")] = Color.auto,
-    quiet: Annotated[bool, typer.Option("-q", "--quiet", help="suppress status messages on stderr")] = False,
-    verbose: Annotated[bool, typer.Option("--verbose", help="extra diagnostics on stderr")] = False,
-    version: Annotated[
-        bool,
-        typer.Option(
-            "--version",
-            callback=_version_callback,
-            is_eager=True,
-            help="show program's version number and exit",
-        ),
-    ] = False,
-) -> int | None:
-    "Run the command-line interface."
-    args = SimpleNamespace(
-        files=files,
-        renderer=renderer,
-        engine=engine,
-        bg=bg,
-        png=png,
-        png_width=png_width,
-        no_save=no_save,
-        ss=ss,
-        width=width,
-        color=color,
-        quiet=quiet,
-        verbose=verbose,
+def build_parser() -> argparse.ArgumentParser:
+    """Build the command-line argument parser."""
+    parser = argparse.ArgumentParser(description="One-shot terminal SVG viewer with PNG auto-save.")
+    parser.add_argument("files", nargs="+", metavar="SVG", help="SVG file(s), glob patterns allowed")
+    parser.add_argument(
+        "--renderer",
+        choices=[r.value for r in Renderer],
+        default=Renderer.auto.value,
+        help="terminal output backend (default: auto-detect)",
     )
+    parser.add_argument(
+        "--engine",
+        choices=[e.value for e in Engine],
+        default=Engine.auto.value,
+        help="rendering engine (default: cairosvg if importable)",
+    )
+    parser.add_argument(
+        "--bg",
+        default=None,
+        metavar="COLOR",
+        help="background color for transparency (name or hex); 'none' keeps alpha in saved PNGs only",
+    )
+    parser.add_argument(
+        "--png",
+        default=None,
+        metavar="PATH",
+        help="save PNG to exactly this path (single input only)",
+    )
+    parser.add_argument(
+        "--png-width",
+        type=int,
+        default=None,
+        metavar="PX",
+        help="width of saved PNGs (default: intrinsic, capped at 512 px on the long side)",
+    )
+    parser.add_argument("--no-save", action="store_true", help="do not auto-save <file>.svg.png")
+    parser.add_argument(
+        "--ss",
+        type=int,
+        default=3,
+        metavar="1-5",
+        help="supersampling factor for the built-in engine",
+    )
+    parser.add_argument(
+        "--width",
+        type=int,
+        default=None,
+        metavar="COLS",
+        help="maximum terminal columns to use",
+    )
+    parser.add_argument(
+        "--color",
+        choices=[c.value for c in Color],
+        default=Color.auto.value,
+        help="color depth for half-block output",
+    )
+    parser.add_argument("-q", "--quiet", action="store_true", help="suppress status messages on stderr")
+    parser.add_argument("--verbose", action="store_true", help="extra diagnostics on stderr")
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"svgview.py {__version__}",
+        help="show program's version number and exit",
+    )
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int | None:
+    "Run the command-line interface."
+    parser = build_parser()
+    args = parser.parse_args(argv)
 
     # expand globs (shell may have done it already)
-    files = []
+    files: list[str] = []
     for pat in args.files:
         if any(ch in pat for ch in "*?["):
             hits = sorted(glob.glob(pat))
@@ -2402,21 +2391,19 @@ def main(
         else:
             files.append(pat)
     if args.png and len(files) > 1:
-        msg = "--png needs exactly one input file"
-        raise typer.BadParameter(msg)
+        parser.error("--png needs exactly one input file")
 
     if args.ss < 1 or args.ss > 5:
-        msg = "--ss must be between 1 and 5"
-        raise typer.BadParameter(msg)
+        parser.error("--ss must be between 1 and 5")
 
     term = TermInfo()
-    renderer = args.renderer
-    if renderer == "halfblock":
-        renderer = "blocks"
-    if renderer == "auto":
-        renderer = "kitty" if term.kitty else "sixel" if term.sixel else "blocks"
+    renderer_name: str = str(args.renderer)
+    if renderer_name == "halfblock":
+        renderer_name = "blocks"
+    if renderer_name == "auto":
+        renderer_name = "kitty" if term.kitty else "sixel" if term.sixel else "blocks"
         if not term.is_tty:
-            renderer = "blocks"
+            renderer_name = "blocks"
 
     truecolor = term.truecolor
     if args.color == "truecolor":
@@ -2424,7 +2411,7 @@ def main(
     elif args.color == "256":
         truecolor = False
 
-    bg = term.bg
+    bg_rgb: tuple[int, int, int] = term.bg
     keep_alpha = False
     if args.bg:
         if args.bg.lower() == "none":
@@ -2432,10 +2419,12 @@ def main(
         else:
             try:
                 c = parse_color(args.bg)
-                bg = (c[0], c[1], c[2])
+                if c is None:
+                    keep_alpha = True
+                else:
+                    bg_rgb = (c[0], c[1], c[2])
             except ValueError:
-                msg = f"unknown --bg color {args.bg!r}"
-                raise typer.BadParameter(msg)
+                parser.error(f"unknown --bg color {args.bg!r}")
 
     cs = load_cairosvg() if args.engine in ("auto", "cairosvg") else None
     status = {"cairosvg": cs}
@@ -2455,7 +2444,7 @@ def main(
             continue
 
         try:
-            result = render_file(args, term, renderer, data, path, status)
+            result = render_file(args, term, renderer_name, data, path, status)
         except (ET.ParseError, ValueError, PathError) as e:
             print(f"svgview: {path}: cannot parse SVG ({e})", file=sys.stderr)
             failures += 1
@@ -2468,7 +2457,7 @@ def main(
             failures += 1
             continue
         img, engine, warn, _pw, _ph = result
-        out = emit(renderer, img, term, bg, truecolor)
+        out = emit(renderer_name, img, term, bg_rgb, truecolor)
         try:
             sys.stdout.buffer.write(out)
             sys.stdout.buffer.flush()
@@ -2482,15 +2471,15 @@ def main(
             elif not args.no_save:
                 png_path = path + ".png"
             if png_path:
-                png = export_png(args, status, data, path)
+                png_bytes = export_png(args, status, data, path)
                 if args.bg and not keep_alpha:
-                    w, h, rgba = decode_png(png)
-                    rgb = composite_rgb(w, h, rgba, bg)
+                    w, h, rgba = decode_png(png_bytes)
+                    rgb = composite_rgb(w, h, rgba, bg_rgb)
                     ba = bytearray(w * h * 4)
                     for i in range(w * h):
                         ba[i * 4 : i * 4 + 3] = rgb[i * 3 : i * 3 + 3]
                         ba[i * 4 + 3] = 255
-                    png = encode_png(w, h, bytes(ba))
+                    png_bytes = encode_png(w, h, bytes(ba))
         #                with open(png_path, "wb") as fh:
         #                    fh.write(png)
         except OSError as e:
@@ -2501,7 +2490,7 @@ def main(
         if not args.quiet:
             w, h = img[0], img[1]
             eng = engine if engine == "cairosvg" else "builtin"
-            bits = [f"{path}: {w}x{h} px via {renderer} [{eng}]"]
+            bits = [f"{path}: {w}x{h} px via {renderer_name} [{eng}]"]
             if png_path:
                 try:
                     iw, ih, _ = decode_png(open(png_path, "rb").read())
@@ -2512,10 +2501,10 @@ def main(
         if warn is not None and not warn.empty:
             note(f"  skipped: {warn.text()} — install cairosvg for full fidelity")
         if args.verbose:
-            note(f"  engine={engine} renderer={renderer} truecolor={truecolor} bg={bg} term={term.cols}x{term.rows}")
+            note(f"  engine={engine} renderer={renderer_name} truecolor={truecolor} bg={bg_rgb} term={term.cols}x{term.rows}")
 
     return 1 if failures else 0
 
 
 if __name__ == "__main__":
-    app()
+    raise SystemExit(main())

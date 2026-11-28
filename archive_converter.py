@@ -22,6 +22,7 @@ import lzma
 import os
 from pathlib import Path, PurePosixPath, PureWindowsPath
 import shutil
+import argparse
 import stat
 import sys
 import tarfile
@@ -33,7 +34,6 @@ from typing import IO, Any, Literal, cast
 import zipfile
 
 from loguru import logger
-import typer
 
 
 CHUNK: int = 1 << 20
@@ -893,11 +893,11 @@ def main(
         print_formats()
         return 0
     if not inputs:
-        msg = "no input files given"
-        raise typer.BadParameter(msg)
+        print("Error: no input files given", file=sys.stderr)
+        return 2
     if not to:
-        msg = "--to is required"
-        raise typer.BadParameter(msg)
+        print("Error: --to is required", file=sys.stderr)
+        return 2
     logger.remove()
     log_level = "ERROR" if quiet else ("DEBUG" if verbose else "INFO")
     logger.add(sys.stderr, level=log_level, format="{message}")
@@ -942,53 +942,51 @@ def main(
     return 1 if counts["failed"] else 0
 
 
-app = typer.Typer(
-    add_completion=False,
-    context_settings={"help_option_names": ["-h", "--help"]},
-    pretty_exceptions_show_locals=False,
-)
+def build_parser() -> argparse.ArgumentParser:
+    """Build the command-line argument parser."""
+    parser = argparse.ArgumentParser(
+        description="Convert archives and compressed files between formats with auto-detected input."
+    )
+    parser.add_argument("inputs", nargs="*", type=Path, help="Input archive or compressed files.")
+    parser.add_argument("-t", "--to", default=None, help="Target format, e.g. zip, tar.gz, zst.")
+    parser.add_argument("--remove", action="store_true", help="Remove source after successful conversion.")
+    parser.add_argument("-o", "--output-dir", type=Path, default=None, help="Directory for outputs.")
+    parser.add_argument("-f", "--force", action="store_true", help="Overwrite existing output files.")
+    parser.add_argument("-l", "--level", type=int, default=None, help="Compression level (format dependent).")
+    parser.add_argument("--dry-run", action="store_true", help="Print the conversion plan without writing.")
+    parser.add_argument("-j", "--jobs", type=int, default=1, help="Number of files to convert in parallel.")
+    parser.add_argument("--verify", action="store_true", help="Verify output after conversion.")
+    parser.add_argument("--strict", action="store_true", help="Fail when extension and content disagree.")
+    parser.add_argument("--tmpdir", type=Path, default=None, help="Temporary directory for staged conversions.")
+    parser.add_argument("--list-formats", action="store_true", help="List supported formats and exit.")
+    parser.add_argument("-v", "--verbose", action="store_true", help="Enable debug logging.")
+    parser.add_argument("-q", "--quiet", action="store_true", help="Only log errors.")
+    return parser
 
 
-@app.command(help="Convert archives and compressed files between formats with auto-detected input.")
-def cli(
-    inputs: list[Path] = typer.Argument(None, help="Input archive or compressed files."),
-    to: str | None = typer.Option(None, "--to", "-t", help="Target format, e.g. zip, tar.gz, zst."),
-    remove: bool = typer.Option(False, "--remove", help="Remove source after successful conversion."),
-    output_dir: Path | None = typer.Option(None, "--output-dir", "-o", help="Directory for outputs."),
-    force: bool = typer.Option(False, "--force", "-f", help="Overwrite existing output files."),
-    level: int | None = typer.Option(None, "--level", "-l", help="Compression level (format dependent)."),
-    dry_run: bool = typer.Option(False, "--dry-run", help="Print the conversion plan without writing."),
-    jobs: int = typer.Option(1, "--jobs", "-j", help="Number of files to convert in parallel."),
-    verify: bool = typer.Option(False, "--verify", help="Verify output after conversion."),
-    strict: bool = typer.Option(False, "--strict", help="Fail when extension and content disagree."),
-    tmpdir: Path | None = typer.Option(None, "--tmpdir", help="Temporary directory for staged conversions."),
-    list_formats: bool = typer.Option(False, "--list-formats", help="List supported formats and exit."),
-    verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable debug logging."),
-    quiet: bool = typer.Option(False, "--quiet", "-q", help="Only log errors."),
-) -> None:
-    """Typer entry point. Delegates to :func:`main`."""
-    if verbose and quiet:
-        msg = "-v and -q are mutually exclusive"
-        raise typer.BadParameter(msg)
-    raise typer.Exit(
-        code=main(
-            inputs=list(inputs or []),
-            to=to,
-            remove=remove,
-            output_dir=output_dir,
-            force=force,
-            level=level,
-            dry_run=dry_run,
-            jobs=jobs,
-            verify=verify,
-            strict=strict,
-            tmpdir=tmpdir,
-            list_formats=list_formats,
-            verbose=verbose,
-            quiet=quiet,
-        )
+def cli(argv: list[str] | None = None) -> int:
+    """CLI entry point. Delegates to :func:`main`."""
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    if args.verbose and args.quiet:
+        parser.error("-v and -q are mutually exclusive")
+    return main(
+        inputs=list(args.inputs or []),
+        to=args.to,
+        remove=args.remove,
+        output_dir=args.output_dir,
+        force=args.force,
+        level=args.level,
+        dry_run=args.dry_run,
+        jobs=args.jobs,
+        verify=args.verify,
+        strict=args.strict,
+        tmpdir=args.tmpdir,
+        list_formats=args.list_formats,
+        verbose=args.verbose,
+        quiet=args.quiet,
     )
 
 
 if __name__ == "__main__":
-    app()
+    raise SystemExit(cli())

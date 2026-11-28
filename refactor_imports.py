@@ -29,6 +29,14 @@ from functools import lru_cache
 from pathlib import Path
 from textwrap import dedent
 from typing import Annotated, Any, BinaryIO, Final, TypeAlias, cast
+from loguru import logger
+
+logger.remove()
+logger.add(
+    sys.stderr,
+    level=os.environ.get("LOGURU_LEVEL", "INFO"),
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+)
 
 PROG: Final = Path(sys.argv[0]).name or "refactor-imports"
 VERSION: Final = "2.0.0"
@@ -227,7 +235,7 @@ class Planner:
     ) -> None:
         self.module: cst.Module = wrapper.module
         self.parents: Parents = wrapper.resolve(md.ParentNodeProvider)
-        self.scopes: Mapping[cst.CSTNode, md.Scope] = wrapper.resolve(md.ScopeProvider)
+        self.scopes: Mapping[cst.CSTNode, md.Scope | None] = wrapper.resolve(md.ScopeProvider)
         self.contexts: Mapping[cst.CSTNode, md.ExpressionContext] = wrapper.resolve(md.ExpressionContextProvider)
         self.keep_imports: bool = keep_imports
         self.conservative: bool = conservative
@@ -851,7 +859,8 @@ def collect_paths(options: Options) -> tuple[list[Path], list[str]]:
     unique: list[Path] = []
     for path in result:
         try:
-            key = os.path.normcase(str(path.resolve()))
+            resolved_str = str(path.resolve())
+            key = resolved_str.lower() if os.name == "nt" else resolved_str
         except (OSError, RuntimeError, ValueError) as exc:
             problems.append(f"{path}: {exc}")
             continue
@@ -1225,232 +1234,6 @@ def run_argparse(args: Sequence[str], *, backend: ParserBackend, requested: Pars
         return 2  # pragma: no cover
 
 
-def parser_exception_exit_code(exc: Exception) -> int | None:
-    """Return an exit code for Click/Typer parser exceptions, or None otherwise."""
-    show: Any = getattr(exc, "show", None)
-    exit_code: Any = getattr(exc, "exit_code", None)
-    name = type(exc).__name__
-    if callable(show):
-        try:
-            show(file=sys.stderr)
-        except TypeError:
-            show()
-        return int(exit_code) if isinstance(exit_code, int) else 2
-    if name == "Exit" and isinstance(exit_code, int):
-        return int(exit_code)
-    if name == "Abort":
-        print(f"{PROG}: aborted", file=sys.stderr)
-        return 1
-    return None
-
-
-def run_typer(args: Sequence[str], *, backend: ParserBackend, requested: ParserBackend) -> int:
-    try:
-        import typer
-    except ImportError as exc:
-        print(f"{PROG}: error: Typer backend unavailable: {exc}", file=sys.stderr)
-        return 2
-
-    try:
-        app = typer.Typer(add_completion=False, pretty_exceptions_enable=False)
-    except TypeError:
-        app = typer.Typer(add_completion=False)
-
-    @app.command(
-        context_settings={
-            "help_option_names": ["-h", "--help"],
-            "allow_interspersed_args": True,
-        }
-    )
-    def command(
-        files: Annotated[
-            list[Path] | None,
-            typer.Argument(
-                exists=True,
-                dir_okay=True,
-                file_okay=True,
-                readable=True,
-                help="Files/directories to process. If omitted, scan '.' recursively.",
-            ),
-        ] = None,
-        write: Annotated[
-            bool, typer.Option("--write", "-w", help="Rewrite files in place (default behavior).")
-        ] = False,
-        dry_run: Annotated[
-            bool,
-            typer.Option(
-                "--dry-run",
-                "-n",
-                "--no-write",
-                help="Report what would change without writing (does not print file contents).",
-            ),
-        ] = False,
-        diff: Annotated[bool, typer.Option("--diff", "-d", help="Show a unified diff without writing.")] = False,
-        check: Annotated[
-            bool, typer.Option("--check", "-c", help="Exit 1 if any file would change; never write.")
-        ] = False,
-        stdout: Annotated[
-            bool,
-            typer.Option(
-                "--stdout",
-                help="Print the refactored bytes of exactly one file to stdout; never write.",
-            ),
-        ] = False,
-        version: Annotated[bool, typer.Option("--version", "-V", help="Show version and exit.")] = False,
-        color: Annotated[
-            Color,
-            typer.Option("--color", help="Diff coloring: auto, always or never."),
-        ] = Color.auto,
-        context: Annotated[
-            int, typer.Option("--context", "-U", min=0, help="Unified diff context lines (default: 3).")
-        ] = 3,
-        conservative: Annotated[
-            bool,
-            typer.Option(
-                "--conservative",
-                "-C",
-                help="Only unique standalone top-level imports and later uses; skip files with star imports.",
-            ),
-        ] = False,
-        skip: Annotated[
-            list[str] | None,
-            typer.Option(
-                "--skip",
-                metavar="NAME",
-                help="Do not bind this module/attribute directly (repeatable/comma-separated).",
-            ),
-        ] = None,
-        keep_imports: Annotated[
-            bool,
-            typer.Option("--keep-imports", "-k", help="Retain module bindings, e.g. for re-exports."),
-        ] = False,
-        include_from_imports: Annotated[
-            bool,
-            typer.Option(
-                "--include-from-imports",
-                help="Assume absolute from-imported objects are submodules. Unsafe for classes/functions.",
-            ),
-        ] = False,
-        extensions: Annotated[
-            list[str] | None,
-            typer.Option(
-                "--ext",
-                "--extension",
-                metavar="EXT",
-                help="Directory-discovery extension (repeatable/comma-separated; default .py).",
-            ),
-        ] = None,
-        exclude: Annotated[
-            list[str] | None,
-            typer.Option(
-                "--exclude",
-                metavar="GLOB",
-                help="Additional path glob to skip during directory discovery (repeatable/comma-separated).",
-            ),
-        ] = None,
-        no_default_excludes: Annotated[
-            bool,
-            typer.Option("--no-default-excludes", help="Do not apply the built-in directory excludes."),
-        ] = False,
-        follow_symlinks: Annotated[
-            bool,
-            typer.Option(
-                "--follow-symlinks",
-                "-L",
-                help="Follow directory symlinks during discovery (with loop protection).",
-            ),
-        ] = False,
-        jobs: Annotated[
-            int,
-            typer.Option(
-                "--jobs",
-                "-j",
-                "--workers",
-                min=1,
-                metavar="N",
-                help="Number of files to process in parallel (default: 1).",
-            ),
-        ] = 1,
-        max_passes: Annotated[
-            int,
-            typer.Option(
-                "--max-passes",
-                min=1,
-                metavar="N",
-                help="Maximum refactoring passes per file (default: 100).",
-            ),
-        ] = 100,
-        quiet: Annotated[bool, typer.Option("--quiet", "-q", help="Suppress non-error status messages.")] = False,
-        verbose: Annotated[bool, typer.Option("--verbose", "-v", help="Print extra status messages.")] = False,
-        parser_backend: Annotated[
-            ParserBackend,
-            typer.Option(
-                "--parser",
-                metavar="BACKEND",
-                help="Parser backend: auto, typer or argparse (default: auto).",
-            ),
-        ] = ParserBackend.auto,
-        typer_backend: Annotated[bool, typer.Option("--typer", help="Force the Typer backend.")] = False,
-        argparse_backend: Annotated[
-            bool,
-            typer.Option(
-                "--argparse",
-                "--no-typer",
-                help="Force the argparse backend, even if Typer is installed.",
-            ),
-        ] = False,
-    ) -> int:
-        """Rewrite Python imports in place; with no paths, scan '.' recursively."""
-        # The actual backend is selected before parsing so --parser/--typer/--argparse
-        # can work uniformly with either backend. These values are parsed for help/validation.
-        _ = (parser_backend, typer_backend, argparse_backend)
-        try:
-            mode = resolve_mode(
-                write=write,
-                dry_run=dry_run,
-                diff=diff,
-                check=check,
-                stdout=stdout,
-            )
-            if version:
-                print(f"{PROG} {VERSION}")
-                return 0
-            options = build_options(
-                files=files,
-                mode=mode,
-                color=color,
-                context=context,
-                conservative=conservative,
-                skip=skip,
-                keep_imports=keep_imports,
-                include_from_imports=include_from_imports,
-                extensions=extensions,
-                exclude=exclude,
-                no_default_excludes=no_default_excludes,
-                follow_symlinks=follow_symlinks,
-                jobs=jobs,
-                max_passes=max_passes,
-                quiet=quiet,
-                verbose=verbose,
-                backend=backend,
-                requested_backend=requested,
-            )
-            return run(options)
-        except UsageError as exc:
-            raise typer.BadParameter(str(exc)) from exc
-
-    try:
-        result = app(args=list(args), standalone_mode=False, prog_name=PROG)
-    except SystemExit as exc:
-        return system_exit_code(exc)
-    except Exception as exc:
-        handled = parser_exception_exit_code(exc)
-        if handled is not None:
-            return handled
-        raise
-    return int(result or 0)
-
-
 def before_separator(argv: Sequence[str]) -> list[str]:
     result: list[str] = []
     for arg in argv:
@@ -1482,15 +1265,6 @@ def requested_backend(argv: Sequence[str]) -> ParserBackend:
     return requested
 
 
-@lru_cache(maxsize=1)
-def typer_available() -> bool:
-    try:
-        import typer  # noqa: F401
-    except Exception:
-        return False
-    return True
-
-
 def system_exit_code(exc: SystemExit) -> int:
     code = exc.code
     if code is None:
@@ -1515,30 +1289,8 @@ def silence_broken_pipe() -> None:
 def run_cli(argv: Sequence[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     requested = requested_backend(args)
-    if requested is ParserBackend.argparse:
-        backend = ParserBackend.argparse
-    else:
-        available = typer_available()
-        if requested is ParserBackend.typer and not available:
-            print(
-                f"{PROG}: error: Typer backend requested but Typer is not installed; "
-                "install typer or use --parser argparse",
-                file=sys.stderr,
-            )
-            return 2
-        backend = (
-            requested
-            if requested is ParserBackend.typer
-            else (ParserBackend.typer if available else ParserBackend.argparse)
-        )
-
     try:
-        if backend is ParserBackend.typer:
-            return run_typer(args, backend=backend, requested=requested)
-        return run_argparse(args, backend=backend, requested=requested)
-    except ImportError as exc:
-        print(f"{PROG}: error: Typer backend unavailable: {exc}", file=sys.stderr)
-        return 2
+        return run_argparse(args, backend=ParserBackend.argparse, requested=requested)
     except SystemExit as exc:
         return system_exit_code(exc)
 

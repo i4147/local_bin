@@ -3,3 +3,5 @@
 !*.*
 !.gitignore
 !shebang-filter
+!tools/
+tools/__pycache__/

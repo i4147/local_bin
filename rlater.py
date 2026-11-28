@@ -50,6 +50,14 @@ import webbrowser
 import zlib
 
 from dh import atomic_write
+from loguru import logger
+
+logger.remove()
+logger.add(
+    sys.stderr,
+    level=os.environ.get("LOGURU_LEVEL", "INFO"),
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+)
 
 
 if TYPE_CHECKING:
@@ -1281,7 +1289,8 @@ def render_terminal(row: sqlite3.Row, tags: Sequence[str], width: int, style: St
                     lines.append(wrap(strip_links(line), "  ", "  "))
             out.append("\n".join(lines))
         elif kind == "quote":
-            level = QUOTE_PREFIX.match(text.splitlines()[0]).group(0).count(">") if text else 1  # type: ignore[union-attr]
+            match = QUOTE_PREFIX.match(text.splitlines()[0]) if text else None
+            level = match.group(0).count(">") if match else 1
             bar = "│ " * level
             paras: list[list[str]] = [[]]
             for line in text.splitlines():

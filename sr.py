@@ -13,6 +13,7 @@ Examples:
 """
 
 from __future__ import annotations
+import argparse
 from collections import deque
 from collections.abc import Iterator
 from dataclasses import dataclass, field
@@ -26,9 +27,17 @@ import sys
 import tempfile
 
 from rich.console import Console
+from rich.prompt import Confirm
 from rich.table import Table
 from rich.text import Text
-import typer
+from loguru import logger
+
+logger.remove()
+logger.add(
+    sys.stderr,
+    level=os.environ.get("LOGURU_LEVEL", "INFO"),
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+)
 
 
 __version__: str = "2.0.0"
@@ -122,8 +131,8 @@ class Config:
     "Store mode, search, eliminate, replace, filenames and related state."
 
     mode: str = "search"
-    search: re.Pattern = None
-    eliminate: re.Pattern | None = None
+    search: re.Pattern[str] = field(default_factory=lambda: re.compile(""))
+    eliminate: re.Pattern[str] | None = None
     replace: str | None = None
     filenames: bool = False
     explain: bool = False
@@ -432,10 +441,11 @@ def replace_file(path: Path, cfg: Config, console: Console) -> int:
     if cfg.explain:
         return count
 
-    if cfg.interactive and not typer.confirm(f"Replace {count} occurrence(s) in {path}?", default=True):
+    if cfg.interactive and not Confirm.ask(f"Replace {count} occurrence(s) in {path}?", default=True):
         return 0
 
-    new_data = cfg.search.sub(cfg.replace, data, count=cfg.max_count or 0)
+    replacement = "" if cfg.replace is None else cfg.replace
+    new_data = cfg.search.sub(replacement, data, count=cfg.max_count or 0)
 
     try:
         fd, tmp_name = tempfile.mkstemp(dir=str(path.parent), prefix=f".{path.name}.", suffix=".sr~")
@@ -472,12 +482,6 @@ def _next_backup_path(path: Path) -> Path | None:
 # ---------------------------------------------------------------------- CLI
 
 
-def _version_callback(value: bool) -> None:
-    if value:
-        typer.echo(f"sr {__version__}")
-        raise typer.Exit
-
-
 def _preprocess_legacy_flags(argv: list[str]) -> list[str]:
     """Rewrite --python / --nopython → --include-type=python / --exclude-type=python."""
     out = []
@@ -491,108 +495,258 @@ def _preprocess_legacy_flags(argv: list[str]) -> list[str]:
     return out
 
 
-app = typer.Typer(
-    name="sr",
-    help="Recursively search and replace in files.",
-    add_completion=True,
-    rich_markup_mode="rich",
-)
-
-
-@app.command(context_settings={"help_option_names": ["-h", "--help"]})
-def main(
-    args: list[str] | None = typer.Argument(None, help="Pattern [and target paths] (pattern optional if -s given)"),
-    search: str | None = typer.Option(
-        None,
+def build_parser() -> argparse.ArgumentParser:
+    """Build the command-line argument parser."""
+    parser = argparse.ArgumentParser(
+        prog="sr",
+        description="Recursively search and replace in files.",
+    )
+    parser.add_argument(
+        "args",
+        nargs="*",
+        help="Pattern [and target paths] (pattern optional if -s given)",
+    )
+    parser.add_argument(
         "-s",
         "--search",
+        default=None,
         help="Pattern to search for (if omitted, first positional is used)",
-    ),
-    replace: str | None = typer.Option(None, "-r", "--replace", help="Replacement string (enables replace mode)"),
-    eliminate: str | None = typer.Option(None, "-e", "--eliminate", help="Skip lines matching this pattern"),
-    ignore_case: bool = typer.Option(False, "-i", "--ignore-case", help="Case-insensitive matching"),
-    literal: bool = typer.Option(False, "-E", "--literal", help="Treat pattern as a literal string (no regex)"),
-    word_regexp: bool = typer.Option(
-        False,
+    )
+    parser.add_argument(
+        "-r",
+        "--replace",
+        default=None,
+        help="Replacement string (enables replace mode)",
+    )
+    parser.add_argument(
+        "-e",
+        "--eliminate",
+        default=None,
+        help="Skip lines matching this pattern",
+    )
+    parser.add_argument("-i", "--ignore-case", action="store_true", help="Case-insensitive matching")
+    parser.add_argument(
+        "-E",
+        "--literal",
+        action="store_true",
+        help="Treat pattern as a literal string (no regex)",
+    )
+    parser.add_argument(
         "-w",
         "--word-regexp",
+        action="store_true",
         help=r"Match whole words only (wraps pattern in \b)",
-    ),
-    invert: bool = typer.Option(False, "--invert-match", help="Select non-matching lines (like grep -v)"),
-    output_limit: int | None = typer.Option(
-        None,
+    )
+    parser.add_argument(
+        "--invert-match",
+        dest="invert",
+        action="store_true",
+        help="Select non-matching lines (like grep -v)",
+    )
+    parser.add_argument(
         "-l",
         "--output-limit",
+        type=int,
+        default=None,
         help=f"Max line length before truncating (default: {DEFAULT_OUTPUT_LIMIT})",
-    ),
-    filenames: bool = typer.Option(
-        False,
+    )
+    parser.add_argument(
         "-n",
         "--filenames",
         "--files-with-matches",
+        dest="filenames",
+        action="store_true",
         help="Print only names of files containing matches",
-    ),
-    count: bool = typer.Option(False, "-c", "--count", help="Print match count per file"),
-    quiet: bool = typer.Option(
-        False,
+    )
+    parser.add_argument("-c", "--count", action="store_true", help="Print match count per file")
+    parser.add_argument(
         "-q",
         "--quiet",
+        action="store_true",
         help="No output; exit code indicates whether matches were found",
-    ),
-    only_matching: bool = typer.Option(
-        False, "-o", "--only-matching", help="Print only the matching part of each line"
-    ),
-    context: int | None = typer.Option(None, "-C", "--context", help="Show N lines of context around matches"),
-    before_context: int | None = typer.Option(None, "-B", "--before-context", help="Show N lines before matches"),
-    after_context: int | None = typer.Option(None, "-A", "--after-context", help="Show N lines after matches"),
-    max_count: int | None = typer.Option(None, "-m", "--max-count", help="Stop after N matches per file"),
-    exclude: list[str] = typer.Option([], "-x", "--exclude", help="Skip files/dirs matching this regex (repeatable)"),
-    exclude_dir: list[str] = typer.Option([], "--exclude-dir", help="Skip directories with this name (repeatable)"),
-    include_type: list[str] = typer.Option(
-        [],
+    )
+    parser.add_argument(
+        "-o",
+        "--only-matching",
+        action="store_true",
+        help="Print only the matching part of each line",
+    )
+    parser.add_argument(
+        "-C",
+        "--context",
+        type=int,
+        default=None,
+        help="Show N lines of context around matches",
+    )
+    parser.add_argument(
+        "-B",
+        "--before-context",
+        type=int,
+        default=None,
+        help="Show N lines before matches",
+    )
+    parser.add_argument(
+        "-A",
+        "--after-context",
+        type=int,
+        default=None,
+        help="Show N lines after matches",
+    )
+    parser.add_argument(
+        "-m",
+        "--max-count",
+        type=int,
+        default=None,
+        help="Stop after N matches per file",
+    )
+    parser.add_argument(
+        "-x",
+        "--exclude",
+        action="append",
+        default=[],
+        help="Skip files/dirs matching this regex (repeatable)",
+    )
+    parser.add_argument(
+        "--exclude-dir",
+        action="append",
+        default=[],
+        help="Skip directories with this name (repeatable)",
+    )
+    parser.add_argument(
         "-t",
         "--include-type",
         "--type",
+        dest="include_type",
+        action="append",
+        default=[],
         help="Only process files of this type (repeatable)",
-    ),
-    exclude_type: list[str] = typer.Option([], "-T", "--exclude-type", help="Skip files of this type (repeatable)"),
-    flags: str | None = typer.Option(None, "-f", "--flags", help="Extra regex flags as letters, e.g. 'ims'"),
-    backup: bool = typer.Option(False, "-b", "--backup", help="Save .NNN~ backup before replacing"),
-    dry_run: bool = typer.Option(
-        False,
+    )
+    parser.add_argument(
+        "-T",
+        "--exclude-type",
+        action="append",
+        default=[],
+        help="Skip files of this type (repeatable)",
+    )
+    parser.add_argument(
+        "-f",
+        "--flags",
+        default=None,
+        help="Extra regex flags as letters, e.g. 'ims'",
+    )
+    parser.add_argument(
+        "-b",
+        "--backup",
+        action="store_true",
+        help="Save .NNN~ backup before replacing",
+    )
+    parser.add_argument(
         "--dry-run",
         "--explain",
+        dest="dry_run",
+        action="store_true",
         help="Show what would change, don't modify files",
-    ),
-    interactive: bool = typer.Option(False, "--interactive", help="Prompt before modifying each file"),
-    ignore_file: Path | None = typer.Option(None, "--ignore-file", help="Load glob patterns from this file"),
-    no_ignore: bool = typer.Option(False, "--no-ignore", help="Don't use built-in ignore lists"),
-    hidden: bool = typer.Option(False, "--hidden", help="Include hidden files and directories"),
-    follow: bool = typer.Option(False, "--follow", help="Follow symbolic links"),
-    max_depth: int | None = typer.Option(None, "--max-depth", help="Maximum recursion depth"),
-    json_output: bool = typer.Option(False, "--json", help="Emit results as JSON Lines"),
-    stats: bool = typer.Option(False, "--stats", help="Print summary table at end"),
-    color: str = typer.Option("auto", "--color", help="Color mode: auto|always|never"),
-    verbose: bool = typer.Option(False, "-v", "--verbose", help="Verbose diagnostics"),
-    version: bool | None = typer.Option(
-        None,
-        "--version",
+    )
+    parser.add_argument(
+        "--interactive",
+        action="store_true",
+        help="Prompt before modifying each file",
+    )
+    parser.add_argument(
+        "--ignore-file",
+        type=Path,
+        default=None,
+        help="Load glob patterns from this file",
+    )
+    parser.add_argument(
+        "--no-ignore",
+        action="store_true",
+        help="Don't use built-in ignore lists",
+    )
+    parser.add_argument(
+        "--hidden",
+        action="store_true",
+        help="Include hidden files and directories",
+    )
+    parser.add_argument("--follow", action="store_true", help="Follow symbolic links")
+    parser.add_argument("--max-depth", type=int, default=None, help="Maximum recursion depth")
+    parser.add_argument(
+        "--json",
+        dest="json_output",
+        action="store_true",
+        help="Emit results as JSON Lines",
+    )
+    parser.add_argument("--stats", action="store_true", help="Print summary table at end")
+    parser.add_argument("--color", default="auto", help="Color mode: auto|always|never")
+    parser.add_argument("-v", "--verbose", action="store_true", help="Verbose diagnostics")
+    parser.add_argument(
         "-V",
-        callback=_version_callback,
-        is_eager=True,
+        "--version",
+        action="version",
+        version=f"sr {__version__}",
         help="Show version and exit",
-    ),
-    help_types: bool = typer.Option(False, "--help-types", "--list-types", help="List available file types and exit"),
+    )
+    parser.add_argument(
+        "--help-types",
+        "--list-types",
+        dest="help_types",
+        action="store_true",
+        help="List available file types and exit",
+    )
+    return parser
+
+
+def main(
+    args: list[str] | None = None,
+    search: str | None = None,
+    replace: str | None = None,
+    eliminate: str | None = None,
+    ignore_case: bool = False,
+    literal: bool = False,
+    word_regexp: bool = False,
+    invert: bool = False,
+    output_limit: int | None = None,
+    filenames: bool = False,
+    count: bool = False,
+    quiet: bool = False,
+    only_matching: bool = False,
+    context: int | None = None,
+    before_context: int | None = None,
+    after_context: int | None = None,
+    max_count: int | None = None,
+    exclude: list[str] | None = None,
+    exclude_dir: list[str] | None = None,
+    include_type: list[str] | None = None,
+    exclude_type: list[str] | None = None,
+    flags: str | None = None,
+    backup: bool = False,
+    dry_run: bool = False,
+    interactive: bool = False,
+    ignore_file: Path | None = None,
+    no_ignore: bool = False,
+    hidden: bool = False,
+    follow: bool = False,
+    max_depth: int | None = None,
+    json_output: bool = False,
+    stats: bool = False,
+    color: str = "auto",
+    verbose: bool = False,
+    help_types: bool = False,
 ) -> None:
     "Run the command-line interface."
+    exclude = exclude or []
+    exclude_dir = exclude_dir or []
+    include_type = include_type or []
+    exclude_type = exclude_type or []
+
     if help_types:
         _display_file_types()
-        raise typer.Exit
+        raise SystemExit(0)
 
     color = color.lower()
     if color not in ("auto", "always", "never"):
-        typer.echo(f"Error: --color must be auto|always|never, got {color!r}", err=True)
-        raise typer.Exit(2)
+        print(f"Error: --color must be auto|always|never, got {color!r}", file=sys.stderr)
+        raise SystemExit(2)
 
     console = make_console(color)
 
@@ -600,8 +754,8 @@ def main(
     args = args or []
     if search is None:
         if not args:
-            typer.echo("Error: no search pattern", err=True)
-            raise typer.Exit(2)
+            print("Error: no search pattern", file=sys.stderr)
+            raise SystemExit(2)
         pattern_str = args[0]
         target_strs = args[1:]
     else:
@@ -626,37 +780,37 @@ def main(
                 if not isinstance(val, re.RegexFlag):
                     raise AttributeError
             except AttributeError:
-                typer.echo(f"Error: unknown regex flag {ch!r}", err=True)
-                raise typer.Exit(2)
+                print(f"Error: unknown regex flag {ch!r}", file=sys.stderr)
+                raise SystemExit(2)
             flag_bits |= val
 
     try:
         search_re = re.compile(pattern_str, flag_bits)
     except re.error as e:
-        typer.echo(f"Error: invalid pattern: {e}", err=True)
-        raise typer.Exit(2)
+        print(f"Error: invalid pattern: {e}", file=sys.stderr)
+        raise SystemExit(2)
 
     eliminate_re = None
     if eliminate:
         try:
             eliminate_re = re.compile(eliminate, flag_bits)
         except re.error as e:
-            typer.echo(f"Error: invalid --eliminate pattern: {e}", err=True)
-            raise typer.Exit(2)
+            print(f"Error: invalid --eliminate pattern: {e}", file=sys.stderr)
+            raise SystemExit(2)
 
     # ---- Validate combos ----
     if replace is not None and (filenames or count):
-        typer.echo("Error: --replace can't be combined with --filenames/--count", err=True)
-        raise typer.Exit(2)
+        print("Error: --replace can't be combined with --filenames/--count", file=sys.stderr)
+        raise SystemExit(2)
     if replace is not None and invert:
-        typer.echo("Error: --replace can't be combined with --invert-match", err=True)
-        raise typer.Exit(2)
+        print("Error: --replace can't be combined with --invert-match", file=sys.stderr)
+        raise SystemExit(2)
     if replace is not None and only_matching:
-        typer.echo("Error: --replace can't be combined with --only-matching", err=True)
-        raise typer.Exit(2)
+        print("Error: --replace can't be combined with --only-matching", file=sys.stderr)
+        raise SystemExit(2)
     if only_matching and invert:
-        typer.echo("Error: --only-matching can't be combined with --invert-match", err=True)
-        raise typer.Exit(2)
+        print("Error: --only-matching can't be combined with --invert-match", file=sys.stderr)
+        raise SystemExit(2)
 
     # ---- Build config ----
     cfg = Config(
@@ -690,13 +844,13 @@ def main(
 
     for t in include_type:
         if t not in FILE_TYPES:
-            typer.echo(f"Error: unknown file type {t!r}. See --help-types.", err=True)
-            raise typer.Exit(2)
+            print(f"Error: unknown file type {t!r}. See --help-types.", file=sys.stderr)
+            raise SystemExit(2)
         cfg.allow_exts.update(FILE_TYPES[t])
     for t in exclude_type:
         if t not in FILE_TYPES:
-            typer.echo(f"Error: unknown file type {t!r}. See --help-types.", err=True)
-            raise typer.Exit(2)
+            print(f"Error: unknown file type {t!r}. See --help-types.", file=sys.stderr)
+            raise SystemExit(2)
         cfg.disallow_exts.update(FILE_TYPES[t])
 
     if verbose:
@@ -739,15 +893,15 @@ def main(
             console.print(table)
 
     if (cfg.quiet or cfg.count or cfg.filenames) and total_matches == 0:
-        raise typer.Exit(1)
+        raise SystemExit(1)
 
 
 def _compile_or_die(pattern: str) -> re.Pattern:
     try:
         return re.compile(pattern)
     except re.error as e:
-        typer.echo(f"Error: invalid regex {pattern!r}: {e}", err=True)
-        raise typer.Exit(2)
+        print(f"Error: invalid regex {pattern!r}: {e}", file=sys.stderr)
+        raise SystemExit(2)
 
 
 def _load_ignore_file(path: Path) -> list[str]:
@@ -760,21 +914,22 @@ def _load_ignore_file(path: Path) -> list[str]:
                     continue
                 patterns.append(line)
     except OSError as e:
-        typer.echo(f"Error: cannot read ignore file {path}: {e}", err=True)
-        raise typer.Exit(2)
+        print(f"Error: cannot read ignore file {path}: {e}", file=sys.stderr)
+        raise SystemExit(2)
     return patterns
 
 
 def _display_file_types() -> None:
-    typer.echo("Available file types (-t TYPE to include, -T TYPE to exclude):")
+    print("Available file types (-t TYPE to include, -T TYPE to exclude):")
     for ftype in sorted(FILE_TYPES):
-        typer.echo(f"  {ftype:12s}: {', '.join(FILE_TYPES[ftype])}")
+        print(f"  {ftype:12s}: {', '.join(FILE_TYPES[ftype])}")
 
 
-def cli() -> None:
+def cli(argv: list[str] | None = None) -> None:
     """Entry point that preprocesses legacy --python / --nopython flags."""
-    sys.argv[1:] = _preprocess_legacy_flags(sys.argv[1:])
-    app()
+    raw = sys.argv[1:] if argv is None else argv
+    ns = build_parser().parse_args(_preprocess_legacy_flags(raw))
+    main(**vars(ns))
 
 
 if __name__ == "__main__":
