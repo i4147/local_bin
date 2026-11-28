@@ -171,6 +171,6 @@
   "compileall": "122 changed Python files passed",
   "notes": [
     "Ruff unsafe fixes were applied at user request and may alter runtime behavior, including import side effects.",
-    "Preexisting Phase 1 working-tree changes were preserved; the unsafe pass is uncommitted."
+    "Changes included in PR branch commit 72fa73b."
   ]
 }

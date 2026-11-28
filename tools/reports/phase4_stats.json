@@ -43,6 +43,6 @@
     "Default and configured results are not comparable: configured check uses extra temporary dependencies, including dh-slim from i4147/dh.",
     "Some scripts explicitly target Python versions later than the 3.11 checker environment.",
     "Remaining optional dependencies and source diagnostics need review; no ignore comments added.",
-    "No phase commit was made because the working tree contained extensive preexisting uncommitted changes."
+    "Changes included in PR branch commit 72fa73b."
   ]
 }

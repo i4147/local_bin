@@ -9,7 +9,7 @@
 
 ## Changed files and commits
 
-- The unsafe Ruff pass and Phase 4 changes are uncommitted; the working tree already contained extensive changes. See `phase3_stats.json` and `phase4_stats.json` for the respective file lists.
+- Commit `72fa73b` includes the lazy-import, similarity, unsafe Ruff and Phase 4 changes that were present in the working tree. See the phase stats for file lists.
 - Earlier Phase 3 commit `563dc9b` contains three F541 fixes and the original Ruff reports.
 - Earlier turns reported Phase 1 commit `ce03885` and Phase 2 commit `2cd0c8f`; those commits are not present in this checkout's Git object database or history. Their file changes were present in the working tree before the unsafe pass.
 
