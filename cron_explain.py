@@ -5,16 +5,22 @@ Fully type-annotated and self-contained for Python 3.12+.
 """
 
 from __future__ import annotations
+import argparse
 import dataclasses
 from datetime import UTC, datetime, timedelta
+import json
 import os
 from pathlib import Path
 import sys
-from types import SimpleNamespace
-from typing import Annotated
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+from loguru import logger
 
-import typer
+logger.remove()
+logger.add(
+    sys.stderr,
+    level=os.environ.get("LOGURU_LEVEL", "INFO"),
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -289,7 +295,7 @@ def compute_next_runs(
     while len(runs) < n and current < horizon:
         naive_dt = current.replace(tzinfo=None)
         try:
-            (naive_dt.replace(tzInfo=tz, fold=0) if hasattr(datetime, "fold") else naive_dt.replace(tzinfo=tz))
+            (naive_dt.replace(tzinfo=tz, fold=0) if hasattr(datetime, "fold") else naive_dt.replace(tzinfo=tz))
         except Exception:
             pass
         try:
@@ -366,46 +372,51 @@ def discover_sources(file_path: str | None) -> list[tuple[str, int, str]]:
     return lines
 
 
-app = typer.Typer(
-    add_completion=False,
-    context_settings={"help_option_names": ["-h", "--help"]},
-    pretty_exceptions_show_locals=False,
-)
-
-
-@app.command(help="Advanced Crontab Explainer & DST Simulator")
-def main(
-    expression: Annotated[
-        str | None,
-        typer.Argument(help="Cron expression string (e.g., '*/5 9-17 * * MON-FRI')"),
-    ] = None,
-    file: Annotated[str | None, typer.Option("--file", help="Path to crontab or cron.d file")] = None,
-    tz: Annotated[
-        str,
-        typer.Option("--tz", help="Target timezone (e.g., America/Toronto, Europe/London)"),
-    ] = "UTC",
-    next: Annotated[int, typer.Option("--next", help="Number of next runs to compute")] = 5,
-    dst_warnings: Annotated[bool, typer.Option("--dst-warnings", help="Enable strict DST gap/fold analysis")] = False,
-    overlaps: Annotated[bool, typer.Option("--overlaps", help="Check for overlapping job executions")] = False,
-    min_duration: Annotated[
-        str,
-        typer.Option("--min-duration", help="Assumed job duration for overlap analysis"),
-    ] = "30m",
-    json: Annotated[bool, typer.Option("--json", help="Output results in JSON format")] = False,
-) -> None:
-    "Run the command-line interface."
-    args = SimpleNamespace(
-        expression=expression,
-        file=file,
-        tz=tz,
-        next=next,
-        dst_warnings=dst_warnings,
-        overlaps=overlaps,
-        min_duration=min_duration,
-        json=json,
+def build_parser() -> argparse.ArgumentParser:
+    """Build the command-line argument parser."""
+    parser = argparse.ArgumentParser(description="Advanced Crontab Explainer & DST Simulator")
+    parser.add_argument(
+        "expression",
+        nargs="?",
+        default=None,
+        help="Cron expression string (e.g., '*/5 9-17 * * MON-FRI')",
     )
+    parser.add_argument("--file", default=None, help="Path to crontab or cron.d file")
+    parser.add_argument(
+        "--tz",
+        default="UTC",
+        help="Target timezone (e.g., America/Toronto, Europe/London)",
+    )
+    parser.add_argument("--next", type=int, default=5, help="Number of next runs to compute")
+    parser.add_argument(
+        "--dst-warnings",
+        action="store_true",
+        help="Enable strict DST gap/fold analysis",
+    )
+    parser.add_argument(
+        "--overlaps",
+        action="store_true",
+        help="Check for overlapping job executions",
+    )
+    parser.add_argument(
+        "--min-duration",
+        default="30m",
+        help="Assumed job duration for overlap analysis",
+    )
+    parser.add_argument(
+        "--json",
+        dest="json",
+        action="store_true",
+        help="Output results in JSON format",
+    )
+    return parser
+
+
+def main(argv: list[str] | None = None) -> None:
+    "Run the command-line interface."
+    args = build_parser().parse_args(argv)
     try:
-        tz = ZoneInfo(args.tz)
+        tz_info = ZoneInfo(args.tz)
     except ZoneInfoNotFoundError:
         print(f"Error: Timezone '{args.tz}' not found.", file=sys.stderr)
         sys.exit(2)
@@ -430,7 +441,7 @@ def main(
     has_warnings = False
     for spec in specs:
         explanation = explain_cron(spec)
-        runs, warnings = compute_next_runs(spec, tz, datetime.now(tz), n=args.next)
+        runs, warnings = compute_next_runs(spec, tz_info, datetime.now(tz_info), n=args.next)
         if warnings:
             has_warnings = True
         all_analyses.append(
@@ -479,4 +490,4 @@ def main(
 
 
 if __name__ == "__main__":
-    app()
+    main()

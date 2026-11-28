@@ -21,7 +21,7 @@ import select
 import shutil
 from string import Template
 import sys
-from typing import Any, Final, Literal, NoReturn
+from typing import Any, Final, Literal, NoReturn, TypeAlias
 import unicodedata
 import urllib.error
 import urllib.parse
@@ -49,27 +49,14 @@ else:
     tty = None
 
 
-if sys.version_info >= (3, 12):
-    # PEP 695 ``type`` aliases; exec'd so this file still parses on Python < 3.12.
-    exec(
-        "type ColorMode = Literal['auto', 'always', 'never']\n"
-        "type ThemeName = Literal['dark', 'light', 'mono']\n"
-        "type BackendName = Literal['auto', 'rich', 'builtin']\n"
-        "type ConvertMode = Literal['render', 'to-html', 'to-markdown']\n"
-        "type InputFormat = Literal['auto', 'markdown', 'html']\n"
-        "type DocFormat = Literal['markdown', 'html']\n"
-        "type Align = Literal['left', 'center', 'right', 'none']\n"
-        "type SgrCodes = tuple[str, ...]"
-    )
-else:
-    ColorMode = Literal["auto", "always", "never"]
-    ThemeName = Literal["dark", "light", "mono"]
-    BackendName = Literal["auto", "rich", "builtin"]
-    ConvertMode = Literal["render", "to-html", "to-markdown"]
-    InputFormat = Literal["auto", "markdown", "html"]
-    DocFormat = Literal["markdown", "html"]
-    Align = Literal["left", "center", "right", "none"]
-    SgrCodes = tuple[str, ...]
+ColorMode: TypeAlias = Literal["auto", "always", "never"]
+ThemeName: TypeAlias = Literal["dark", "light", "mono"]
+BackendName: TypeAlias = Literal["auto", "rich", "builtin"]
+ConvertMode: TypeAlias = Literal["render", "to-html", "to-markdown"]
+InputFormat: TypeAlias = Literal["auto", "markdown", "html"]
+DocFormat: TypeAlias = Literal["markdown", "html"]
+Align: TypeAlias = Literal["left", "center", "right", "none"]
+SgrCodes: TypeAlias = tuple[str, ...]
 
 
 class ExitCode(IntEnum):
@@ -152,7 +139,7 @@ $body
 </html>
 """)
 
-PAGER_HELP: Final = """glow.py pager -- keyboard reference
+PAGER_HELP: Final[str] = """glow.py pager -- keyboard reference
 
   q  Esc  Ctrl-C   quit
   Space  f  PageDown   next page        b  Ctrl-B  PageUp   previous page
@@ -529,10 +516,7 @@ class RawHtml:
     html: str
 
 
-if sys.version_info >= (3, 12):
-    exec("type InlineNode = Text | CodeSpan | Strong | Emph | Strike | Link | Image | SoftBreak | HardBreak | RawHtml")
-else:
-    InlineNode = Text | CodeSpan | Strong | Emph | Strike | Link | Image | SoftBreak | HardBreak | RawHtml
+InlineNode: TypeAlias = Text | CodeSpan | Strong | Emph | Strike | Link | Image | SoftBreak | HardBreak | RawHtml
 
 
 @dataclass(slots=True, frozen=True)
@@ -606,14 +590,8 @@ class HtmlBlock:
     raw: str
 
 
-if sys.version_info >= (3, 12):
-    exec(
-        "type Block = Heading | Paragraph | CodeBlock | QuoteBlock | ListBlock | TableBlock | RuleBlock | HtmlBlock\n"
-        "type LinkRef = tuple[str, str | None]"
-    )
-else:
-    Block = Heading | Paragraph | CodeBlock | QuoteBlock | ListBlock | TableBlock | RuleBlock | HtmlBlock
-    LinkRef = tuple[str, str | None]
+Block: TypeAlias = Heading | Paragraph | CodeBlock | QuoteBlock | ListBlock | TableBlock | RuleBlock | HtmlBlock
+LinkRef: TypeAlias = tuple[str, str | None]
 
 _REF_RE: Final = re.compile(
     r"^ {0,3}\[(?P<label>[^\]]+)\]:\s*<?(?P<url>[^>\s]+)>?"
@@ -1028,10 +1006,7 @@ class Segment:
     codes: SgrCodes = ()
 
 
-if sys.version_info >= (3, 12):
-    exec("type StyledLine = list[Segment]")
-else:
-    StyledLine = list[Segment]
+StyledLine: TypeAlias = list[Segment]
 
 
 def _merge_lines(target: list[StyledLine], extra: list[StyledLine]) -> None:
@@ -1711,7 +1686,8 @@ def html_to_markdown_bs4(cleaned: str, opts: Options) -> str:
         "Render list."
         ordered = node.name == "ol"
         try:
-            start = int(node.get("start", "1"))
+            start_attr = node.get("start", "1")
+            start = int(start_attr) if isinstance(start_attr, str) else 1
         except (TypeError, ValueError):
             start = 1
         lines: list[str] = []

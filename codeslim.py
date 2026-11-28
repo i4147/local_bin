@@ -120,7 +120,7 @@ from abc import ABCMeta, abstractmethod
 import argparse
 import builtins
 from collections import OrderedDict, defaultdict
-from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Generator, Iterable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from enum import Enum
@@ -140,6 +140,14 @@ from typing import (
 
 import libcst as cst
 from libcst.metadata import MetadataWrapper, ParentNodeProvider, PositionProvider
+from loguru import logger
+
+logger.remove()
+logger.add(
+    sys.stderr,
+    level=os.environ.get("LOGURU_LEVEL", "INFO"),
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+)
 
 
 __all__ = [
@@ -248,10 +256,10 @@ SIDE_EFFECT_MODULES = {
 
 
 @contextmanager
-def cd(target: str | Path) -> Iterator[None]:
+def cd(target: str | Path) -> Generator[None, None, None]:
     """``with cd(path):`` -- temporarily change the working directory."""
-    prev = os.getcwd()
-    os.chdir(os.fspath(os.path.expanduser(str(target))))
+    prev = Path.cwd()
+    os.chdir(Path(target).expanduser())
     try:
         yield
     finally:
@@ -259,17 +267,17 @@ def cd(target: str | Path) -> Iterator[None]:
 
 
 def makedirs(path: str | Path) -> str:
-    os.makedirs(path, exist_ok=True)
+    Path(path).mkdir(parents=True, exist_ok=True)
     return str(path)
 
 
 def is_file_exist(dir: str | Path, filename: str) -> bool:
-    return os.path.exists(os.path.join(str(dir), filename))
+    return (Path(dir) / filename).exists()
 
 
 def get_file_name(file_path: str | Path) -> str:
     """``a/b/models.py`` -> ``models`` (parity with the original helper)."""
-    return ".".join(os.path.basename(str(file_path)).split(".")[:-1])
+    return ".".join(Path(file_path).name.split(".")[:-1])
 
 
 def common_root(paths: Iterable[str | Path]) -> Path:
@@ -359,13 +367,21 @@ def add_codegen_header(module: cst.Module, text: str = CODEGEN_PREFIX) -> cst.Mo
 # --------------------------------------------------------------------------------------
 
 
+def _asname_str(asname: cst.AsName) -> str:
+    return asname.name.value if isinstance(asname.name, cst.Name) else node_code(asname.name)
+
+
 def node_code(node: cst.CSTNode) -> str:
     """Render any CST node back to source (``node.code`` only exists on Module)."""
     if isinstance(node, cst.Module):
         return node.code
-    if isinstance(node, cst.BaseStatement):
+    if isinstance(node, (cst.SimpleStatementLine, cst.BaseCompoundStatement)):
         return cst.Module(body=[node]).code
-    return cst.Module(body=[cst.SimpleStatementLine(body=[cst.Expr(value=node)])]).code
+    if isinstance(node, cst.BaseSmallStatement):
+        return cst.Module(body=[cst.SimpleStatementLine(body=[node])]).code
+    if isinstance(node, cst.BaseExpression):
+        return cst.Module(body=[cst.SimpleStatementLine(body=[cst.Expr(value=node)])]).code
+    return ""
 
 
 def chain_name(node: cst.CSTNode | None) -> str | None:
@@ -639,7 +655,7 @@ def bound_names_of(stmt: cst.BaseStatement) -> set[str]:
                 continue
             for alias in small.names:
                 if alias.asname is not None:
-                    names.add(alias.asname.name.value)
+                    names.add(_asname_str(alias.asname))
                 else:
                     source = chain_name(alias.name) or ""
                     names.add(source.split(".")[0])
@@ -660,11 +676,11 @@ def contains_node_types(node: cst.CSTNode, types: tuple[type, ...]) -> bool:
         def __init__(self) -> None:
             self.found = False
 
-        def on_visit(self, node_: cst.CSTNode) -> bool:
-            if isinstance(node_, types):
+        def on_visit(self, node: cst.CSTNode) -> bool:
+            if isinstance(node, types):
                 self.found = True
                 return False
-            return super().on_visit(node_)
+            return super().on_visit(node)
 
     finder = _Finder()
     node.visit(finder)
@@ -718,7 +734,7 @@ def assigned_names(node: cst.CSTNode) -> set[str]:
 
         def visit_ImportAlias(self, node: cst.ImportAlias) -> bool | None:
             if node.asname is not None:
-                self.bound.add(node.asname.name.value)
+                self.bound.add(_asname_str(node.asname))
             elif isinstance(node.name, cst.Name):
                 self.bound.add(node.name.value)
             else:
@@ -790,19 +806,20 @@ def free_names(node: cst.CSTNode) -> set[str]:
     return collector.names - assigned_names(node) - set(dir(builtins))
 
 
-def apply_transform(node: cst.CSTNode, transformer: cst.CSTTransformer) -> cst.CSTNode:
+def apply_transform(node: cst.CSTNode, transformer: cst.CSTTransformer) -> cst.CSTNode | cst.RemovalSentinel:
     """Run ``transformer`` over an arbitrary node by borrowing an empty module."""
     if isinstance(node, cst.Module):
         return node.visit(transformer)
-    if isinstance(node, cst.BaseStatement):
+    if isinstance(node, (cst.SimpleStatementLine, cst.BaseCompoundStatement)):
         module = cst.Module(body=[node]).visit(transformer)
         return module.body[0] if module.body else cst.RemovalSentinel.REMOVE
     # expression / small statement: wrap in a throw-away statement
-    stmt = cst.SimpleStatementLine(body=[cst.Expr(value=node)])  # type: ignore[arg-type]
-    module = cst.Module(body=[stmt]).visit(transformer)
-    first = module.body[0]
-    if isinstance(first, cst.SimpleStatementLine) and isinstance(first.body[0], cst.Expr):
-        return first.body[0].value
+    if isinstance(node, cst.BaseExpression):
+        stmt = cst.SimpleStatementLine(body=[cst.Expr(value=node)])
+        module = cst.Module(body=[stmt]).visit(transformer)
+        first = module.body[0]
+        if isinstance(first, cst.SimpleStatementLine) and isinstance(first.body[0], cst.Expr):
+            return first.body[0].value
     return node
 
 
@@ -821,6 +838,9 @@ def validate_module(module: cst.Module, origin: str) -> None:
 
 class Entry(metaclass=ABCMeta):
     """Something AutoSlim can start tracing from."""
+
+    entries: list[str]
+    asts: list[cst.Module]
 
     @classmethod
     def build(cls, *args: Any) -> Entry:
@@ -1201,7 +1221,7 @@ class EndPoint(metaclass=ABCMeta):
     __target__: list[str] = ["file_path"]
 
     @abstractmethod
-    def __call__(self, file_path: str) -> bool:  # pragma: no cover - abstract
+    def __call__(self, **kwargs: Any) -> bool:  # pragma: no cover - abstract
         pass
 
 
@@ -1213,7 +1233,7 @@ class BuiltinEndPoint(EndPoint):
     def __init__(self) -> None:
         self.builtins = set(dir(builtins)) | set(sys.builtin_module_names)
 
-    def __call__(self, module_name: str) -> bool:  # type: ignore[override]
+    def __call__(self, module_name: str = "", **_: Any) -> bool:
         root = (module_name or "").split(".")[0]
         return not (root in self.builtins or root in sys.stdlib_module_names)
 
@@ -1230,7 +1250,7 @@ class LocalEndPoint(EndPoint):
     def __init__(self, local_dir: str | Path):
         self.local_dir = Path(local_dir).resolve()
 
-    def __call__(self, file_path: str) -> bool:
+    def __call__(self, file_path: str = "", **_: Any) -> bool:
         if not file_path:
             return False
         candidate = Path(file_path).resolve()
@@ -1248,7 +1268,7 @@ class ExceptEndPoint(LocalEndPoint):
         self.excepts = list(excepts)
         super().__init__(local_dir)
 
-    def __call__(self, file_path: str, module_name: str) -> bool:  # type: ignore[override]
+    def __call__(self, file_path: str = "", module_name: str = "", **_: Any) -> bool:
         root = (module_name or "").split(".")[0]
         if module_name in self.excepts or root in self.excepts:
             return False
@@ -1263,7 +1283,7 @@ class IncludeEndPoint(EndPoint):
     def __init__(self, modules: str | Sequence[str]):
         self.modules = [modules] if isinstance(modules, str) else list(modules)
 
-    def __call__(self, module_name: str) -> bool:  # type: ignore[override]
+    def __call__(self, module_name: str = "", **_: Any) -> bool:
         root = (module_name or "").split(".")[0]
         return any(module_name == m or root == m.split(".")[0] for m in self.modules)
 
@@ -1279,23 +1299,21 @@ class EndPointManager:
     """Runs a list of endpoints against an import candidate."""
 
     #: pairs that contradict each other when combined with ``CombinePolicy.ANY``
-    INCOMPATIBLE = [(LocalEndPoint, ExceptEndPoint)]
+    INCOMPATIBLE: list[tuple[type[EndPoint], type[EndPoint]]] = [(LocalEndPoint, ExceptEndPoint)]
 
     def __init__(
         self,
         endpoints: EndPoint | Sequence[EndPoint],
         policy: CombinePolicy = CombinePolicy.ALL,
     ):
-        if not isinstance(endpoints, (list, tuple)):
-            endpoints = [endpoints]
-        endpoints = list(endpoints)
+        ep_list: list[EndPoint] = [endpoints] if isinstance(endpoints, EndPoint) else list(endpoints)
         self.policy = policy
         if policy is CombinePolicy.ANY:
-            types = [type(e) for e in endpoints]
+            types = [type(e) for e in ep_list]
             for pair in EndPointManager.INCOMPATIBLE:
                 if pair[0] in types and pair[1] in types:
                     raise ValueError(f"Incompatible endpoints for ANY policy: {pair}")
-        self.endpoints = endpoints
+        self.endpoints = ep_list
 
     @classmethod
     def add_imcompatible_pair(cls, pair: tuple[type[EndPoint], type[EndPoint]]) -> None:
@@ -1343,8 +1361,8 @@ class _DefNode:
         self.name = self.node.name.value
         if self.metas is None:
             self.metas = [chain_name(d.decorator) or "?" for d in self.node.decorators]
-        if self.def_type is _DefType.Class and self.bases is None:
-            self.bases = [chain_name(a.value) for a in self.node.bases if a.keyword is None and chain_name(a.value)]
+        if self.def_type is _DefType.Class and self.bases is None and isinstance(self.node, cst.ClassDef):
+            self.bases = [b for a in self.node.bases if a.keyword is None and (b := chain_name(a.value))]
 
     def __repr__(self) -> str:
         return f"_DefNode(name={self.name}, bases={self.bases}, metas={self.metas})"
@@ -1510,12 +1528,12 @@ class CSTFileParser(cst.CSTVisitor):
         module_name = chain_name(node.module) if is_import_from else None
         for alias in node.names:
             source = chain_name(alias.name) or "?"
-            local = alias.asname.name.value if alias.asname is not None else source.split(".")[0]
+            local = _asname_str(alias.asname) if alias.asname is not None else source.split(".")[0]
             record = _ImportNode(
                 node=node,
                 name=local,
                 module_name=source if not is_import_from else module_name,
-                asname=alias.asname.name.value if alias.asname is not None else None,
+                asname=_asname_str(alias.asname) if alias.asname is not None else None,
                 level=level,
                 imported_name=source if is_import_from else None,
             )
@@ -1523,8 +1541,8 @@ class CSTFileParser(cst.CSTVisitor):
 
     def visit_ClassDef(self, node: cst.ClassDef) -> bool | None:
         self._class_stack.append(node.name.value)
-        bases = [chain_name(a.value) for a in node.bases if a.keyword is None and chain_name(a.value)]
-        metas = [chain_name(a.value) for a in node.bases if a.keyword is not None]
+        bases = [b for a in node.bases if a.keyword is None and (b := chain_name(a.value))]
+        metas = [m for a in node.bases if a.keyword is not None and (m := chain_name(a.value))]
         metas += [chain_name(d.decorator) or "?" for d in node.decorators]
         parent = self._class_stack[-2] if len(self._class_stack) > 1 else None
         record = _DefNode(node, _DefType.Class, parent=parent, bases=bases, metas=metas)
@@ -1754,7 +1772,7 @@ class _ReportScanner(cst.CSTVisitor):
             return
         for alias in node.names:
             source = chain_name(alias.name) or "?"
-            local = alias.asname.name.value if alias.asname is not None else source.split(".")[0]
+            local = _asname_str(alias.asname) if alias.asname is not None else source.split(".")[0]
             entry = (
                 node,
                 module_name if isinstance(node, cst.ImportFrom) else source,
@@ -2032,15 +2050,17 @@ class Rewriter(cst.CSTTransformer):
         self, original_node: cst.CSTNode, updated_node: cst.CSTNode
     ) -> cst.CSTNode | cst.RemovalSentinel | cst.FlattenSentinel:
         name = type(original_node).__name__
+        current: cst.CSTNode = updated_node
         handler = self.targets.get(name)
         if handler is not None:
-            updated_node = self._apply(handler, original_node, updated_node)
-            if isinstance(updated_node, cst.RemovalSentinel):
-                return updated_node
+            res = self._apply(handler, original_node, current)
+            if isinstance(res, cst.RemovalSentinel):
+                return res
+            current = res
         hook = self.post_hooks.get(name)
         if hook is not None:
-            updated_node = self._apply(hook, original_node, updated_node)
-        return updated_node
+            return self._apply(hook, original_node, current)
+        return current
 
     @staticmethod
     def _apply(func: Hook, original_node: cst.CSTNode, updated_node: cst.CSTNode) -> cst.CSTNode | cst.RemovalSentinel:
@@ -2206,6 +2226,8 @@ class ClassMerging:
         if file_parser is None or name not in file_parser.classes:
             return None
         node = file_parser.classes[name].node
+        if not isinstance(node, cst.ClassDef):
+            return None
         body = list(node.body.body) if isinstance(node.body, cst.IndentedBlock) else []
         methods: OrderedDict[str, cst.FunctionDef] = OrderedDict()
         attributes: list[tuple[str, cst.BaseStatement]] = []
@@ -2214,10 +2236,10 @@ class ClassMerging:
         for index, stmt in enumerate(body):
             if isinstance(stmt, cst.FunctionDef):
                 methods[stmt.name.value] = stmt
-            elif index == 0 and is_docstring(stmt):
-                docstring = stmt  # type: ignore[assignment]
-            elif isinstance(stmt, cst.SimpleStatementLine) and statement_name(stmt):
-                attributes.append((statement_name(stmt), stmt))  # type: ignore[arg-type]
+            elif index == 0 and isinstance(stmt, cst.SimpleStatementLine) and is_docstring(stmt):
+                docstring = stmt
+            elif isinstance(stmt, cst.SimpleStatementLine) and (attr_name := statement_name(stmt)):
+                attributes.append((attr_name, stmt))
             else:
                 other.append(stmt)
 
@@ -2320,7 +2342,9 @@ class ClassMerging:
         leaf_resolver = resolver_for(0)
         for stmt in leaf.body:
             if isinstance(stmt, cst.FunctionDef):
-                stmt = apply_transform(stmt, SuperRewriter(leaf_resolver, _first_param_name(stmt)))
+                transformed = apply_transform(stmt, SuperRewriter(leaf_resolver, _first_param_name(stmt)))
+                assert isinstance(transformed, cst.BaseStatement)
+                stmt = transformed
             body.append(stmt)
             name = statement_name(stmt)
             if name:
@@ -2344,14 +2368,15 @@ class ClassMerging:
                     new_name = final_name(index, name)
                     renamed = new_name != name
                     moved = apply_transform(stmt, SuperRewriter(resolve, _first_param_name(stmt)))
+                    assert isinstance(moved, cst.FunctionDef)
                     if renamed:
-                        moved = moved.with_changes(name=cst.Name(new_name))  # type: ignore[union-attr]
+                        moved = moved.with_changes(name=cst.Name(new_name))
                         self.notes.append(
                             f"{info.name}.{name} inlined as {new_name} (overridden by {chain[owner[name]].name})"
                         )
                     else:
                         self.notes.append(f"{info.name}.{name} inlined")
-                    injected.append(_blank_before(moved))  # type: ignore[arg-type]
+                    injected.append(_blank_before(moved))
                     continue
                 if stmt is info.docstring:
                     continue
@@ -2550,7 +2575,11 @@ def insert_imports(module: cst.Module, statements: Sequence[cst.BaseStatement]) 
             insert_at = index + 1
         elif isinstance(stmt, (cst.ClassDef, cst.FunctionDef)):
             break
-    new_lines = [_strip_leading(s) if insert_at else s for s in statements]
+    new_lines: list[cst.SimpleStatementLine | cst.BaseCompoundStatement] = [
+        s
+        for raw in statements
+        if isinstance((s := _strip_leading(raw) if insert_at else raw), (cst.SimpleStatementLine, cst.BaseCompoundStatement))
+    ]
     body[insert_at:insert_at] = new_lines
     return module.with_changes(body=body)
 
@@ -2633,8 +2662,11 @@ class ClassMergeTransformer(cst.CSTTransformer):
             len(body),
         )
         if plan.extra_defs:
-            body[class_index:class_index] = list(plan.extra_defs)
-            class_index += len(plan.extra_defs)
+            extra_top = [
+                s for s in plan.extra_defs if isinstance(s, (cst.SimpleStatementLine, cst.BaseCompoundStatement))
+            ]
+            body[class_index:class_index] = extra_top
+            class_index += len(extra_top)
         module = updated_node.with_changes(body=body)
         return insert_imports(module, plan.extra_imports)
 
@@ -2880,7 +2912,8 @@ def is_simple_expression(node: cst.BaseExpression) -> bool:
         return all(is_simple_expression(e.value) for e in node.elements)
     if isinstance(node, cst.Dict):
         return all(
-            is_simple_expression(e.value) and (e.key is None or is_simple_expression(e.key)) for e in node.elements
+            is_simple_expression(e.value) and (not isinstance(e, cst.DictElement) or is_simple_expression(e.key))
+            for e in node.elements
         )
     if isinstance(node, cst.Attribute):
         return is_simple_expression(node.value)
@@ -3049,7 +3082,7 @@ class InLine:
             def visit_Call(self, node: cst.Call) -> bool | None:
                 name = node.func.value if isinstance(node.func, cst.Name) else None
                 candidate = resolvable.get(name) if name else None
-                if candidate is None:
+                if name is None or candidate is None:
                     return True
                 if not inliner.cross_file and candidate.file != file:
                     return True
@@ -3132,7 +3165,7 @@ class InLine:
             return None, []
 
         expression = apply_transform(candidate.expression, _Substituter(mapping))
-        if isinstance(expression, cst.RemovalSentinel):  # pragma: no cover
+        if not isinstance(expression, cst.BaseExpression):  # pragma: no cover
             return None, []
         return expression, extra
 
@@ -3224,7 +3257,7 @@ class FlattenImports(cst.CSTTransformer):
                 aliases = []
                 for alias, candidate in submodules:
                     new_name = gen.dotted_to_output[candidate]
-                    local = alias.asname.name.value if alias.asname else self._alias_name(alias)
+                    local = _asname_str(alias.asname) if alias.asname else self._alias_name(alias)
                     aliases.append(
                         cst.ImportAlias(
                             name=_dotted_node(new_name),
@@ -3363,7 +3396,7 @@ class MergeImportStatements(cst.CSTTransformer):
                 for alias in node.names:
                     key = (
                         chain_name(alias.name) or "",
-                        alias.asname.name.value if alias.asname else None,
+                        _asname_str(alias.asname) if alias.asname else None,
                     )
                     if key in seen:
                         continue
@@ -3438,7 +3471,7 @@ class PruneUnusedImports(cst.CSTTransformer):
         kept = []
         for alias in updated_node.names:
             source = chain_name(alias.name) or ""
-            bound = alias.asname.name.value if alias.asname else source.split(".")[0]
+            bound = _asname_str(alias.asname) if alias.asname else source.split(".")[0]
             if self.is_init or bound in self.used:
                 kept.append(alias)
             else:
@@ -3452,7 +3485,7 @@ class PruneUnusedImports(cst.CSTTransformer):
         kept = []
         for alias in updated_node.names:
             dotted = chain_name(alias.name) or ""
-            bound = alias.asname.name.value if alias.asname else dotted.split(".")[0]
+            bound = _asname_str(alias.asname) if alias.asname else dotted.split(".")[0]
             root = dotted.split(".")[0]
             droppable = dotted in self.local_modules or (
                 self.prune_external and root in sys.stdlib_module_names and root not in SIDE_EFFECT_MODULES
@@ -3503,7 +3536,7 @@ class PruneUnusedDefs(cst.CSTTransformer):
             return updated_node
         small = updated_node.body[0]
         value: cst.BaseExpression | None = None
-        targets: list[cst.BaseExpression] = []
+        targets: Sequence[cst.BaseExpression] = ()
         if isinstance(small, cst.Assign):
             targets = [t.target for t in small.targets]
             value = small.value
@@ -3958,6 +3991,7 @@ class SegmentCodeGenerator(CodeGenerator):
 
     # -- merging ---------------------------------------------------------------------
     def _plan_merges(self) -> None:
+        assert self.merge_level is not None
         for file, file_parser in self.parsers.items():
             mergeable = file_parser.get_target_merge_class()
             provided = self.provided.setdefault(file, set())
@@ -4177,7 +4211,7 @@ class AutoSlim:
         import inspect
 
         # an already built Entry can be passed straight in (StringEntry(snippets, roots=..))
-        entry = self.entries if isinstance(self.entries, Entry) else self._entry_type(self.entries)
+        entry = self.entries if isinstance(self.entries, Entry) else self._entry_type.build(self.entries)
         self.parser = Parser(entry, endpoints=self._endpoints)
         kwargs = dict(self._options)
         kwargs.update(
@@ -4484,6 +4518,7 @@ def run_demo(workdir: str | Path | None = None, verbose: bool = True) -> dict[st
     results["ok"] = True
 
     say("\n" + "=" * 78)
+    assert segment.summary is not None
     total_in = segment.summary["lines_in"]
     total_out = segment.summary["lines_out"]
     say(
@@ -4835,9 +4870,13 @@ def cmd_selftest(args: argparse.Namespace) -> int:
         except Exception as exc:  # noqa: BLE001 - report everything
             results.append((label, False, f"{type(exc).__name__}: {exc}"))
 
+    def _demo_check() -> str:
+        run_demo(workdir=args.workdir, verbose=not args.quiet)
+        return ""
+
     record(
         "demo (file level + segment level + runtime check)",
-        lambda: (run_demo(workdir=args.workdir, verbose=not args.quiet) and "") or "",
+        _demo_check,
     )
 
     def _inline_check() -> str:

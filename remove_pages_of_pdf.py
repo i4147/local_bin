@@ -2,14 +2,23 @@
 "Utilities for remove pages of pdf."
 
 from __future__ import annotations
+import argparse
 from collections.abc import Callable
 import importlib
 import os
 from pathlib import Path
 import shutil
 import tempfile
+import sys
+from loguru import logger
 
-import typer
+logger.remove()
+logger.add(
+    sys.stderr,
+    level=os.environ.get("LOGURU_LEVEL", "INFO"),
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+)
+
 
 
 RemoveFn = Callable[[Path, Path, int, int], None]
@@ -104,19 +113,34 @@ def _pick_backend() -> Backend:
     raise RuntimeError(msg)
 
 
-app = typer.Typer(add_completion=False, pretty_exceptions_enable=False)
+def _positive_int(value: str) -> int:
+    num = int(value)
+    if num < 1:
+        msg = "must be >= 1"
+        raise argparse.ArgumentTypeError(msg)
+    return num
 
 
-@app.command()
-def main(
-    pdf: Path = typer.Argument(..., exists=True, dir_okay=False, readable=True, resolve_path=True),
-    start: int = typer.Argument(..., min=1),
-    end: int = typer.Argument(..., min=1),
-) -> None:
+def build_parser() -> argparse.ArgumentParser:
+    """Build the command-line argument parser."""
+    parser = argparse.ArgumentParser(description="Remove a range of pages from a PDF file in place.")
+    parser.add_argument("pdf", type=Path, help="Path to the PDF file.")
+    parser.add_argument("start", type=_positive_int, help="First 1-based page number to remove.")
+    parser.add_argument("end", type=_positive_int, help="Last 1-based page number to remove.")
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
     "Run the command-line interface."
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    pdf: Path = args.pdf.resolve()
+    start: int = args.start
+    end: int = args.end
+    if not pdf.exists() or pdf.is_dir():
+        parser.error(f"PDF file does not exist or is a directory: {pdf}")
     if start > end:
-        msg = "start must be <= end"
-        raise typer.BadParameter(msg)
+        parser.error("start must be <= end")
     name, remove = _pick_backend()
     fd, tmp_str = tempfile.mkstemp(suffix=".pdf", dir=str(pdf.parent))
     os.close(fd)
@@ -128,8 +152,9 @@ def main(
         if tmp_path.exists():
             tmp_path.unlink()
         raise
-    typer.echo(f"[{name}] removed pages {start}-{end} from {pdf}")
+    print(f"[{name}] removed pages {start}-{end} from {pdf}")
+    return 0
 
 
 if __name__ == "__main__":
-    app()
+    raise SystemExit(main())

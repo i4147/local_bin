@@ -19,16 +19,16 @@ Examples::
 """
 
 from __future__ import annotations
+import argparse
 import bisect
 from collections import deque
 from collections.abc import Iterator
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace as dc_replace
 import fnmatch
 import functools
 import hashlib
 import json
-import logging
 import os
 from pathlib import Path
 import re
@@ -41,48 +41,6 @@ from typing import Any, TextIO
 
 from dh import atomic_write
 from loguru import logger
-import typer
-
-
-try:
-    from loguru import logger as _loguru_logger  # type: ignore[import-not-found]
-
-    logger = _loguru_logger
-    HAS_LOGURU = True
-except Exception:  # pragma: no cover - fallback when loguru is unavailable
-    HAS_LOGURU = False
-    logging.basicConfig(stream=sys.stderr, level=logging.WARNING, format="%(levelname)s: %(message)s")
-
-    class _StubLogger:
-        """Minimal loguru-compatible shim."""
-
-        def __init__(self) -> None:
-            self.log = logger
-
-        def add(self, *args: Any, **kwargs: Any) -> int:
-            return 0
-
-        def remove(self, *args: Any, **kwargs: Any) -> None:
-            return None
-
-        def debug(self, message: Any, *args: Any, **kwargs: Any) -> None:
-            self._log.debug(str(message), *args)
-
-        def info(self, message: Any, *args: Any, **kwargs: Any) -> None:
-            self._log.info(str(message), *args)
-
-        def warning(self, message: Any, *args: Any, **kwargs: Any) -> None:
-            self._log.warning(str(message), *args)
-
-        def error(self, message: Any, *args: Any, **kwargs: Any) -> None:
-            self._log.error(str(message), *args)
-
-        def exception(self, message: Any, *args: Any, **kwargs: Any) -> None:
-            self._log.exception(str(message), *args)
-
-    logger = _StubLogger()
-
-
 # --------------------------------------------------------------------------- #
 # Constants
 # --------------------------------------------------------------------------- #
@@ -164,28 +122,21 @@ def _preset(name: str) -> set[str]:
 
 
 def _setup_logging(log_path_override: str | None = None, level: str = "DEBUG") -> None:
-    """Configure loguru (or the stdlib shim): a debug log file plus stderr fallback."""
-    if HAS_LOGURU:
-        logger.remove()
-        if log_path_override is not None and log_path_override == "":
-            logger.add(
-                sys.stderr,
-                level=level if level != "DEBUG" else "WARNING",
-                format="{message}",
-            )
-            return
-        path = _LOG_PATH_DEFAULT if log_path_override is None else Path(log_path_override)
-        try:
-            path.parent.mkdir(parents=True, exist_ok=True)
-            logger.add(str(path), level=level, encoding="utf-8", rotation="10 MB", retention=5)
-        except OSError:
-            logger.add(sys.stderr, level="WARNING", format="{message}")
-    else:
-        logging.basicConfig(
-            stream=sys.stderr,
-            level=getattr(logging, level.upper(), logging.WARNING),
-            format="%(levelname)s: %(message)s",
+    """Configure loguru: a debug log file plus stderr fallback."""
+    logger.remove()
+    if log_path_override is not None and log_path_override == "":
+        logger.add(
+            sys.stderr,
+            level=level if level != "DEBUG" else "WARNING",
+            format="{message}",
         )
+        return
+    path = _LOG_PATH_DEFAULT if log_path_override is None else Path(log_path_override)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        logger.add(str(path), level=level, encoding="utf-8", rotation="10 MB", retention=5)
+    except OSError:
+        logger.add(sys.stderr, level="WARNING", format="{message}")
 
 
 _setup_logging()
@@ -231,8 +182,8 @@ def resolve_type_presets(types: list[str] | None) -> set[str]:
             if not key:
                 continue
             if key not in TYPE_PRESETS:
-                typer.echo(f"unknown type preset {key!r}; known presets: {known}", err=True)
-                raise typer.Exit(2)
+                print(f'unknown type preset {key!r}; known presets: {known}', file=sys.stderr)
+                raise SystemExit(2)
             out |= TYPE_PRESETS[key]
     return out
 
@@ -247,21 +198,21 @@ def _resolve_type_not(types: list[str] | None) -> set[str]:
             if not key:
                 continue
             if key not in TYPE_PRESETS:
-                typer.echo(f"unknown type preset for --type-not: {key!r}", err=True)
-                raise typer.Exit(2)
+                print(f'unknown type preset for --type-not: {key!r}', file=sys.stderr)
+                raise SystemExit(2)
             out |= TYPE_PRESETS[key]
     return out
 
 
 def _apply_type_add(spec: str) -> None:
     if ":" not in spec:
-        typer.echo(f"invalid --type-add spec {spec!r}; expected NAME:EXT[,EXT...]", err=True)
-        raise typer.Exit(2)
+        print(f'invalid --type-add spec {spec!r}; expected NAME:EXT[,EXT...]', file=sys.stderr)
+        raise SystemExit(2)
     name, exts = spec.split(":", 1)
     key = name.strip().lower()
     if not key:
-        typer.echo("invalid --type-add: empty name", err=True)
-        raise typer.Exit(2)
+        print('invalid --type-add: empty name', file=sys.stderr)
+        raise SystemExit(2)
     extset: set[str] = set()
     for piece in exts.split(","):
         e = normalize_extension(piece)
@@ -696,8 +647,8 @@ def _collect_files(
         for p in ignore_files:
             fp = Path(p)
             if not fp.is_file():
-                typer.echo(f"error: --ignore-file {p!r} not found", err=True)
-                raise typer.Exit(3)
+                print(f'error: --ignore-file {p!r} not found', file=sys.stderr)
+                raise SystemExit(3)
             extra_ignore_paths.append(fp)
     matcher: IgnoreMatcher | None = None
     if not no_ignore or extra_ignore_paths:
@@ -727,8 +678,8 @@ def _collect_files(
     if require_git:
         tracked = _git_tracked_paths(Path.cwd())
         if tracked is None:
-            typer.echo("error: --require-git requires a git repo with git installed", err=True)
-            raise typer.Exit(3)
+            print('error: --require-git requires a git repo with git installed', file=sys.stderr)
+            raise SystemExit(3)
         candidates = [f for f in candidates if f.resolve() in tracked]
     return candidates
 
@@ -745,8 +696,8 @@ def _read_list_source(path_str: str) -> list[str]:
         with open(path_str, "r", encoding="utf-8", errors="replace") as fh:
             return [line.rstrip("\n") for line in fh]
     except OSError as ex:
-        typer.echo(f"error: cannot read {path_str!r}: {ex}", err=True)
-        raise typer.Exit(3)
+        print(f'error: cannot read {path_str!r}: {ex}', file=sys.stderr)
+        raise SystemExit(3)
 
 
 def _read_pattern_file(path_str: str) -> list[str]:
@@ -886,11 +837,8 @@ def _resolve_engine(engine: str) -> str:
         except ImportError:  # pragma: no cover
             _regex_mod = None
         if _regex_mod is None:
-            typer.echo(
-                "error: --engine regex requires the 'regex' module (pip install regex)",
-                err=True,
-            )
-            raise typer.Exit(3)
+            print("error: --engine regex requires the 'regex' module (pip install regex)", file=sys.stderr)
+            raise SystemExit(3)
         return "regex"
     return "re"
 
@@ -900,14 +848,14 @@ def _engine_flags(engine: str, ignore_case: bool, multiline_dotall: bool, no_uni
         import regex as _regex_mod  # type: ignore[import-not-found]
     except ImportError:  # pragma: no cover
         _regex_mod = None
-    if engine == "regex":
-        flags = _regex_mod.MULTILINE  # type: ignore[union-attr]
+    if engine == "regex" and _regex_mod is not None:
+        flags = _regex_mod.MULTILINE
         if ignore_case:
-            flags |= _regex_mod.IGNORECASE  # type: ignore[union-attr]
+            flags |= _regex_mod.IGNORECASE
         if multiline_dotall:
-            flags |= _regex_mod.DOTALL  # type: ignore[union-attr]
+            flags |= _regex_mod.DOTALL
         if no_unicode:
-            flags |= _regex_mod.ASCII  # type: ignore[union-attr]
+            flags |= _regex_mod.ASCII
         return flags
     flags = re.MULTILINE
     if ignore_case:
@@ -1803,7 +1751,7 @@ def _backup_file(path: Path, suffix: str, backup_dir: Path | None, cwd: Path) ->
     try:
         data = path.read_bytes()
     except OSError as ex:
-        typer.echo(f"backup failed for {path}: {ex}", err=True)
+        print(f'backup failed for {path}: {ex}', file=sys.stderr)
         return
     if backup_dir is not None:
         try:
@@ -1816,13 +1764,13 @@ def _backup_file(path: Path, suffix: str, backup_dir: Path | None, cwd: Path) ->
             target.parent.mkdir(parents=True, exist_ok=True)
             atomic_write(target, data)
         except OSError as ex:
-            typer.echo(f"backup failed for {path}: {ex}", err=True)
+            print(f'backup failed for {path}: {ex}', file=sys.stderr)
     else:
         target = path.with_name(path.name + suffix)
         try:
             atomic_write(target, data)
         except OSError as ex:
-            typer.echo(f"backup failed for {path}: {ex}", err=True)
+            print(f'backup failed for {path}: {ex}', file=sys.stderr)
 
 
 def _sha256(data: bytes) -> str:
@@ -1859,8 +1807,8 @@ def _append_undo_journal(journal: Path, path: Path, old_bytes: bytes, new_bytes:
 def _undo_from_journal(journal: Path, cwd: Path) -> int:
     jpath, _blob_dir = _undo_journal_paths(journal)
     if not jpath.is_file():
-        typer.echo(f"error: undo journal {jpath} not found", err=True)
-        raise typer.Exit(3)
+        print(f'error: undo journal {jpath} not found', file=sys.stderr)
+        raise SystemExit(3)
     entries: list[dict[str, Any]] = []
     with open(jpath, "r", encoding="utf-8") as jf:
         for line in jf:
@@ -1880,19 +1828,19 @@ def _undo_from_journal(journal: Path, cwd: Path) -> int:
         except OSError:
             continue
         if _sha256(current) != entry["new_hash"]:
-            typer.echo(f"skip {path}: hash mismatch", err=True)
+            print(f'skip {path}: hash mismatch', file=sys.stderr)
             continue
         try:
             data = blob.read_bytes()
         except OSError:
-            typer.echo(f"skip {path}: blob missing", err=True)
+            print(f'skip {path}: blob missing', file=sys.stderr)
             continue
         try:
             _atomic_write(path, data)
             restored += 1
         except OSError as ex:
-            typer.echo(f"undo failed for {path}: {ex}", err=True)
-    typer.echo(f"Restored {restored} file(s)")
+            print(f'undo failed for {path}: {ex}', file=sys.stderr)
+    print(f'Restored {restored} file(s)')
     return 0
 
 
@@ -1979,10 +1927,7 @@ def _emit_completion(shell: str) -> int:
     }
     script = mapping.get(shell)
     if script is None:
-        typer.echo(
-            f"error: unknown shell {shell!r}; expected bash, zsh, fish, powershell",
-            err=True,
-        )
+        print(f'error: unknown shell {shell!r}; expected bash, zsh, fish, powershell', file=sys.stderr)
         return 2
     sys.stdout.write(script)
     return 0
@@ -2012,40 +1957,40 @@ def _search_quiet(
     buffer_size: int,
     threads: int,
 ) -> bool:
-    base_job = {
-        "path": "",
-        "cwd": str(cwd),
-        "compiled": compiled,
-        "pattern_str": pattern_str,
-        "engine": engine,
-        "flags": flags,
-        "fixed": fixed,
-        "ignore_case": ignore_case,
-        "no_unicode": no_unicode,
-        "invert": invert_match,
-        "before": 0,
-        "after": 0,
-        "max_count": 1,
-        "multiline": multiline and not invert_match,
-        "encoding": encoding,
-        "replace": None,
-        "only_matching": False,
-        "crlf": False,
-        "literal_replace": False,
-        "preserve_case": False,
-        "case_mode": None,
-        "text_mode": text_mode,
-        "use_mmap": use_mmap,
-        "mmap_threshold": mmap_threshold,
-        "buffer_size": buffer_size,
-        "process_lines": False,
-        "in_place": False,
-        "record_context": False,
-        "byte_offset": False,
-        "pre_cmd": None,
-        "pre_glob": None,
-    }
-    jobs = [Job(**{**base_job, "path": str(p)}) for p in files]
+    base_job = Job(
+        path="",
+        cwd=str(cwd),
+        compiled=compiled,
+        pattern_str=pattern_str,
+        engine=engine,
+        flags=flags,
+        fixed=fixed,
+        ignore_case=ignore_case,
+        no_unicode=no_unicode,
+        invert=invert_match,
+        before=0,
+        after=0,
+        max_count=1,
+        multiline=multiline and not invert_match,
+        encoding=encoding,
+        replace=None,
+        only_matching=False,
+        crlf=False,
+        literal_replace=False,
+        preserve_case=False,
+        case_mode=None,
+        text_mode=text_mode,
+        use_mmap=use_mmap,
+        mmap_threshold=mmap_threshold,
+        buffer_size=buffer_size,
+        process_lines=False,
+        in_place=False,
+        record_context=False,
+        byte_offset=False,
+        pre_cmd=None,
+        pre_glob=None,
+    )
+    jobs = [dc_replace(base_job, path=str(p)) for p in files]
     if threads <= 1:
         return any(worker(j).match_count for j in jobs)
     with ProcessPoolExecutor(max_workers=threads) as ex:
@@ -2066,216 +2011,241 @@ def _search_quiet(
 # CLI
 # --------------------------------------------------------------------------- #
 
-_app = typer.Typer(
-    name="pyrg",
-    help=(
-        "pyrg — a ripgrep-like recursive regex search tool.\n\n"
-        "Search files for a regular expression (or fixed string) with support for "
-        "case folding, inversion, multiline patterns, context lines, only-matching "
-        "output, in-place replacement, glob/extension/type filtering, gitignore-style "
-        "ignore files, JSON output, counting, quiet mode, and parallel processing."
-    ),
-    no_args_is_help=True,
-    pretty_exceptions_enable=False,
-    rich_markup_mode="rich",
-)
+def build_parser() -> argparse.ArgumentParser:
+    """Build the command-line argument parser."""
+    parser = argparse.ArgumentParser(prog='pyrg', description='pyrg — a ripgrep-like recursive regex search tool.\n\nSearch files for a regular expression (or fixed string) with support for case folding, inversion, multiline patterns, context lines, only-matching output, in-place replacement, glob/extension/type filtering, gitignore-style ignore files, JSON output, counting, quiet mode, and parallel processing.')
+    parser.add_argument('pattern', nargs="?", default=None, help='Regex pattern (or use -r/--regexp). Required unless --files/--type-list/--generate/--version/--undo.')
+    parser.add_argument('paths', nargs="*", default=None, help='Files or directories to search (default: current directory).')
+    parser.add_argument('-r', '--regexp', dest='regexp', default=None, help='Pattern (alternative to positional PATTERN).')
+    parser.add_argument('-e', dest='e_opt', default=None, help='Alias for -r/--regexp (extension mode under --legacy-flags).')
+    parser.add_argument('-f', '--pattern-file', dest='pattern_file', default=None, help='Read patterns from PATH (one per line).')
+    parser.add_argument('--ext', dest='extensions', action="append", default=None, help='Only search files with given extension(s) (repeatable, comma ok).')
+    parser.add_argument('-t', '--type', dest='types', action="append", default=None, help='Only search files matching a type preset (repeatable).')
+    parser.add_argument('-T', '--type-not', dest='type_not', action="append", default=None, help='Exclude files of a given type preset (repeatable).')
+    parser.add_argument('--type-add', dest='type_add', action="append", default=None, help='Register preset NAME:EXT[,EXT...] (repeatable).')
+    parser.add_argument('--type-clear', dest='type_clear', action="append", default=None, help='Remove preset NAME (repeatable).')
+    parser.add_argument('--type-list', dest='type_list', action="store_true", default=False, help='Print known presets and exit.')
+    parser.add_argument('-i', '--ignore-case', dest='ignore_case', action="store_true", default=False, help='Case-insensitive matching.')
+    parser.add_argument('-S', '--smart-case', dest='smart_case', action="store_true", default=False, help='Case-insensitive unless pattern has uppercase.')
+    parser.add_argument('-s', '--case-sensitive', dest='case_sensitive', action="store_true", default=False, help='Force case-sensitive matching.')
+    parser.add_argument('-F', '--fixed-strings', dest='fixed_strings', action="store_true", default=False, help='Treat PATTERN as a literal string.')
+    parser.add_argument('-w', '--word-regexp', dest='word_regexp', action="store_true", default=False, help='Match whole words only.')
+    parser.add_argument('--line-regexp', dest='line_regexp_x', action="store_true", default=False, help='Match whole lines only.')
+    parser.add_argument('-v', '--invert-match', dest='invert_match', action="store_true", default=False, help='Show non-matching lines.')
+    parser.add_argument('-U', '--multiline', dest='multiline', action="store_true", default=False, help='Allow pattern to span lines (DOTALL).')
+    parser.add_argument('--no-unicode', dest='no_unicode', action="store_true", default=False, help='Disable Unicode (re.ASCII).')
+    parser.add_argument('--crlf', dest='crlf', action="store_true", default=False, help='Strip CR before matching; re-append on write.')
+    parser.add_argument('-P', '--pcre2', dest='pcre2', action="store_true", default=False, help="Use the 'regex' module (alias for --engine regex).")
+    parser.add_argument('--engine', dest='engine', default='re', help="Regex engine: 're' (default) or 'regex'.")
+    parser.add_argument('-o', '--only-matching', dest='only_matching', action="store_true", default=False, help='Print only matched parts.')
+    parser.add_argument('--replace', dest='replace', default=None, help='Replacement template (\\1 backreferences).')
+    parser.add_argument('--literal-replace', dest='literal_replace', action="store_true", default=False, help='Do not expand backreferences in replacement.')
+    parser.add_argument('--replace-from', dest='replace_from', default=None, help='Read replacement template from PATH (-: stdin).')
+    parser.add_argument('-n', '--line-number', dest='line_number_flag', action="store_true", default=True, help='Show line numbers (default on).')
+    parser.add_argument('--no-line-number', dest='no_line_number', action="store_true", default=False, help='Hide line numbers.')
+    parser.add_argument('-l', '--files-with-matches', dest='files_with_matches', action="store_true", default=False, help='Print only paths with matches.')
+    parser.add_argument('-L', '--files-without-match', dest='files_without_match', action="store_true", default=False, help='Print only paths without matches.')
+    parser.add_argument('-c', '--count', dest='count', action="store_true", default=False, help='Print match count per file.')
+    parser.add_argument('-q', '--quiet', dest='quiet', action="store_true", default=False, help='Suppress output; exit status indicates match.')
+    parser.add_argument('--check', dest='check', action="store_true", default=False, help='Exit 0 on match, 1 on none, 2 on error.')
+    parser.add_argument('--exit-code', dest='exit_code', action="store_true", default=False, help='Exit 1 when no matches found.')
+    parser.add_argument('--json', dest='json_out', action="store_true", default=False, help='Emit one JSON object per match.')
+    parser.add_argument('--json-seq', dest='json_seq', action="store_true", default=False, help='Emit one JSON array per match.')
+    parser.add_argument('--heading', dest='heading_flag', action="store_true", default=False, help="Force headings above each file's matches.")
+    parser.add_argument('--no-heading', dest='no_heading', action="store_true", default=False, help='Suppress headings.')
+    parser.add_argument('-H', '--with-filename', dest='with_filename', action="store_true", default=False, help='Force filename in output.')
+    parser.add_argument('--no-filename', dest='no_filename', action="store_true", default=False, help='Suppress filename in output.')
+    parser.add_argument('--column', dest='column', action="store_true", default=False, help='Print 1-based column of first match.')
+    parser.add_argument('-b', '--byte-offset', dest='byte_offset', action="store_true", default=False, help='Print byte offset of match.')
+    parser.add_argument('-0', '--null', dest='null_sep', action="store_true", default=False, help='NUL after paths in -l/-L/-c/--files.')
+    parser.add_argument('--passthru', dest='passthru', action="store_true", default=False, help='Print non-matching lines alongside matches.')
+    parser.add_argument('-p', '--pretty', dest='pretty', action="store_true", default=False, help='Shorthand for --color always --heading --line-number.')
+    parser.add_argument('--max-columns', dest='max_columns', default=0, type=int, help='Truncate printed lines to N characters.')
+    parser.add_argument('--max-columns-preview', dest='max_columns_preview', action="store_true", default=False, help='Show truncation preview.')
+    parser.add_argument('--stats-only', dest='stats_only', action="store_true", default=False, help='Print only stats summary (implies -q).')
+    parser.add_argument('--context-separator', dest='context_separator', default=None, help='Separator between context groups (default: --).')
+    parser.add_argument('--field-match-separator', dest='field_match_separator', default=':', help='Separator between path/line/text for matches.')
+    parser.add_argument('--field-context-separator', dest='field_context_separator', default='-', help='Separator for context lines.')
+    parser.add_argument('-A', '--after-context', dest='after_context', default=0, type=int, help='Show N lines after each match.')
+    parser.add_argument('-B', '--before-context', dest='before_context', default=0, type=int, help='Show N lines before each match.')
+    parser.add_argument('-C', '--context', dest='context', default=None, type=int, help='Shorthand for -A N -B N.')
+    parser.add_argument('--hidden', dest='hidden', action="store_true", default=False, help='Search hidden files/dirs.')
+    parser.add_argument('-u', '--unrestricted', dest='unrestricted', action="count", default=0, help='Reduce filtering: -u no-ignore, -uu +hidden, -uuu +text.')
+    parser.add_argument('-a', '--text', dest='text_flag', action="store_true", default=False, help='Treat binary files as text.')
+    parser.add_argument('--binary', dest='binary_flag', action="store_true", default=False, help='Search binary files, escape NULs.')
+    parser.add_argument('--require-git', dest='require_git', action="store_true", default=False, help='Only search files tracked by git.')
+    parser.add_argument('--require-clean-git', dest='require_clean_git', action="store_true", default=False, help='Refuse if git working tree is dirty.')
+    parser.add_argument('-g', '--glob', dest='glob_patterns', action="append", default=None, help='Only search paths matching GLOB (repeatable).')
+    parser.add_argument('--iglob', dest='iglob', action="append", default=None, help='Case-insensitive include glob (repeatable).')
+    parser.add_argument('--glob-case-insensitive', dest='glob_case_insensitive', action="store_true", default=False, help='Make -g/--iglob/--exclude-dir case-insensitive.')
+    parser.add_argument('--exclude', dest='exclude', action="append", default=None, help='Exclude paths matching GLOB (repeatable).')
+    parser.add_argument('--exclude-dir', dest='exclude_dirs', action="append", default=None, help='Exclude directory NAME (repeatable).')
+    parser.add_argument('--max-depth', dest='max_depth', default=None, type=int, help='Maximum directory depth.')
+    parser.add_argument('--max-filesize', dest='max_filesize', default=10000000, type=int, help='Skip files larger than BYTES.')
+    parser.add_argument('-m', '-M', '--max-count', dest='max_count', default=0, type=int, help='Stop after N matching lines per file.')
+    parser.add_argument('--no-ignore', dest='no_ignore', action="store_true", default=False, help='Do not honour .gitignore / .ignore.')
+    parser.add_argument('--ignore-file', dest='ignore_file', action="append", default=None, help='Additional ignore file (repeatable).')
+    parser.add_argument('--follow', dest='follow', action="store_true", default=False, help='Follow symlinks (with cycle detection).')
+    parser.add_argument('--files-from', dest='files_from', default=None, help='Read file list from PATH (-: stdin).')
+    parser.add_argument('--encoding', dest='encoding', default='utf-8', help='Text encoding to use.')
+    parser.add_argument('--files', dest='list_files', action="store_true", default=False, help='List files that would be searched, then exit.')
+    parser.add_argument('--sort', dest='sort', default='none', help='Sort: path|modified|accessed|created|none.')
+    parser.add_argument('--sortr', dest='sortr', action="store_true", default=False, help='Reverse sort order.')
+    parser.add_argument('--pre', dest='pre_cmd', default=None, help='Pipe each file through CMD and search its stdout.')
+    parser.add_argument('--pre-glob', dest='pre_glob', default=None, help='Only preprocess files matching GLOB.')
+    parser.add_argument('-j', '--threads', dest='threads', default=MAX_WORKERS, type=int, help='Worker count.')
+    parser.add_argument('--no-parallel', dest='no_parallel', action="store_true", default=False, help='Force single-threaded execution.')
+    parser.add_argument('--mmap', dest='mmap_flag', action=argparse.BooleanOptionalAction, default=True, help='Use mmap for large files (default on).')
+    parser.add_argument('--mmap-threshold', dest='mmap_threshold', default=1048576, type=int, help='mmap files >= BYTES.')
+    parser.add_argument('--buffer-size', dest='buffer_size', default=65536, type=int, help='Buffered reader size.')
+    parser.add_argument('--process-lines', dest='process_lines', action="store_true", default=False, help='Stream lines instead of reading whole file.')
+    parser.add_argument('--regex-size-limit', dest='regex_size_limit', default=10000000, type=int, help='Regex size limit (engine=regex only).')
+    parser.add_argument('--dfa-size-limit', dest='dfa_size_limit', default=10000000, type=int, help='DFA size limit (engine=regex only).')
+    parser.add_argument('-W', '--in-place', dest='in_place', action="store_true", default=False, help='Modify files in place (requires --replace).')
+    parser.add_argument('--dry-run', dest='dry_run', action="store_true", default=False, help='Preview changes without writing (implies --diff).')
+    parser.add_argument('--diff', dest='diff', action="store_true", default=False, help='Print unified diff (implies --dry-run).')
+    parser.add_argument('--backup', dest='backup', default=None, help='Save backup with SUFFIX (default .bak).')
+    parser.add_argument('--backup-dir', dest='backup_dir', default=None, help='Mirror backups into DIR.')
+    parser.add_argument('--undo-journal', dest='undo_journal', default=None, help='JSON undo journal path.')
+    parser.add_argument('--undo', dest='undo', action="store_true", default=False, help='Replay --undo-journal in reverse.')
+    parser.add_argument('--prompt', dest='prompt', action="store_true", default=False, help='Interactive per-file [y]/[n]/[a]/[q] prompt.')
+    parser.add_argument('--confirm', dest='confirm', action="store_true", default=False, help='Ask global [y/N] confirmation before writing.')
+    parser.add_argument('--atomic-write', dest='atomic_write', action=argparse.BooleanOptionalAction, default=True, help='Atomic writes (default on for --in-place).')
+    parser.add_argument('--preserve-case', dest='preserve_case', action="store_true", default=False, help='Preserve match case in replacement.')
+    parser.add_argument('--upper', dest='upper', action="store_true", default=False, help='Uppercase the replacement.')
+    parser.add_argument('--lower', dest='lower', action="store_true", default=False, help='Lowercase the replacement.')
+    parser.add_argument('--capitalize', dest='capitalize', action="store_true", default=False, help='Capitalize the replacement.')
+    parser.add_argument('--color', dest='color', default='auto', help='Colour output: auto|always|never.')
+    parser.add_argument('--no-color', dest='no_color', action="store_true", default=False, help='Alias for --color never.')
+    parser.add_argument('--out-file', dest='out_file', default=None, help='Write results to FILE.')
+    parser.add_argument('--stats', dest='stats', action="count", default=0, help='Print summary to stderr (repeat for more detail).')
+    parser.add_argument('--no-messages', dest='no_messages', action="store_true", default=False, help='Suppress per-file error reporting and no-match message.')
+    parser.add_argument('--legacy-flags', dest='legacy_flags', action="store_true", default=False, help='Restore old short-flag meanings (-e/-x/-L).')
+    parser.add_argument('--config', dest='config_path', default=None, help='Load defaults from TOML/JSON config.')
+    parser.add_argument('--no-config', dest='no_config', action="store_true", default=False, help='Disable config auto-discovery.')
+    parser.add_argument('--debug', dest='debug_flag', action="store_true", default=False, help='Enable DEBUG logging (stderr).')
+    parser.add_argument('--trace', dest='trace_flag', action="store_true", default=False, help='Enable TRACE logging (stderr).')
+    parser.add_argument('--log-file', dest='log_file', default=None, help="Override log file path ('' to disable).")
+    parser.add_argument('--version', dest='version_flag', action="store_true", default=False, help='Print version and exit.')
+    parser.add_argument('--generate', dest='generate', default=None, help='Emit shell completions for bash|zsh|fish|powershell.')
+    return parser
 
 
-@_app.command()
 def _pyrg_command(
-    pattern: str | None = typer.Argument(
-        None,
-        help="Regex pattern (or use -r/--regexp). Required unless --files/--type-list/--generate/--version/--undo.",
-    ),
-    paths: list[str] | None = typer.Argument(None, help="Files or directories to search (default: current directory)."),
-    regexp: str | None = typer.Option(None, "-r", "--regexp", help="Pattern (alternative to positional PATTERN)."),
-    e_opt: str | None = typer.Option(None, "-e", help="Alias for -r/--regexp (extension mode under --legacy-flags)."),
-    pattern_file: str | None = typer.Option(
-        None, "-f", "--pattern-file", help="Read patterns from PATH (one per line)."
-    ),
-    extensions: list[str] | None = typer.Option(
-        None,
-        "--ext",
-        help="Only search files with given extension(s) (repeatable, comma ok).",
-    ),
-    types: list[str] | None = typer.Option(
-        None,
-        "-t",
-        "--type",
-        help="Only search files matching a type preset (repeatable).",
-    ),
-    type_not: list[str] | None = typer.Option(
-        None,
-        "-T",
-        "--type-not",
-        help="Exclude files of a given type preset (repeatable).",
-    ),
-    type_add: list[str] | None = typer.Option(
-        None, "--type-add", help="Register preset NAME:EXT[,EXT...] (repeatable)."
-    ),
-    type_clear: list[str] | None = typer.Option(None, "--type-clear", help="Remove preset NAME (repeatable)."),
-    type_list: bool = typer.Option(False, "--type-list", help="Print known presets and exit."),
-    ignore_case: bool = typer.Option(False, "-i", "--ignore-case", help="Case-insensitive matching."),
-    smart_case: bool = typer.Option(
-        False,
-        "-S",
-        "--smart-case",
-        help="Case-insensitive unless pattern has uppercase.",
-    ),
-    case_sensitive: bool = typer.Option(False, "-s", "--case-sensitive", help="Force case-sensitive matching."),
-    fixed_strings: bool = typer.Option(False, "-F", "--fixed-strings", help="Treat PATTERN as a literal string."),
-    word_regexp: bool = typer.Option(False, "-w", "--word-regexp", help="Match whole words only."),
-    line_regexp_x: bool = typer.Option(False, "--line-regexp", help="Match whole lines only."),
-    invert_match: bool = typer.Option(False, "-v", "--invert-match", help="Show non-matching lines."),
-    multiline: bool = typer.Option(False, "-U", "--multiline", help="Allow pattern to span lines (DOTALL)."),
-    no_unicode: bool = typer.Option(False, "--no-unicode", help="Disable Unicode (re.ASCII)."),
-    crlf: bool = typer.Option(False, "--crlf", help="Strip CR before matching; re-append on write."),
-    pcre2: bool = typer.Option(
-        False,
-        "-P",
-        "--pcre2",
-        help="Use the 'regex' module (alias for --engine regex).",
-    ),
-    engine: str = typer.Option("re", "--engine", help="Regex engine: 're' (default) or 'regex'."),
-    only_matching: bool = typer.Option(False, "-o", "--only-matching", help="Print only matched parts."),
-    replace: str | None = typer.Option(None, "--replace", help="Replacement template (\\1 backreferences)."),
-    literal_replace: bool = typer.Option(
-        False, "--literal-replace", help="Do not expand backreferences in replacement."
-    ),
-    replace_from: str | None = typer.Option(
-        None, "--replace-from", help="Read replacement template from PATH (-: stdin)."
-    ),
-    line_number_flag: bool = typer.Option(True, "-n", "--line-number", help="Show line numbers (default on)."),
-    no_line_number: bool = typer.Option(False, "--no-line-number", help="Hide line numbers."),
-    files_with_matches: bool = typer.Option(False, "-l", "--files-with-matches", help="Print only paths with matches."),
-    files_without_match: bool = typer.Option(
-        False, "-L", "--files-without-match", help="Print only paths without matches."
-    ),
-    count: bool = typer.Option(False, "-c", "--count", help="Print match count per file."),
-    quiet: bool = typer.Option(False, "-q", "--quiet", help="Suppress output; exit status indicates match."),
-    check: bool = typer.Option(False, "--check", help="Exit 0 on match, 1 on none, 2 on error."),
-    exit_code: bool = typer.Option(False, "--exit-code", help="Exit 1 when no matches found."),
-    json_out: bool = typer.Option(False, "--json", help="Emit one JSON object per match."),
-    json_seq: bool = typer.Option(False, "--json-seq", help="Emit one JSON array per match."),
-    heading_flag: bool = typer.Option(False, "--heading", help="Force headings above each file's matches."),
-    no_heading: bool = typer.Option(False, "--no-heading", help="Suppress headings."),
-    with_filename: bool = typer.Option(False, "-H", "--with-filename", help="Force filename in output."),
-    no_filename: bool = typer.Option(False, "--no-filename", help="Suppress filename in output."),
-    column: bool = typer.Option(False, "--column", help="Print 1-based column of first match."),
-    byte_offset: bool = typer.Option(False, "-b", "--byte-offset", help="Print byte offset of match."),
-    null_sep: bool = typer.Option(False, "-0", "--null", help="NUL after paths in -l/-L/-c/--files."),
-    passthru: bool = typer.Option(False, "--passthru", help="Print non-matching lines alongside matches."),
-    pretty: bool = typer.Option(
-        False,
-        "-p",
-        "--pretty",
-        help="Shorthand for --color always --heading --line-number.",
-    ),
-    max_columns: int = typer.Option(0, "--max-columns", help="Truncate printed lines to N characters."),
-    max_columns_preview: bool = typer.Option(False, "--max-columns-preview", help="Show truncation preview."),
-    stats_only: bool = typer.Option(False, "--stats-only", help="Print only stats summary (implies -q)."),
-    context_separator: str | None = typer.Option(
-        None,
-        "--context-separator",
-        help="Separator between context groups (default: --).",
-    ),
-    field_match_separator: str = typer.Option(
-        ":",
-        "--field-match-separator",
-        help="Separator between path/line/text for matches.",
-    ),
-    field_context_separator: str = typer.Option("-", "--field-context-separator", help="Separator for context lines."),
-    after_context: int = typer.Option(0, "-A", "--after-context", help="Show N lines after each match."),
-    before_context: int = typer.Option(0, "-B", "--before-context", help="Show N lines before each match."),
-    context: int | None = typer.Option(None, "-C", "--context", help="Shorthand for -A N -B N."),
-    hidden: bool = typer.Option(False, "--hidden", help="Search hidden files/dirs."),
-    unrestricted: int = typer.Option(
-        0,
-        "-u",
-        "--unrestricted",
-        count=True,
-        help="Reduce filtering: -u no-ignore, -uu +hidden, -uuu +text.",
-    ),
-    text_flag: bool = typer.Option(False, "-a", "--text", help="Treat binary files as text."),
-    binary_flag: bool = typer.Option(False, "--binary", help="Search binary files, escape NULs."),
-    require_git: bool = typer.Option(False, "--require-git", help="Only search files tracked by git."),
-    require_clean_git: bool = typer.Option(False, "--require-clean-git", help="Refuse if git working tree is dirty."),
-    glob_patterns: list[str] | None = typer.Option(
-        None, "-g", "--glob", help="Only search paths matching GLOB (repeatable)."
-    ),
-    iglob: list[str] | None = typer.Option(None, "--iglob", help="Case-insensitive include glob (repeatable)."),
-    glob_case_insensitive: bool = typer.Option(
-        False,
-        "--glob-case-insensitive",
-        help="Make -g/--iglob/--exclude-dir case-insensitive.",
-    ),
-    exclude: list[str] | None = typer.Option(None, "--exclude", help="Exclude paths matching GLOB (repeatable)."),
-    exclude_dirs: list[str] | None = typer.Option(None, "--exclude-dir", help="Exclude directory NAME (repeatable)."),
-    max_depth: int | None = typer.Option(None, "--max-depth", help="Maximum directory depth."),
-    max_filesize: int = typer.Option(10_000_000, "--max-filesize", help="Skip files larger than BYTES."),
-    max_count: int = typer.Option(0, "-m", "-M", "--max-count", help="Stop after N matching lines per file."),
-    no_ignore: bool = typer.Option(False, "--no-ignore", help="Do not honour .gitignore / .ignore."),
-    ignore_file: list[str] | None = typer.Option(None, "--ignore-file", help="Additional ignore file (repeatable)."),
-    follow: bool = typer.Option(False, "--follow", help="Follow symlinks (with cycle detection)."),
-    files_from: str | None = typer.Option(None, "--files-from", help="Read file list from PATH (-: stdin)."),
-    encoding: str = typer.Option("utf-8", "--encoding", help="Text encoding to use."),
-    list_files: bool = typer.Option(False, "--files", help="List files that would be searched, then exit."),
-    sort: str = typer.Option("none", "--sort", help="Sort: path|modified|accessed|created|none."),
-    sortr: bool = typer.Option(False, "--sortr", help="Reverse sort order."),
-    pre_cmd: str | None = typer.Option(None, "--pre", help="Pipe each file through CMD and search its stdout."),
-    pre_glob: str | None = typer.Option(None, "--pre-glob", help="Only preprocess files matching GLOB."),
-    threads: int = typer.Option(MAX_WORKERS, "-j", "--threads", help="Worker count."),
-    no_parallel: bool = typer.Option(False, "--no-parallel", help="Force single-threaded execution."),
-    mmap_flag: bool = typer.Option(True, "--mmap/--no-mmap", help="Use mmap for large files (default on)."),
-    mmap_threshold: int = typer.Option(1_048_576, "--mmap-threshold", help="mmap files >= BYTES."),
-    buffer_size: int = typer.Option(65_536, "--buffer-size", help="Buffered reader size."),
-    process_lines: bool = typer.Option(False, "--process-lines", help="Stream lines instead of reading whole file."),
-    regex_size_limit: int = typer.Option(
-        10_000_000, "--regex-size-limit", help="Regex size limit (engine=regex only)."
-    ),
-    dfa_size_limit: int = typer.Option(10_000_000, "--dfa-size-limit", help="DFA size limit (engine=regex only)."),
-    in_place: bool = typer.Option(False, "-W", "--in-place", help="Modify files in place (requires --replace)."),
-    dry_run: bool = typer.Option(False, "--dry-run", help="Preview changes without writing (implies --diff)."),
-    diff: bool = typer.Option(False, "--diff", help="Print unified diff (implies --dry-run)."),
-    backup: str | None = typer.Option(None, "--backup", help="Save backup with SUFFIX (default .bak)."),
-    backup_dir: str | None = typer.Option(None, "--backup-dir", help="Mirror backups into DIR."),
-    undo_journal: str | None = typer.Option(None, "--undo-journal", help="JSON undo journal path."),
-    undo: bool = typer.Option(False, "--undo", help="Replay --undo-journal in reverse."),
-    prompt: bool = typer.Option(False, "--prompt", help="Interactive per-file [y]/[n]/[a]/[q] prompt."),
-    confirm: bool = typer.Option(False, "--confirm", help="Ask global [y/N] confirmation before writing."),
-    atomic_write: bool = typer.Option(
-        True,
-        "--atomic-write/--no-atomic-write",
-        help="Atomic writes (default on for --in-place).",
-    ),
-    preserve_case: bool = typer.Option(False, "--preserve-case", help="Preserve match case in replacement."),
-    upper: bool = typer.Option(False, "--upper", help="Uppercase the replacement."),
-    lower: bool = typer.Option(False, "--lower", help="Lowercase the replacement."),
-    capitalize: bool = typer.Option(False, "--capitalize", help="Capitalize the replacement."),
-    color: str = typer.Option("auto", "--color", help="Colour output: auto|always|never."),
-    no_color: bool = typer.Option(False, "--no-color", help="Alias for --color never."),
-    out_file: str | None = typer.Option(None, "--out-file", help="Write results to FILE."),
-    stats: int = typer.Option(
-        0,
-        "--stats",
-        count=True,
-        help="Print summary to stderr (repeat for more detail).",
-    ),
-    no_messages: bool = typer.Option(
-        False,
-        "--no-messages",
-        help="Suppress per-file error reporting and no-match message.",
-    ),
-    legacy_flags: bool = typer.Option(False, "--legacy-flags", help="Restore old short-flag meanings (-e/-x/-L)."),
-    config_path: str | None = typer.Option(None, "--config", help="Load defaults from TOML/JSON config."),
-    no_config: bool = typer.Option(False, "--no-config", help="Disable config auto-discovery."),
-    debug_flag: bool = typer.Option(False, "--debug", help="Enable DEBUG logging (stderr)."),
-    trace_flag: bool = typer.Option(False, "--trace", help="Enable TRACE logging (stderr)."),
-    log_file: str | None = typer.Option(None, "--log-file", help="Override log file path ('' to disable)."),
-    version_flag: bool = typer.Option(False, "--version", help="Print version and exit."),
-    generate: str | None = typer.Option(
-        None, "--generate", help="Emit shell completions for bash|zsh|fish|powershell."
-    ),
+    pattern: str | None = None,
+    paths: list[str] | None = None,
+    regexp: str | None = None,
+    e_opt: str | None = None,
+    pattern_file: str | None = None,
+    extensions: list[str] | None = None,
+    types: list[str] | None = None,
+    type_not: list[str] | None = None,
+    type_add: list[str] | None = None,
+    type_clear: list[str] | None = None,
+    type_list: bool = False,
+    ignore_case: bool = False,
+    smart_case: bool = False,
+    case_sensitive: bool = False,
+    fixed_strings: bool = False,
+    word_regexp: bool = False,
+    line_regexp_x: bool = False,
+    invert_match: bool = False,
+    multiline: bool = False,
+    no_unicode: bool = False,
+    crlf: bool = False,
+    pcre2: bool = False,
+    engine: str = 're',
+    only_matching: bool = False,
+    replace: str | None = None,
+    literal_replace: bool = False,
+    replace_from: str | None = None,
+    line_number_flag: bool = True,
+    no_line_number: bool = False,
+    files_with_matches: bool = False,
+    files_without_match: bool = False,
+    count: bool = False,
+    quiet: bool = False,
+    check: bool = False,
+    exit_code: bool = False,
+    json_out: bool = False,
+    json_seq: bool = False,
+    heading_flag: bool = False,
+    no_heading: bool = False,
+    with_filename: bool = False,
+    no_filename: bool = False,
+    column: bool = False,
+    byte_offset: bool = False,
+    null_sep: bool = False,
+    passthru: bool = False,
+    pretty: bool = False,
+    max_columns: int = 0,
+    max_columns_preview: bool = False,
+    stats_only: bool = False,
+    context_separator: str | None = None,
+    field_match_separator: str = ':',
+    field_context_separator: str = '-',
+    after_context: int = 0,
+    before_context: int = 0,
+    context: int | None = None,
+    hidden: bool = False,
+    unrestricted: int = 0,
+    text_flag: bool = False,
+    binary_flag: bool = False,
+    require_git: bool = False,
+    require_clean_git: bool = False,
+    glob_patterns: list[str] | None = None,
+    iglob: list[str] | None = None,
+    glob_case_insensitive: bool = False,
+    exclude: list[str] | None = None,
+    exclude_dirs: list[str] | None = None,
+    max_depth: int | None = None,
+    max_filesize: int = 10000000,
+    max_count: int = 0,
+    no_ignore: bool = False,
+    ignore_file: list[str] | None = None,
+    follow: bool = False,
+    files_from: str | None = None,
+    encoding: str = 'utf-8',
+    list_files: bool = False,
+    sort: str = 'none',
+    sortr: bool = False,
+    pre_cmd: str | None = None,
+    pre_glob: str | None = None,
+    threads: int = MAX_WORKERS,
+    no_parallel: bool = False,
+    mmap_flag: bool = True,
+    mmap_threshold: int = 1048576,
+    buffer_size: int = 65536,
+    process_lines: bool = False,
+    regex_size_limit: int = 10000000,
+    dfa_size_limit: int = 10000000,
+    in_place: bool = False,
+    dry_run: bool = False,
+    diff: bool = False,
+    backup: str | None = None,
+    backup_dir: str | None = None,
+    undo_journal: str | None = None,
+    undo: bool = False,
+    prompt: bool = False,
+    confirm: bool = False,
+    atomic_write: bool = True,
+    preserve_case: bool = False,
+    upper: bool = False,
+    lower: bool = False,
+    capitalize: bool = False,
+    color: str = 'auto',
+    no_color: bool = False,
+    out_file: str | None = None,
+    stats: int = 0,
+    no_messages: bool = False,
+    legacy_flags: bool = False,
+    config_path: str | None = None,
+    no_config: bool = False,
+    debug_flag: bool = False,
+    trace_flag: bool = False,
+    log_file: str | None = None,
+    version_flag: bool = False,
+    generate: str | None = None,
 ) -> None:
     """Search FILES for PATTERN.
 
@@ -2287,15 +2257,15 @@ def _pyrg_command(
     1 if none, and 2 on usage/error.
     """
     if version_flag:
-        typer.echo(f"pyrg {__version__}")
-        raise typer.Exit(0)
+        print(f'pyrg {__version__}')
+        raise SystemExit(0)
     if generate is not None:
-        raise typer.Exit(_emit_completion(generate))
+        raise SystemExit(_emit_completion(generate))
     if type_list:
         for name in sorted(TYPE_PRESETS):
             exts = " ".join(sorted(TYPE_PRESETS[name]))
-            typer.echo(f"{name}: {exts}")
-        raise typer.Exit(0)
+            print(f'{name}: {exts}')
+        raise SystemExit(0)
 
     cfg = _load_config(config_path or _env_str("PYRG_CONFIG"), no_config)
     if log_file is not None:
@@ -2304,7 +2274,7 @@ def _pyrg_command(
             "DEBUG" if not (debug_flag or trace_flag) else ("TRACE" if trace_flag else "DEBUG"),
         )
     elif debug_flag or trace_flag:
-        logger.remove() if HAS_LOGURU else None
+        logger.remove()
         logger.add(sys.stderr, level="TRACE" if trace_flag else "DEBUG", format="{message}")
 
     if threads == MAX_WORKERS:
@@ -2324,66 +2294,48 @@ def _pyrg_command(
         color = str(cfg["color"])
     effective_color = "never" if no_color else color
     if effective_color not in ("auto", "always", "never"):
-        typer.echo(
-            f"invalid --color value: {effective_color}; expected auto, always, never",
-            err=True,
-        )
-        raise typer.Exit(2)
+        print(f'invalid --color value: {effective_color}; expected auto, always, never', file=sys.stderr)
+        raise SystemExit(2)
     if pretty:
         effective_color = "always"
         heading_flag = True
     if sort not in ("path", "modified", "accessed", "created", "none"):
-        typer.echo(
-            f"invalid --sort value: {sort}; expected path|modified|accessed|created|none",
-            err=True,
-        )
-        raise typer.Exit(2)
+        print(f'invalid --sort value: {sort}; expected path|modified|accessed|created|none', file=sys.stderr)
+        raise SystemExit(2)
     if heading_flag and no_heading:
-        typer.echo("--heading and --no-heading are mutually exclusive", err=True)
-        raise typer.Exit(2)
+        print('--heading and --no-heading are mutually exclusive', file=sys.stderr)
+        raise SystemExit(2)
     if with_filename and no_filename:
-        typer.echo("-H/--with-filename and --no-filename are mutually exclusive", err=True)
-        raise typer.Exit(2)
+        print('-H/--with-filename and --no-filename are mutually exclusive', file=sys.stderr)
+        raise SystemExit(2)
     if context is not None:
         after_context = context
         before_context = context
     if line_number_flag and no_line_number:
-        typer.echo("error: -n and --no-line-number are mutually exclusive", err=True)
-        raise typer.Exit(2)
+        print('error: -n and --no-line-number are mutually exclusive', file=sys.stderr)
+        raise SystemExit(2)
     if files_with_matches and files_without_match:
-        typer.echo(
-            "error: -l/--files-with-matches and -L/--files-without-match are mutually exclusive",
-            err=True,
-        )
-        raise typer.Exit(2)
+        print('error: -l/--files-with-matches and -L/--files-without-match are mutually exclusive', file=sys.stderr)
+        raise SystemExit(2)
     if ignore_case and smart_case:
-        typer.echo(
-            "error: -i/--ignore-case and -S/--smart-case are mutually exclusive",
-            err=True,
-        )
-        raise typer.Exit(2)
+        print('error: -i/--ignore-case and -S/--smart-case are mutually exclusive', file=sys.stderr)
+        raise SystemExit(2)
     if smart_case and case_sensitive:
-        typer.echo(
-            "error: -S/--smart-case and -s/--case-sensitive are mutually exclusive",
-            err=True,
-        )
-        raise typer.Exit(2)
+        print('error: -S/--smart-case and -s/--case-sensitive are mutually exclusive', file=sys.stderr)
+        raise SystemExit(2)
     if ignore_case and case_sensitive:
-        typer.echo(
-            "error: -i/--ignore-case and -s/--case-sensitive are mutually exclusive",
-            err=True,
-        )
-        raise typer.Exit(2)
+        print('error: -i/--ignore-case and -s/--case-sensitive are mutually exclusive', file=sys.stderr)
+        raise SystemExit(2)
     if replace is not None and replace_from is not None:
-        typer.echo("error: --replace and --replace-from are mutually exclusive", err=True)
-        raise typer.Exit(2)
+        print('error: --replace and --replace-from are mutually exclusive', file=sys.stderr)
+        raise SystemExit(2)
     if passthru and (files_with_matches or files_without_match or count or quiet or json_out or json_seq):
-        typer.echo("error: --passthru is mutually exclusive with -l/-L/-c/-q/--json", err=True)
-        raise typer.Exit(2)
+        print('error: --passthru is mutually exclusive with -l/-L/-c/-q/--json', file=sys.stderr)
+        raise SystemExit(2)
     if in_place:
         if replace is None and replace_from is None:
-            typer.echo("error: -W/--in-place requires --replace or --replace-from", err=True)
-            raise typer.Exit(2)
+            print('error: -W/--in-place requires --replace or --replace-from', file=sys.stderr)
+            raise SystemExit(2)
         if (
             files_with_matches
             or files_without_match
@@ -2395,35 +2347,26 @@ def _pyrg_command(
             or list_files
             or files_from is not None
         ):
-            typer.echo(
-                "error: --in-place is mutually exclusive with -l/-L/-c/-q/--json/--passthru/--files/--files-from",
-                err=True,
-            )
-            raise typer.Exit(2)
+            print('error: --in-place is mutually exclusive with -l/-L/-c/-q/--json/--passthru/--files/--files-from', file=sys.stderr)
+            raise SystemExit(2)
         if prompt and threads > 1:
-            typer.echo("error: --prompt requires -j 1", err=True)
-            raise typer.Exit(2)
+            print('error: --prompt requires -j 1', file=sys.stderr)
+            raise SystemExit(2)
     if context_separator is not None and json_out:
-        typer.echo("error: --context-separator is mutually exclusive with --json", err=True)
-        raise typer.Exit(2)
+        print('error: --context-separator is mutually exclusive with --json', file=sys.stderr)
+        raise SystemExit(2)
     if pattern_file is not None and (regexp is not None or e_opt is not None):
-        typer.echo("error: -f/--pattern-file is mutually exclusive with -r/--regexp", err=True)
-        raise typer.Exit(2)
+        print('error: -f/--pattern-file is mutually exclusive with -r/--regexp', file=sys.stderr)
+        raise SystemExit(2)
     if pattern_file is not None and fixed_strings and replace is not None:
-        typer.echo(
-            "error: -f + -F + --replace is not supported (backreferences ambiguous)",
-            err=True,
-        )
-        raise typer.Exit(2)
+        print('error: -f + -F + --replace is not supported (backreferences ambiguous)', file=sys.stderr)
+        raise SystemExit(2)
     if multiline and invert_match:
         logger.warning("--multiline ignored with --invert-match")
         multiline = False
     if sum([preserve_case, upper, lower, capitalize]) > 1:
-        typer.echo(
-            "error: --preserve-case/--upper/--lower/--capitalize are mutually exclusive",
-            err=True,
-        )
-        raise typer.Exit(2)
+        print('error: --preserve-case/--upper/--lower/--capitalize are mutually exclusive', file=sys.stderr)
+        raise SystemExit(2)
     case_mode: str | None = None
     if upper:
         case_mode = "upper"
@@ -2434,9 +2377,9 @@ def _pyrg_command(
 
     if undo:
         if not undo_journal:
-            typer.echo("error: --undo requires --undo-journal", err=True)
-            raise typer.Exit(2)
-        raise typer.Exit(_undo_from_journal(Path(undo_journal), Path.cwd()))
+            print('error: --undo requires --undo-journal', file=sys.stderr)
+            raise SystemExit(2)
+        raise SystemExit(_undo_from_journal(Path(undo_journal), Path.cwd()))
 
     if pcre2:
         engine = "regex"
@@ -2454,8 +2397,8 @@ def _pyrg_command(
                 TYPE_PRESETS.pop(piece.strip().lower(), None)
 
     if require_clean_git and not _git_clean(Path.cwd()):
-        typer.echo("error: --require-clean-git: git working tree is dirty", err=True)
-        raise typer.Exit(3)
+        print('error: --require-clean-git: git working tree is dirty', file=sys.stderr)
+        raise SystemExit(3)
 
     if no_line_number:
         line_number_flag = False
@@ -2466,10 +2409,7 @@ def _pyrg_command(
 
     legacy = legacy_flags
     if not legacy and e_opt is not None:
-        typer.echo(
-            "note: -e is --regexp (alias for -r). Use --ext for extensions; --legacy-flags restores old behaviour.",
-            err=True,
-        )
+        print('note: -e is --regexp (alias for -r). Use --ext for extensions; --legacy-flags restores old behaviour.', file=sys.stderr)
         if regexp is None:
             regexp = e_opt
     if legacy and e_opt is not None:
@@ -2523,8 +2463,8 @@ def _pyrg_command(
             try:
                 compiled = _compile_cached(pattern_str, pattern_flags, engine)
             except Exception as ex:
-                typer.echo(f"Invalid regex: {ex}", err=True)
-                raise typer.Exit(2)
+                print(f'Invalid regex: {ex}', file=sys.stderr)
+                raise SystemExit(2)
 
     if sortr and sort != "none":
         pass
@@ -2577,7 +2517,7 @@ def _pyrg_command(
         finally:
             if should_close_list:
                 out_fh_list.close()
-        raise typer.Exit(0)
+        raise SystemExit(0)
 
     if sort in ("path",):
         files.sort(key=str)
@@ -2592,8 +2532,8 @@ def _pyrg_command(
 
     if not files:
         if not no_messages:
-            typer.echo("pyrg: no files matched the search filters", err=True)
-        raise typer.Exit(1)
+            print('pyrg: no files matched the search filters', file=sys.stderr)
+        raise SystemExit(1)
 
     out_fh, should_close = _open_output(out_file)
     use_color = _should_color(effective_color, out_fh is sys.stdout) and not json_out and not json_seq
@@ -2652,42 +2592,43 @@ def _pyrg_command(
         if should_close:
             out_fh.close()
         exit_no_match = 1 if (check or exit_code or quiet) else 0
-        raise typer.Exit(0 if any_match else exit_no_match)
+        raise SystemExit(0 if any_match else exit_no_match)
 
     t0 = time.monotonic()
-    base_job = {
-        "cwd": str(Path.cwd()),
-        "compiled": compiled,
-        "pattern_str": pattern_str,
-        "engine": engine,
-        "flags": pattern_flags,
-        "fixed": fixed,
-        "ignore_case": effective_ignore_case,
-        "no_unicode": no_unicode,
-        "invert": invert_match,
-        "before": before_context,
-        "after": after_context,
-        "max_count": max_count,
-        "multiline": multiline and not invert_match,
-        "encoding": encoding,
-        "replace": resolved_replace,
-        "only_matching": only_matching,
-        "crlf": crlf,
-        "literal_replace": literal_replace,
-        "preserve_case": preserve_case,
-        "case_mode": case_mode,
-        "text_mode": text_mode,
-        "use_mmap": mmap_flag,
-        "mmap_threshold": mmap_threshold,
-        "buffer_size": buffer_size,
-        "process_lines": process_lines,
-        "in_place": in_place,
-        "record_context": bool(json_out or json_seq or byte_offset or column),
-        "byte_offset": byte_offset,
-        "pre_cmd": pre_cmd,
-        "pre_glob": pre_glob,
-    }
-    jobs = [Job(**{**base_job, "path": str(p)}) for p in files]
+    base_job = Job(
+        path="",
+        cwd=str(Path.cwd()),
+        compiled=compiled,
+        pattern_str=pattern_str,
+        engine=engine,
+        flags=pattern_flags,
+        fixed=fixed,
+        ignore_case=effective_ignore_case,
+        no_unicode=no_unicode,
+        invert=invert_match,
+        before=before_context,
+        after=after_context,
+        max_count=max_count,
+        multiline=multiline and not invert_match,
+        encoding=encoding,
+        replace=resolved_replace,
+        only_matching=only_matching,
+        crlf=crlf,
+        literal_replace=literal_replace,
+        preserve_case=preserve_case,
+        case_mode=case_mode,
+        text_mode=text_mode,
+        use_mmap=mmap_flag,
+        mmap_threshold=mmap_threshold,
+        buffer_size=buffer_size,
+        process_lines=process_lines,
+        in_place=in_place,
+        record_context=bool(json_out or json_seq or byte_offset or column),
+        byte_offset=byte_offset,
+        pre_cmd=pre_cmd,
+        pre_glob=pre_glob,
+    )
+    jobs = [dc_replace(base_job, path=str(p)) for p in files]
 
     files_searched = 0
     files_matched = 0
@@ -2754,15 +2695,15 @@ def _pyrg_command(
 
                 _consume(_gen())
     except KeyboardInterrupt:
-        typer.echo("\nSearch cancelled.", err=True)
+        print('\nSearch cancelled.', file=sys.stderr)
         if should_close:
             out_fh.close()
-        raise typer.Exit(130)
+        raise SystemExit(130)
     finally:
         if should_close and not out_fh.closed:
             out_fh.close()
             if out_file:
-                typer.echo(f"Results written to: {out_file}", err=True)
+                print(f'Results written to: {out_file}', file=sys.stderr)
 
     if in_place:
         cwd = Path.cwd()
@@ -2777,7 +2718,7 @@ def _pyrg_command(
             confirmed = True
             if confirm and applicable:
                 total_apply = sum(r.match_count for r in applicable)
-                typer.echo(f"About to modify {len(applicable)} file(s), {total_apply} replacement(s).")
+                print(f'About to modify {len(applicable)} file(s), {total_apply} replacement(s).')
                 answer = _prompt_yes_no("Proceed? [y/N] ")
                 confirmed = answer in ("y", "yes")
             if confirmed:
@@ -2817,18 +2758,18 @@ def _pyrg_command(
                         try:
                             _atomic_write(p, r.new_content or b"")
                         except OSError as ex:
-                            typer.echo(f"write failed for {p}: {ex}", err=True)
+                            print(f'write failed for {p}: {ex}', file=sys.stderr)
                             files_errored += 1
                             continue
                     else:
                         try:
-                            atomic_write(p, r.new_content or b"")
+                            p.write_bytes(r.new_content or b"")
                         except OSError as ex:
-                            typer.echo(f"write failed for {p}: {ex}", err=True)
+                            print(f'write failed for {p}: {ex}', file=sys.stderr)
                             files_errored += 1
                             continue
                     write_count += 1
-                typer.echo(f"Modified {write_count} file(s)", err=True)
+                print(f'Modified {write_count} file(s)', file=sys.stderr)
 
     elapsed = time.monotonic() - t0
     if stats > 0 or stats_only:
@@ -2840,16 +2781,13 @@ def _pyrg_command(
         ]
         if files_errored:
             parts.append(f"{files_errored} errors")
-        typer.echo(", ".join(parts), err=True)
+        print(', '.join(parts), file=sys.stderr)
         if stats >= 2:
             for d, s in sorted(per_dir_stats.items()):
-                typer.echo(
-                    f"  {d}: {s['files']} files, {s['matched']} matched, {s['matches']} matches",
-                    err=True,
-                )
+                print(f"  {d}: {s['files']} files, {s['matched']} matched, {s['matches']} matches", file=sys.stderr)
 
     exit_no_match = 1 if (check or exit_code) else 0
-    raise typer.Exit(0 if any_match else exit_no_match)
+    raise SystemExit(0 if any_match else exit_no_match)
 
 
 def _build_pattern_source(
@@ -2870,8 +2808,8 @@ def _build_pattern_source(
     if pattern_file is not None:
         pats = _read_pattern_file(pattern_file)
         if not pats:
-            typer.echo(f"error: --pattern-file {pattern_file!r} contains no patterns", err=True)
-            raise typer.Exit(2)
+            print(f'error: --pattern-file {pattern_file!r} contains no patterns', file=sys.stderr)
+            raise SystemExit(2)
         if fixed_strings:
             combined = "|".join(re.escape(p) for p in pats)
         else:
@@ -2879,11 +2817,8 @@ def _build_pattern_source(
     else:
         pat = regexp or pattern
         if not pat:
-            typer.echo(
-                "No pattern provided. Use positional PATTERN or -r/--regexp PATTERN.",
-                err=True,
-            )
-            raise typer.Exit(2)
+            print('No pattern provided. Use positional PATTERN or -r/--regexp PATTERN.', file=sys.stderr)
+            raise SystemExit(2)
         combined = pat
 
     effective_ignore_case = ignore_case
@@ -2919,7 +2854,13 @@ def main(argv: list[str] | None = None) -> int:
     if argv is not None:
         sys.argv[1:] = list(argv)
     try:
-        _app()
+        parser = build_parser()
+        raw = sys.argv[1:]
+        if not raw:
+            parser.print_help()
+            return 0
+        ns = parser.parse_args(raw)
+        _pyrg_command(**vars(ns))
         return 0
     except SystemExit as exc:
         return int(exc.code or 0)

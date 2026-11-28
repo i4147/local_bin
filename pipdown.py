@@ -7,6 +7,7 @@ from collections.abc import Iterator
 from dataclasses import dataclass, field
 import hashlib
 from html.parser import HTMLParser
+import importlib
 import json
 from pathlib import Path
 import sys
@@ -541,7 +542,7 @@ def download_all(
     going so one bad artifact does not abort the others.
     """
     try:
-        import pycurl
+        pycurl = importlib.import_module("pycurl")
     except ImportError as exc:
         msg = "pycurl backend requires: pip install pycurl"
         raise RuntimeError(msg) from exc

@@ -85,6 +85,14 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import zipfile
+from loguru import logger
+
+logger.remove()
+logger.add(
+    sys.stderr,
+    level=os.environ.get("LOGURU_LEVEL", "INFO"),
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+)
 
 
 VERSION: str = "1.0.0"
@@ -605,7 +613,7 @@ def _mk(**kw: Any) -> LangConf:
     return LangConf(keywords=kw.pop("keywords"), **kw)
 
 
-LANGS: dict[str, None] = {
+LANGS: dict[str, LangConf | None] = {
     "c": _mk(keywords=C_KEYWORDS),
     "cpp": _mk(keywords=C_KEYWORDS),
     "objc": _mk(keywords=C_KEYWORDS),
@@ -793,7 +801,7 @@ class TokenTable:
         return len(self._ids)
 
 
-def _skip_heredoc_bodies(src: Path, i: Any, line: str, patterns: Iterable[Any]):
+def _skip_heredoc_bodies(src: str, i: int, line: int, patterns: list[Any]):
     """Advance past the body of every pending heredoc (called at EOL)."""
     n = len(src)
     for pat in patterns:
@@ -806,7 +814,7 @@ def _skip_heredoc_bodies(src: Path, i: Any, line: str, patterns: Iterable[Any]):
     return i, line
 
 
-def lex_c_like(src: Path, conf: Any, exact: Any):
+def lex_c_like(src: str, conf: Any, exact: Any):
     """Shared scanner for the C-like language family (incl. ruby/shell)."""
     toks = []
     n = len(src)
@@ -973,24 +981,31 @@ def lex_c_like(src: Path, conf: Any, exact: Any):
                     continue
         if c.isdigit():
             m = NUM_RE.match(src, i)
-            toks.append((m.group(0) if exact else "NUM", line))
-            i = m.end()
-            last_kind = "num"
-            bol = False
-            continue
+            if m is not None:
+                toks.append((m.group(0) if exact else "NUM", line))
+                i = m.end()
+                last_kind = "num"
+                bol = False
+                continue
         if c.isalpha() or c == "_" or (conf.ident_extra and c in conf.ident_extra):
             m = ire.match(src, i)
-            text = m.group(0)
-            kw = text in conf.keywords
-            toks.append((text if (kw or exact) else "ID", line))
-            i = m.end()
-            last_kind = "kw" if kw else "id"
-            bol = False
-            continue
+            if m is not None:
+                text = m.group(0)
+                kw = text in conf.keywords
+                toks.append((text if (kw or exact) else "ID", line))
+                i = m.end()
+                last_kind = "kw" if kw else "id"
+                bol = False
+                continue
         m = OPS_RE.match(src, i)
-        text = m.group(0)
-        toks.append((text, line))
-        i = m.end()
+        if m is not None:
+            text = m.group(0)
+            toks.append((text, line))
+            i = m.end()
+        else:
+            text = c
+            toks.append((text, line))
+            i += 1
         last_kind = "op"
         last_raw = text
         bol = False
@@ -998,7 +1013,7 @@ def lex_c_like(src: Path, conf: Any, exact: Any):
     return toks
 
 
-def _scan_py_string(src: Path, i: int):
+def _scan_py_string(src: str, i: int):
     """Scan a Python string starting at the quote (prefix already consumed).
     Returns (end_index, newline_count).  Handles triple quotes, escape
     sequences and line continuations inside strings.
@@ -1033,7 +1048,7 @@ def _scan_py_string(src: Path, i: int):
 _PY_PREFIXES: set[str] = {"r", "b", "u", "f", "rb", "br", "fr", "rf"}
 
 
-def lex_python(src: Path, exact: Any):
+def lex_python(src: str, exact: Any):
     """Python lexer with INDENT/DEDENT and NEWLINE tokens (PEP 8-ish)."""
     toks = []
     n = len(src)
@@ -1118,17 +1133,22 @@ def lex_python(src: Path, exact: Any):
             continue
         if c.isdigit() or (c == "." and i + 1 < n and src[i + 1].isdigit()):
             m = PY_NUM_RE.match(src, i)
-            toks.append((m.group(0) if exact else "NUM", line))
-            i = m.end()
-            pending = True
-            continue
+            if m is not None:
+                toks.append((m.group(0) if exact else "NUM", line))
+                i = m.end()
+                pending = True
+                continue
         if c in "([{":
             depth += 1
         elif c in ")]}" and depth > 0:
             depth -= 1
         m = PY_OPS_RE.match(src, i)
-        toks.append((m.group(0), line))
-        i = m.end()
+        if m is not None:
+            toks.append((m.group(0), line))
+            i = m.end()
+        else:
+            toks.append((c, line))
+            i += 1
         pending = True
         continue
     if pending:
@@ -1142,7 +1162,7 @@ def lex_python(src: Path, exact: Any):
 _GENERIC_TOKEN_RE = re.compile(r"[^\W\d]\w*|\d[\w.]*|[^\s]", re.UNICODE)
 
 
-def lex_generic(src: Path, exact: Any):
+def lex_generic(src: str, exact: Any):
     """Fallback lexer: words, numbers and single punctuation characters."""
     out = []
     line = 1
@@ -1160,7 +1180,7 @@ def lex_generic(src: Path, exact: Any):
     return out
 
 
-def lex_source(src: Path, lang: str, exact: Any):
+def lex_source(src: str, lang: str, exact: Any):
     if lang == "python":
         return lex_python(src, exact)
     if lang == "generic":
@@ -1188,7 +1208,7 @@ def gram_hashes(ids: list[Any], k: int):
     return out
 
 
-def winnow(hashes: Iterable[Any], w: int):
+def winnow(hashes: Sequence[Any], w: int):
     """Winnowing (Schleimer et al. 2003).
     Keeps the rightmost minimum of every window of ``w`` consecutive hashes;
     returns {gram_position: hash}.  Guarantees that any match of at least
@@ -1277,7 +1297,7 @@ def file_language(name: str, opts: Any):
     """Language for a file name, or None if the file should not be scanned."""
     if opts.language:
         return opts.language
-    ext = os.path.splitext(name)[1].lower()
+    ext = Path(name).suffix.lower()
     lang = EXT_LANG.get(ext)
     if lang:
         return lang
@@ -1296,7 +1316,7 @@ def _is_excluded(rel: str, opts: Any) -> bool:
     return False
 
 
-def _add_text_file(corpus: Any, rel: str, text: str, lang: str, opts: Any, table: dict[str, Any]) -> bool:
+def _add_text_file(corpus: Any, rel: str, text: str, lang: str, opts: Any, table: TokenTable) -> bool:
     """Lex text and append a SourceFile; returns False if skipped."""
     try:
         toks = lex_source(text, lang, opts.exact_idents)
@@ -1320,9 +1340,9 @@ def _add_text_file(corpus: Any, rel: str, text: str, lang: str, opts: Any, table
     return True
 
 
-def _add_disk_file(corpus: Any, full: Path, rel: Any, lang: str, opts: Any, table: dict[str, Any]) -> None:
+def _add_disk_file(corpus: Any, full: str | Path, rel: Any, lang: str, opts: Any, table: TokenTable) -> None:
     try:
-        if os.path.getsize(full) > opts.max_file_kb * 1024:
+        if Path(full).stat().st_size > opts.max_file_kb * 1024:
             _note_skip(corpus, rel, "too large")
             return
         with open(full, "rb") as fh:
@@ -1336,31 +1356,32 @@ def _add_disk_file(corpus: Any, full: Path, rel: Any, lang: str, opts: Any, tabl
     _add_text_file(corpus, rel, data.decode("utf-8-sig", "replace"), lang, opts, table)
 
 
-def scan_dir(corpus: Any, root: Path, subdir: str, opts: Any, table: dict[str, Any]) -> None:
+def scan_dir(corpus: Any, root: str | Path, subdir: str | None, opts: Any, table: TokenTable) -> None:
     """Append every source file under root/subdir to the corpus."""
-    base = os.path.join(root, subdir) if subdir else root
-    base = os.path.normpath(base)
-    if not Path(base).is_dir():
+    base = (Path(root) / subdir) if subdir else Path(root)
+    if not base.is_dir():
         raise MoseError(f'directory not found: "{base}"')
     for dirpath, dirnames, filenames in os.walk(base, followlinks=False):
+        cur = Path(dirpath)
         dirnames[:] = sorted(
             d
             for d in dirnames
             if d not in SKIP_DIRS
             and not d.startswith(".")
-            and not _is_excluded(os.path.relpath(os.path.join(dirpath, d), base), opts)
+            and not _is_excluded(str((cur / d).relative_to(base)), opts)
         )
         for fn in sorted(filenames):
             if fn.lower() in SKIP_FILE_NAMES:
                 continue
-            rel = os.path.relpath(os.path.join(dirpath, fn), base)
+            full_path = cur / fn
+            rel = str(full_path.relative_to(base))
             if _is_excluded(rel, opts):
                 continue
             lang = file_language(fn, opts)
             if lang is None:
                 _note_skip(corpus, rel, "not a source file")
                 continue
-            _add_disk_file(corpus, os.path.join(dirpath, fn), rel, lang, opts, table)
+            _add_disk_file(corpus, str(full_path), rel, lang, opts, table)
 
 
 UA: str = TOOL + "/" + VERSION
@@ -1444,7 +1465,7 @@ def parse_remote(url: str) -> RemoteSpec:
         label = "bitbucket.org/{}{}".format(project, "@" + ref if ref else "")
         return RemoteSpec("bitbucket", project, ref, subdir, "", label)
     if re.search(r"\.(zip|tar|tgz)(?:[?#].*)?$", path) or re.search(r"\.tar\.(?:gz|bz2|xz)$", path):
-        return RemoteSpec("archive", url, "", "", "", os.path.basename(path) or host)
+        return RemoteSpec("archive", url, "", "", "", Path(path).name or host)
     raise MoseError(
         f"unsupported repository host {host!r}; supported: github.com, gitlab.com, "
         "bitbucket.org, or a direct .zip/.tar archive URL"
@@ -1495,7 +1516,7 @@ def _resolve_default_ref(spec: Any):
     return None
 
 
-def _download(url: str, dest_path: Path, opts: Any) -> int:
+def _download(url: str, dest_path: str | Path, opts: Any) -> int:
     """Stream ``url`` to ``dest_path``; raises MoseError on failure."""
     req = urllib.request.Request(url, headers={"User-Agent": UA})
     try:
@@ -1519,7 +1540,7 @@ def _download(url: str, dest_path: Path, opts: Any) -> int:
     return got
 
 
-def _download_bytes(url: str, opts: Any, cap: int = MAX_FILE_BYTES * 8) -> str:
+def _download_bytes(url: str, opts: Any, cap: int = MAX_FILE_BYTES * 8) -> bytes:
     req = urllib.request.Request(url, headers={"User-Agent": UA})
     try:
         with urllib.request.urlopen(req, timeout=60) as resp:
@@ -1533,14 +1554,14 @@ def _download_bytes(url: str, opts: Any, cap: int = MAX_FILE_BYTES * 8) -> str:
     return data
 
 
-def _safe_extract_zip(zpath: Any, dest: Path) -> None:
+def _safe_extract_zip(zpath: Any, dest: str | Path) -> None:
     total = 0
     with zipfile.ZipFile(zpath) as zf:
         for info in zf.infolist():
             if info.is_dir():
                 continue
             name = info.filename.replace("\\", "/")
-            base = os.path.basename(name)
+            base = Path(name).name
             if name.startswith("__MACOSX/") or base.startswith("._") or base == ".DS_Store":
                 continue
             parts = name.split("/")
@@ -1551,20 +1572,20 @@ def _safe_extract_zip(zpath: Any, dest: Path) -> None:
             total += info.file_size
             if total > MAX_ARCHIVE_BYTES:
                 raise MoseError("archive too large when decompressed")
-            target = os.path.join(dest, *parts)
-            os.makedirs(os.path.dirname(target), exist_ok=True)
-            with zf.open(info) as src, open(target, "wb") as out:
+            target = Path(dest, *parts)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            with zf.open(info) as src, target.open("wb") as out:
                 shutil.copyfileobj(src, out)
 
 
-def _safe_extract_tar(tpath: Path, dest: Path) -> None:
+def _safe_extract_tar(tpath: str | Path, dest: str | Path) -> None:
     total = 0
     with tarfile.open(tpath, "r:*") as tf:
         for m in tf:
             if not m.isreg():
                 continue
             name = m.name.replace("\\", "/").lstrip("/")
-            base = os.path.basename(name)
+            base = Path(name).name
             if base.startswith("._") or base == ".DS_Store" or "__MACOSX" in name:
                 continue
             parts = name.split("/")
@@ -1576,19 +1597,18 @@ def _safe_extract_tar(tpath: Path, dest: Path) -> None:
             fsrc = tf.extractfile(m)
             if fsrc is None:
                 continue
-            target = os.path.join(dest, *parts)
-            os.makedirs(os.path.dirname(target), exist_ok=True)
-            with fsrc, open(target, "wb") as out:
+            target = Path(dest, *parts)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            with fsrc, target.open("wb") as out:
                 shutil.copyfileobj(fsrc, out)
 
 
-def _strip_root(dest: Path):
-    entries = [e for e in os.listdir(dest) if not e.startswith("__MACOSX")]
-    if len(entries) == 1:
-        p = os.path.join(dest, entries[0])
-        if Path(p).is_dir():
-            return p
-    return dest
+def _strip_root(dest: str | Path) -> Path:
+    dest_path = Path(dest)
+    entries = [p for p in dest_path.iterdir() if not p.name.startswith("__MACOSX")]
+    if len(entries) == 1 and entries[0].is_dir():
+        return entries[0]
+    return dest_path
 
 
 def _fmt_bytes(n: int) -> str:
@@ -1604,14 +1624,14 @@ def _remote_label(spec: Any) -> str:
     return spec.label + extra
 
 
-def load_remote(spec_str: str, opts: Any, table: dict[str, Any], tmpdirs: list[Any]) -> Corpus:
+def load_remote(spec_str: str, opts: Any, table: TokenTable, tmpdirs: list[Any]) -> Corpus:
     """Load remote."""
     rs = parse_remote(_normalize_git_url(spec_str))
     if rs.single_file and rs.provider in ("github", "gitlab"):
         data = _download_bytes(_raw_file_url(rs), opts)
         text = data.decode("utf-8-sig", "replace")
         name = rs.single_file.rsplit("/", 1)[-1]
-        lang = opts.language or EXT_LANG.get(os.path.splitext(name)[1].lower()) or "generic"
+        lang = opts.language or EXT_LANG.get(Path(name).suffix.lower()) or "generic"
         corpus = Corpus(label=_remote_label(rs), kind="git")
         if not _add_text_file(corpus, name, text, lang, opts, table):
             raise MoseError(f"remote file {rs.label} has too few tokens to compare")
@@ -1633,20 +1653,20 @@ def load_remote(spec_str: str, opts: Any, table: dict[str, Any], tmpdirs: list[A
         try:
             if not opts.quiet:
                 print(f"downloading {_archive_url(spec)} ...", file=sys.stderr)
-            zpath = os.path.join(workdir, "archive")
-            _download(_archive_url(spec), zpath, opts)
+            zpath = Path(workdir) / "archive"
+            _download(_archive_url(spec), str(zpath), opts)
             archive_url = _archive_url(spec)
             rs = spec
             break
         except MoseError as e:
             last_err = e
             zpath = None
-    if zpath is None:
+    if zpath is None or archive_url is None:
         raise MoseError("could not download {} ({})".format(rs.label, last_err or "no ref"))
     if not opts.quiet:
-        print(f"ok, got {_fmt_bytes(os.path.getsize(zpath))}", file=sys.stderr)
-    extract_dir = os.path.join(workdir, "x")
-    os.makedirs(extract_dir, exist_ok=True)
+        print(f"ok, got {_fmt_bytes(zpath.stat().st_size)}", file=sys.stderr)
+    extract_dir = Path(workdir) / "x"
+    extract_dir.mkdir(parents=True, exist_ok=True)
     clean = archive_url.lower().split("?")[0].split("#")[0]
     tarball = clean.endswith((".tar", ".tgz", ".gz", ".bz2", ".xz")) and ".zip" not in clean
     try:
@@ -1658,12 +1678,12 @@ def load_remote(spec_str: str, opts: Any, table: dict[str, Any], tmpdirs: list[A
         raise MoseError(f"cannot extract archive from {archive_url} ({e})")
     base = _strip_root(extract_dir)
     if rs.subdir:
-        cand = os.path.normpath(os.path.join(base, rs.subdir))
-        if Path(cand).is_file():
+        cand = base / rs.subdir
+        if cand.is_file():
             corpus = Corpus(label=_remote_label(rs), kind="git")
-            name = os.path.basename(cand)
+            name = cand.name
             lang = file_language(name, opts) or "generic"
-            _add_disk_file(corpus, cand, name, lang, opts, table)
+            _add_disk_file(corpus, str(cand), name, lang, opts, table)
             if not corpus.files:
                 raise MoseError(f"remote file {rs.label}/{rs.subdir} has too few tokens")
             return corpus
@@ -1681,7 +1701,7 @@ def _no_files_error(rs: Any) -> MoseError:
     return MoseError(f"no source files found in {rs.label} (try --language or --include)")
 
 
-def load_corpus(spec: str, opts: Any, table: dict[str, Any], tmpdirs: Any):
+def load_corpus(spec: str, opts: Any, table: TokenTable, tmpdirs: Any):
     """Load corpus."""
     if looks_like_url(spec):
         return load_remote(spec, opts, table, tmpdirs)
@@ -1693,12 +1713,13 @@ def load_corpus(spec: str, opts: Any, table: dict[str, Any], tmpdirs: Any):
                 f'no source files found under "{spec}" (try --language or --include, or check --exclude patterns)'
             )
         return corpus
-    if Path(spec).is_file():
-        lang = file_language(os.path.basename(spec), opts)
+    spec_path = Path(spec)
+    if spec_path.is_file():
+        lang = file_language(spec_path.name, opts)
         if lang is None:
             raise MoseError(f'unrecognized source file "{spec}"; use -l LANG or --include')
-        corpus = Corpus(label=os.path.basename(spec), kind="file")
-        _add_disk_file(corpus, os.path.abspath(spec), os.path.basename(spec), lang, opts, table)
+        corpus = Corpus(label=spec_path.name, kind="file")
+        _add_disk_file(corpus, str(spec_path.resolve()), spec_path.name, lang, opts, table)
         if not corpus.files:
             raise MoseError(f'file "{spec}" has too few tokens to compare')
         return corpus
@@ -1768,7 +1789,7 @@ def _union_len(intervals: Iterable[Any], ntok: Any) -> int:
     return total
 
 
-def compare_corpora(corpA: Any, corpB: Any, identical: Any, base_hashes: None, opts: Any):
+def compare_corpora(corpA: Any, corpB: Any, identical: Any, base_hashes: set[Any] | None, opts: Any):
     """All PairMatches between corpus A and corpus B, filtered and sorted."""
     invA = build_inverted(corpA)
     invB = invA if identical else build_inverted(corpB)
@@ -1846,7 +1867,7 @@ def _run_lines(pm: Any):
     return res
 
 
-def _fmt_pct(x: str) -> str:
+def _fmt_pct(x: float) -> str:
     return (f"{x:5.1f}") if x >= 99.95 else (f"{round(x, 1):5.1f}")
 
 
@@ -1854,7 +1875,7 @@ def print_report(
     matches: list[Any],
     corpA: Any,
     corpB: Any,
-    base_corpus: None,
+    base_corpus: Any,
     opts: Any,
     pairs_compared: Any,
 ) -> None:
@@ -2050,13 +2071,13 @@ def _hbar(pct: Any, hue: Any) -> str:
 
 def _render_pane(
     lines: list[Any],
-    path: Path,
+    path: str,
     lo: int,
     hi: int,
     hit_lo: Any,
     hit_hi: Any,
-    hue: str,
-    budget: Sequence[Any],
+    hue: int,
+    budget: list[int],
 ) -> str:
     """One side of a run: file lines lo..hi (1-based), hit lines highlighted."""
     parts = ['<div class="pane"><div class="ph">%s:%d&ndash;%d</div><pre>' % (_hesc(path), lo, hi)]
@@ -2366,7 +2387,7 @@ def _same_corpus(path_a: Path, path_b: Path):
         return True
     try:
         if Path(path_a).is_dir() and Path(path_b).is_dir():
-            return os.path.samefile(path_a, path_b)
+            return Path(path_a).samefile(path_b)
     except OSError:
         pass
     return False

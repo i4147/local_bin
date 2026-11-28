@@ -9,45 +9,21 @@ from pathlib import Path
 import sys
 import tempfile
 from types import SimpleNamespace
-from typing import TYPE_CHECKING, Annotated, Any, NamedTuple, NoReturn
+from typing import IO, TYPE_CHECKING, Annotated, Any, NamedTuple, NoReturn
 
-import click
 from dh import get_files, runcmd
-import typer
 
 
-if TYPE_CHECKING:
-    import argparse
+import argparse
+from loguru import logger
 
+logger.remove()
+logger.add(
+    sys.stderr,
+    level=os.environ.get("LOGURU_LEVEL", "INFO"),
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+)
 
-_STATE: dict[str, object] = {}
-
-
-class _Args(SimpleNamespace):
-    """argparse.Namespace look-alike: unknown attributes read as None."""
-
-    def __getattr__(self, name: str) -> None:
-        if name.startswith("__"):
-            raise AttributeError(name)
-
-
-class _ParserShim:
-    """Stand-in for the removed argparse parser; hands back what Typer parsed."""
-
-    def parse_args(self, args: list[Any] | None = None, namespace: Any = None) -> _Args:
-        "Parse args."
-        return _Args(**_STATE)
-
-    def error(self, message: str) -> NoReturn:
-        raise typer.BadParameter(message)
-
-    def print_help(self, file: Path | None = None) -> None:
-        "Print help."
-        typer.echo(click.get_current_context().get_help(), file=file)
-
-    def print_usage(self, file: Path | None = None) -> None:
-        "Print usage."
-        typer.echo(click.get_current_context().get_usage(), file=file)
 
 
 class FileResult(NamedTuple):
@@ -139,10 +115,15 @@ def find_html_files(directory: Path) -> list[Path]:
     return get_files(directory, ext=[".html"])
 
 
+def _build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description='Minify HTML files in the current directory in place.')
+    parser.add_argument('--binary', default='min-html', help='min-html executable name or path (default: min-html)')
+    parser.add_argument('-j', '--workers', type=int, default=max(1, os.cpu_count() or 1), help='number of files to process concurrently')
+    return parser
+
+
 def parse_args() -> argparse.Namespace:
-    "Parse args."
-    parser = _ParserShim()
-    return parser.parse_args()
+    return _build_parser().parse_args()
 
 
 def main() -> int:
@@ -177,7 +158,7 @@ def main() -> int:
             print(f"ERROR {result.path.name}: {result.error or 'minification failed'}")
             continue
 
-        change = result.before - result.after
+        change = (result.before or 0) - result.after
         if change >= 0:
             reduction = f"saved {format_bytes(change)}"
         else:
@@ -191,33 +172,5 @@ def main() -> int:
 
     return 1 if has_errors else 0
 
-
-def _run() -> None:
-    raise SystemExit(main())
-
-
-app = typer.Typer(
-    add_completion=False,
-    context_settings={"help_option_names": ["-h", "--help"]},
-    pretty_exceptions_show_locals=False,
-)
-
-
-@app.command(help="Minify HTML files in the current directory in place.")
-def cli(
-    binary: Annotated[
-        str,
-        typer.Option("--binary", help="min-html executable name or path (default: min-html)"),
-    ] = "min-html",
-    workers: Annotated[
-        int,
-        typer.Option("-j", "--workers", help="number of files to process concurrently"),
-    ] = max(1, os.cpu_count() or 1),
-) -> None:
-    """Run the command-line interface."""
-    _STATE.update(binary=binary, workers=workers)
-    _run()
-
-
 if __name__ == "__main__":
-    app()
+    raise SystemExit(main())

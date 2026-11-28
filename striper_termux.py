@@ -15,8 +15,6 @@ import difflib
 import fnmatch
 import io
 import json
-import logging
-from logging.handlers import RotatingFileHandler
 import os
 from pathlib import Path
 import re
@@ -32,7 +30,7 @@ from loguru import logger
 
 
 log = logger
-LOGGER = logging.getLogger("striper_termux")
+LOGGER = logger
 _Edit = tuple[int, int, bytes]
 
 
@@ -458,13 +456,13 @@ def excluded(path: Path, root: Path, patterns: tuple[str, ...]) -> bool:
 def normalize_inputs(inputs: list[Path]) -> list[Path]:
     """Deduplicate input roots, not every discovered file (bounded by CLI size)."""
     paths = sorted(
-        {Path(os.path.abspath(path.expanduser())) for path in inputs},
+        {path.expanduser().absolute() for path in inputs},
         key=lambda path: (len(path.parts), str(path)),
     )
     roots: list[Path] = []
     for path in paths:
         if has_symlink_component(path):
-            LOGGER.warning("Skipping symlink input: %s", path)
+            LOGGER.warning("Skipping symlink input: {}", path)
             continue
         if not path.exists():
             raise FileNotFoundError(f"Input does not exist: {path}")
@@ -501,7 +499,7 @@ def walk_python_files(
     def visit(directory: Path, root: Path, depth: int) -> Iterator[Path]:
         if depth > limits.max_depth:
             stats.skipped += 1
-            LOGGER.warning("Depth limit reached: %s", directory)
+            LOGGER.warning("Depth limit reached: {}", directory)
             return
         try:
             if directory.is_symlink():
@@ -523,10 +521,10 @@ def walk_python_files(
                             yield path
                     except OSError:
                         stats.errors += 1
-                        LOGGER.exception("Cannot inspect %s", path)
+                        LOGGER.exception("Cannot inspect {}", path)
         except OSError:
             stats.errors += 1
-            LOGGER.exception("Cannot traverse %s", directory)
+            LOGGER.exception("Cannot traverse {}", directory)
 
     for root in roots:
         if root.is_dir():
@@ -538,7 +536,7 @@ def walk_python_files(
                     yield root
             except OSError:
                 stats.errors += 1
-                LOGGER.exception("Cannot inspect %s", root)
+                LOGGER.exception("Cannot inspect {}", root)
 
 
 class StreamingReport:
@@ -581,23 +579,27 @@ class StreamingReport:
 
 def configure_logging(error_log: Path, log_file: Path | None, level: str) -> None:
     """Configure logging."""
-    LOGGER.setLevel(logging.DEBUG)
-    LOGGER.propagate = False
-    for handler in LOGGER.handlers[:]:
-        handler.close()
-        LOGGER.removeHandler(handler)
-    console = logging.StreamHandler()
-    console.setLevel(level)
-    console.setFormatter(logging.Formatter("%(levelname)s | %(message)s"))
-    LOGGER.addHandler(console)
-    errors = RotatingFileHandler(error_log, maxBytes=1_000_000, backupCount=2, encoding="utf-8", delay=True)
-    errors.setLevel(logging.ERROR)
-    errors.setFormatter(logging.Formatter("%(asctime)s | %(levelname)s | %(message)s"))
-    LOGGER.addHandler(errors)
+    logger.remove()
+    logger.add(sys.stderr, level=level.upper(), format="{level} | {message}")
+    logger.add(
+        error_log,
+        level="ERROR",
+        rotation=1_000_000,
+        retention=2,
+        encoding="utf-8",
+        delay=True,
+        format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {message}",
+    )
     if log_file is not None:
-        full = RotatingFileHandler(log_file, maxBytes=2_000_000, backupCount=2, encoding="utf-8", delay=True)
-        full.setFormatter(logging.Formatter("%(asctime)s | %(levelname)s | %(message)s"))
-        LOGGER.addHandler(full)
+        logger.add(
+            log_file,
+            level="DEBUG",
+            rotation=2_000_000,
+            retention=2,
+            encoding="utf-8",
+            delay=True,
+            format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {message}",
+        )
 
 
 def main() -> int:
@@ -656,7 +658,7 @@ def main() -> int:
         if args.report_json is not None:
             report = StreamingReport(args.report_json)
         outputs = {
-            Path(os.path.abspath(path))
+            Path(path).absolute()
             for path in (
                 args.error_log,
                 args.log_file,
@@ -690,10 +692,10 @@ def main() -> int:
             stats.files += 1
             if result.skipped:
                 stats.skipped += 1
-                LOGGER.warning("%s: skipped: %s", path.name, result.skipped)
+                LOGGER.warning("{}: skipped: {}", path.name, result.skipped)
             elif result.error:
                 stats.errors += 1
-                LOGGER.error("%s: %s\n%s", path, result.error, result.traceback)
+                LOGGER.error("{}: {}\n{}", path, result.error, result.traceback)
             else:
                 stats.changed += result.modified
                 stats.bytes_reduced += result.saved
@@ -705,7 +707,7 @@ def main() -> int:
                 timing = f"  {result.elapsed:.4f}s" if args.time else ""
                 print(f"{path.name}  {number}{timing}")
                 LOGGER.debug(
-                    "%s: modified=%s, saved=%s, seconds=%.6f",
+                    "{}: modified={}, saved={}, seconds={:.6f}",
                     path,
                     result.modified,
                     result.saved,

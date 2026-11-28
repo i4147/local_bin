@@ -15,7 +15,6 @@ from enum import Enum
 import hashlib
 import json
 import keyword
-import logging
 import os
 from pathlib import Path
 import re
@@ -24,6 +23,7 @@ import time
 from typing import Any
 
 import httpx
+from loguru import logger
 from rapidfuzz import process
 from rapidfuzz.distance import Levenshtein
 from tenacity import (
@@ -43,7 +43,8 @@ __version__: str = "0.1.0"
 SCHEMA_VERSION: int = 2
 GITHUB_ISSUES_URL: str = "https://github.com/i4147/pkgname/issues"
 
-logger = logging.getLogger("check_pypi_name")
+logger.remove()
+logger.add(sys.stderr, level="WARNING", format="{level}: {message}")
 
 # ---------------------------------------------------------------------------
 # Configuration & Constants
@@ -413,7 +414,7 @@ def _read_cache(cache_path: Path) -> list[str] | None:
         lines = cache_path.read_text(encoding="utf-8").splitlines()
         return [ln.strip() for ln in lines if ln.strip()]
     except Exception as exc:
-        logger.warning("Ignoring unreadable index cache '%s': %s", cache_path, exc)
+        logger.warning("Ignoring unreadable index cache '{}': {}", cache_path, exc)
         return None
 
 
@@ -432,7 +433,7 @@ def load_local_index(
         msg = f"Local index file not found at '{resolved}'."
         if strict:
             raise IndexLoadError(msg)
-        logger.warning("%s Continuing without local index.", msg)
+        logger.warning("{} Continuing without local index.", msg)
         return None
 
     try:
@@ -469,7 +470,7 @@ def load_local_index(
         msg = f"Failed to load local index '{resolved}': {exc}"
         if strict:
             raise IndexLoadError(msg) from exc
-        logger.warning("%s Continuing without local index.", msg)
+        logger.warning("{} Continuing without local index.", msg)
         return None
 
 
@@ -1206,12 +1207,9 @@ def _render_human(result: CheckResult) -> None:
 
 
 def _configure_logging(verbose: bool) -> None:
-    level = logging.DEBUG if verbose else logging.WARNING
-    logging.basicConfig(
-        level=level,
-        format="%(levelname)s: %(message)s",
-        stream=sys.stderr,
-    )
+    level = "DEBUG" if verbose else "WARNING"
+    logger.remove()
+    logger.add(sys.stderr, level=level, format="{level}: {message}")
 
 
 def _cmd_check(args: argparse.Namespace) -> int:

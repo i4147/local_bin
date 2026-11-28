@@ -3,7 +3,9 @@
 
 from __future__ import annotations
 
+import argparse
 import ast
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 import re
@@ -15,7 +17,7 @@ import warnings
 
 from dh import MAX_WORKERS, atomic_write
 from loguru import logger
-import typer
+
 
 
 LOGURU_LOGFORMAT: str = "{time:YYYY-MM-DD HH:mm:ss.SSS} {level} {file.name}:{line} {message}"
@@ -24,13 +26,13 @@ STDLIB_MODULES: frozenset[str] = frozenset(getattr(sys, "stdlib_module_names", (
 ModuleKey = tuple[str, ...]
 Renames = dict[tuple[ModuleKey, str], str]
 FuncNode = ast.FunctionDef | ast.AsyncFunctionDef
-FUNC_NODES: tuple[type, ...] = (ast.FunctionDef, ast.AsyncFunctionDef)
-DEFINITION_NODES: tuple[type, ...] = (
+FUNC_NODES = (ast.FunctionDef, ast.AsyncFunctionDef)
+DEFINITION_NODES = (
     ast.FunctionDef,
     ast.AsyncFunctionDef,
     ast.ClassDef,
 )
-_DEF_NODES: tuple[type, ...] = (
+_DEF_NODES = (
     ast.Module,
     ast.FunctionDef,
     ast.AsyncFunctionDef,
@@ -949,7 +951,7 @@ def unique_nodes(body: list[ast.stmt]) -> list[ast.stmt]:
     return result
 
 
-def merge_imports(nodes: list[ast.stmt]) -> list[list[ast.stmt]]:
+def merge_imports(nodes: Sequence[ast.stmt]) -> list[list[ast.stmt]]:
     """Merge imports."""
     plain: dict[str, set[str | None]] = {}
     froms: dict[str, set[tuple[str, str | None]]] = {}
@@ -1100,49 +1102,46 @@ def refactor(modules: list[ModuleInfo], output: Path, root_name: str) -> None:
     )
 
 
-app = typer.Typer(
-    add_completion=False,
-    context_settings={"help_option_names": ["-h", "--help"]},
-    pretty_exceptions_show_locals=False,
-)
+def build_parser() -> argparse.ArgumentParser:
+    """Build the command-line argument parser."""
+    parser = argparse.ArgumentParser(description="Consolidate a multi-file Python package into one module.")
+    parser.add_argument(
+        "input",
+        nargs="?",
+        type=Path,
+        default=None,
+        help="package directory or .py file (default: current directory)",
+    )
+    parser.add_argument(
+        "-f",
+        "--merged-file",
+        type=Path,
+        default=None,
+        help="read source from a single merged file containing '# File: <path>' section headers",
+    )
+    parser.add_argument(
+        "-o",
+        "--output",
+        type=Path,
+        default=None,
+        help="output file (default: <current folder name>.py in cwd; never overwrites, adds _1, _2, ...)",
+    )
+    parser.add_argument(
+        "-l",
+        "--log-file",
+        type=Path,
+        default=Path("/data/data/com.termux/files/home/tmp/apps/consolidate.log"),
+        help="loguru log file (default: next to the output file with .log suffix)",
+    )
+    return parser
 
 
-@app.command(help="Consolidate a multi-file Python package into one module.")
-def main(
-    input: Annotated[
-        Path | None,
-        typer.Argument(help="package directory or .py file (default: current directory)"),
-    ] = None,
-    merged_file: Annotated[
-        Path | None,
-        typer.Option(
-            "-f",
-            "--merged-file",
-            help="read source from a single merged file containing '# File: <path>' section headers",
-        ),
-    ] = None,
-    output: Annotated[
-        Path | None,
-        typer.Option(
-            "-o",
-            "--output",
-            help="output file (default: <current folder name>.py in cwd; never overwrites, adds _1, _2, ...)",
-        ),
-    ] = None,
-    log_file: Annotated[
-        Path,
-        typer.Option(
-            "-l",
-            "--log-file",
-            help="loguru log file (default: next to the output file with .log suffix)",
-        ),
-    ] = "/data/data/com.termux/files/home/tmp/apps/consolidate.log",
-) -> int:
+def main(argv: Sequence[str] | None = None) -> int:
     "Run the command-line interface."
-    args = SimpleNamespace(input=input, merged_file=merged_file, output=output, log_file=log_file)
+    parser = build_parser()
+    args = parser.parse_args(argv)
     if args.merged_file is not None and args.input is not None:
-        msg = "Provide either a positional INPUT or -f/--merged-file, not both"
-        raise typer.BadParameter(msg)
+        parser.error("Provide either a positional INPUT or -f/--merged-file, not both")
     cwd = Path.cwd()
     requested: Path = args.output if args.output is not None else cwd / f"{cwd.name or 'merged'}.py"
     output = unique_path(requested)
@@ -1167,8 +1166,8 @@ def main(
         if input_path.is_dir():
             root_name = input_path.resolve().name
     refactor(modules, output, root_name)
-    return
+    return 0
 
 
 if __name__ == "__main__":
-    app()
+    raise SystemExit(main())

@@ -7,6 +7,7 @@ from collections.abc import Iterator
 import glob
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 from typing import Any
@@ -21,6 +22,15 @@ from rich.progress import (
     TextColumn,
 )
 from rich.table import Table
+import sys
+from loguru import logger
+
+logger.remove()
+logger.add(
+    sys.stderr,
+    level=os.environ.get("LOGURU_LEVEL", "INFO"),
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+)
 
 
 console = Console()
@@ -36,10 +46,18 @@ DIRS_TO_DELETE: list[str] = [
     "$HOME/.cache/*",
 ]
 
+def _expand_env(value: str) -> str:
+    return re.sub(
+        r"\$(?:(\w+)|\{([^}]+)\})",
+        lambda m: os.environ.get(m.group(1) or m.group(2), m.group(0)),
+        value,
+    )
+
+
 # --- CONFIGURATION: Strict exemptions to NEVER delete ---
 KEEP_EXEMPTIONS: list[Any] = [
-    os.path.expandvars("$HOME/.cache/pip/wheels"),
-    os.path.expandvars("$HOME/.cache/pip"),
+    _expand_env("$HOME/.cache/pip/wheels"),
+    _expand_env("$HOME/.cache/pip"),
 ]
 
 # --- CONFIGURATION: File Extensions to hunt down and delete ---
@@ -58,9 +76,9 @@ SCAN_ZONES: list[str] = [
 ]
 
 
-def expand_and_resolve(pattern: str) -> Iterator[Path]:
+def expand_and_resolve(pattern: str) -> list[str]:
     """Expand and resolve."""
-    return glob.glob(os.path.expandvars(pattern), recursive=True)
+    return glob.glob(_expand_env(pattern), recursive=True)
 
 
 def is_exempt(path: Path) -> bool:
@@ -117,9 +135,9 @@ def purge_system() -> None:
 
         for path in resolved_dirs:
             p = Path(path)
-            if p.exists() and not is_exempt(path) and p.is_dir():
+            if p.exists() and not is_exempt(p) and p.is_dir():
                 try:
-                    dir_size = get_size(path)
+                    dir_size = get_size(p)
                     shutil.rmtree(path)
                     total_bytes_freed += dir_size
                     deleted_count += 1
@@ -136,16 +154,17 @@ def purge_system() -> None:
         file_task = progress.add_task("[yellow]Scanning for extension junk...", total=None)
         match_files = []
         for zone in SCAN_ZONES:
-            expanded_zone = os.path.expandvars(zone)
+            expanded_zone = _expand_env(zone)
             for ext in FILE_EXTENSIONS:
                 match_files.extend(str(p) for p in Path(expanded_zone).rglob(f"*{ext}"))
 
         progress.update(file_task, total=len(match_files) if match_files else 1)
 
         for file_path in match_files:
-            if Path(file_path).is_file() and not is_exempt(file_path):
+            file_obj = Path(file_path)
+            if file_obj.is_file() and not is_exempt(file_obj):
                 try:
-                    file_size = get_size(file_path)
+                    file_size = get_size(file_obj)
                     os.remove(file_path)
                     total_bytes_freed += file_size
                     deleted_count += 1
@@ -177,7 +196,7 @@ def purge_system() -> None:
     )
 
     # Get current footprint size
-    resolved_site_pkgs = glob.glob(os.path.expandvars("$PREFIX/lib/python3.*/site-packages"))
+    resolved_site_pkgs = glob.glob(_expand_env("$PREFIX/lib/python3.*/site-packages"))
     if resolved_site_pkgs:
         size_check = subprocess.run(["du", "-sh", resolved_site_pkgs[0]], capture_output=True, text=True)
         current_size = size_check.stdout.split()[0] if size_check.returncode == 0 else "Unknown"

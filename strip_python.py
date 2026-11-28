@@ -385,7 +385,7 @@ def _cst_transformer_types(
     )
     if cache is None:
         cache = {}
-        thread._strip_python_cst_types_v1 = cache
+        setattr(thread, "_strip_python_cst_types_v1", cache)
     if strip_all in cache:
         return cache[strip_all]
 
@@ -569,7 +569,7 @@ def get_worker_stripper(options: FileOptions) -> ASTStripper:
     state = cast(_WorkerState | None, getattr(thread, "_strip_python_worker_state_v1", None))
     if state is None:
         state = _WorkerState()
-        thread._strip_python_worker_state_v1 = state
+        setattr(thread, "_strip_python_worker_state_v1", state)
     key = (
         options.backend,
         options.comments,
@@ -816,7 +816,7 @@ def iter_python_files(
     issues: list[DiscoveryIssue] | None = None,
 ) -> Iterator[Path]:
     """Yield Python files; only the fastwalk path requires ancestor rechecking."""
-    root_dir = Path(os.path.abspath(root_dir.expanduser()))
+    root_dir = root_dir.expanduser().absolute()
     if has_symlink_component(root_dir):
         return
     mode = root_dir.stat().st_mode  # Raises for missing inputs instead of hiding errors.
@@ -1239,7 +1239,7 @@ def main() -> int:
             )
         )
         outputs = {
-            Path(os.path.abspath(output))
+            Path(output).absolute()
             for output in (args.error_log, args.log_file, args.report_json)
             if output is not None
         }

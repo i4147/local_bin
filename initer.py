@@ -38,6 +38,17 @@ import sys
 from typing import Any
 
 from dh import atomic_write
+from loguru import logger
+
+logger.remove()
+logger.add(
+    sys.stderr,
+    level=os.environ.get("LOGURU_LEVEL", "INFO"),
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+)
+
+
+VERSION: str = "1.0.0"
 
 
 def esc_generic(s: str) -> str:
@@ -1782,7 +1793,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             content,
             args.license,
             spec.comment,
-            tokens.get("YEAR", "0") and int(tokens["YEAR"]) or 0,
+            int(tokens["YEAR"]) if tokens.get("YEAR") else 0,
             tokens.get("AUTHOR", ""),
         )
 

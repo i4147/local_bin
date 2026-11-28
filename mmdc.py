@@ -42,9 +42,17 @@ import os
 from pathlib import Path
 import re
 import sys
-from typing import Any
+from typing import Any, NoReturn, TypeAlias
 
 from dh import atomic_write
+from loguru import logger
+
+logger.remove()
+logger.add(
+    sys.stderr,
+    level=os.environ.get("LOGURU_LEVEL", "INFO"),
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+)
 
 
 __version__: str = "12.0.0"
@@ -712,10 +720,7 @@ def get_theme(name: str | None, theme_variables: dict[str, Any] | None = None) -
 # --------------------------------------------------------------------------
 # drawing model: backend-agnostic primitives
 # --------------------------------------------------------------------------
-if sys.version_info >= (3, 12):
-    exec("type Pt = tuple[float, float]")
-else:
-    Pt = tuple[float, float]
+Pt: TypeAlias = tuple[float, float]
 #: Shape names understood by :func:`shape_prims`.
 NODE_SHAPES: tuple[str, ...] = (
     "rect",
@@ -1558,7 +1563,10 @@ def canvas_to_pdf(
     num_stream = 4
     num_f1 = 5
     num_f2 = 6
-    gs_names: list[tuple[str, float]] = sorted(gstates.items(), key=lambda kv: kv[1])
+    gs_names: list[tuple[str, float]] = sorted(
+        ((name, opacity) for opacity, name in gstates.items()),
+        key=lambda kv: kv[0],
+    )
     gs_num: dict[str, int] = {name: 7 + i for i, (name, _key) in enumerate(gs_names)}
     objects: dict[int, bytes] = {}
     objects[num_catalog] = b"<< /Type /Catalog /Pages " + str(num_pages).encode() + b" 0 R >>"
@@ -1878,7 +1886,7 @@ def canvas_to_png(
             overlay.alpha_composite(layer)
     img.alpha_composite(overlay)
     if ss > 1 and (big_w != px_w or big_h != px_h):
-        img = img.resize((px_w, px_h), Image.LANCZOS)
+        img = img.resize((px_w, px_h), Image.Resampling.LANCZOS)
     buf = io.BytesIO()
     img.save(buf, format="PNG")
     return buf.getvalue()
@@ -2869,9 +2877,9 @@ def render_flowchart(statements: Sequence[str], theme: Theme, config: dict[str, 
     def depth_of(gid: str) -> int:
         seen = set()
         d = 0
-        while gid in ir.groups and ir.groups[gid].parent is not None and gid not in seen:
+        while gid in ir.groups and (parent := ir.groups[gid].parent) is not None and gid not in seen:
             seen.add(gid)
-            gid = ir.groups[gid].parent  # type: ignore[assignment]
+            gid = parent
             d += 1
         return d
 
@@ -3194,8 +3202,8 @@ def parse_sequence(statements: Sequence[str]) -> SeqIR:
                 if m.group(2):
                     ir.autonumber_start = int(m.group(2))
             continue
-        if low.startswith("title ") and _SEQ_TITLE_RE.match(stmt):
-            ir.title = _SEQ_TITLE_RE.match(stmt).group(1).strip()  # type: ignore[union-attr]
+        if low.startswith("title ") and (tm := _SEQ_TITLE_RE.match(stmt)):
+            ir.title = tm.group(1).strip()
             continue
         if _SEQ_END_RE.match(stmt):
             if stack:
@@ -4647,8 +4655,8 @@ def render_state(statements: Sequence[str], theme: Theme, config: dict[str, Any]
 
     def depth_of(gid: str) -> int:
         d = 0
-        while gid in ir.groups and ir.groups[gid].group is not None:
-            gid = ir.groups[gid].group  # type: ignore[assignment]
+        while gid in ir.groups and (parent := ir.groups[gid].group) is not None:
+            gid = parent
             d += 1
         return d
 
@@ -5199,8 +5207,9 @@ def run(input: str | None, output: str, opts: dict[str, Any] | None = None) -> N
                     output,
                 )
                 out_file = re.sub(r"\.(?:md|markdown)$", f".{outputFormat}", out_file)
-                if o.get("artefacts"):
-                    out_file = str(Path(o["artefacts"]).resolve() / Path(out_file).name)
+                artefacts = o.get("artefacts")
+                if artefacts:
+                    out_file = str(Path(artefacts).resolve() / Path(out_file).name)
                 out_file_rel = "./" + relative_to(out_file, Path(output).parent)
                 fut = limiter(
                     lambda d=mermaid_definition, of=out_file: _render_to_file(d, of, outputFormat, parse_opts)
@@ -5248,7 +5257,7 @@ def _pool_limiter(pool: ThreadPoolExecutor) -> Callable[..., Any]:
     def limiter(fn: Callable[..., Any], *args: Any) -> Any:
         return pool.submit(fn, *args)
 
-    limiter.shutdown = pool.shutdown  # type: ignore[attr-defined]
+    setattr(limiter, "shutdown", pool.shutdown)
     return limiter
 
 
@@ -5319,7 +5328,7 @@ class _CommanderParser(argparse.ArgumentParser):
                     out.append(f"  {' ' * width}{line}".rstrip())
         return "\n".join(out) + "\n"
 
-    def error(self, message: str) -> None:
+    def error(self, message: str) -> NoReturn:
         sys.stderr.write(self.format_usage())
         sys.stderr.write(f"error: {message}\n")
         sys.stderr.write("Try 'mmdc --help' for more information.\n")

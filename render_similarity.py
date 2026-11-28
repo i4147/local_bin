@@ -10,6 +10,16 @@ import json
 from pathlib import Path
 from typing import Any
 from xml.sax.saxutils import escape
+import os
+import sys
+from loguru import logger
+
+logger.remove()
+logger.add(
+    sys.stderr,
+    level=os.environ.get("LOGURU_LEVEL", "INFO"),
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+)
 
 
 ROOT: Path = Path(__file__).resolve().parent.parent

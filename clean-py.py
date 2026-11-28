@@ -8,7 +8,7 @@ from __future__ import annotations
 import argparse
 import ast
 import codecs
-from collections.abc import Iterator, Sequence
+from collections.abc import Generator, Iterator, Sequence
 from contextlib import closing, contextmanager, nullcontext
 from difflib import unified_diff
 from enum import Enum
@@ -35,6 +35,14 @@ from rich.console import Console
 from rich.segment import Segment, Segments
 from rich.style import Style
 from rich.text import Text
+from loguru import logger
+
+logger.remove()
+logger.add(
+    sys.stderr,
+    level=os.environ.get("LOGURU_LEVEL", "INFO"),
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+)
 
 
 def default_workers() -> int:
@@ -357,7 +365,7 @@ def _ast_equal(a: object, b: object) -> bool:
                 return False
         return True
     if isinstance(a, list):
-        return len(a) == len(b) and all(_ast_equal(x, y) for x, y in zip(a, b))
+        return isinstance(b, list) and len(a) == len(b) and all(_ast_equal(x, y) for x, y in zip(a, b))
     return a == b
 
 
@@ -610,7 +618,7 @@ def apply(edit: Edit, *, dry_run: bool = False) -> None:
 
 
 @contextmanager
-def database(enabled: bool = False) -> Iterator[sqlite3.Connection | None]:
+def database(enabled: bool = False) -> Generator[sqlite3.Connection | None]:
     """Yield database from the supplied input."""
     if not enabled:
         yield None

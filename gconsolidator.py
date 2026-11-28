@@ -41,6 +41,14 @@ from libcst.metadata import (
     MetadataWrapper,
     ScopeProvider,
 )
+from loguru import logger
+
+logger.remove()
+logger.add(
+    sys.stderr,
+    level=os.environ.get("LOGURU_LEVEL", "INFO"),
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+)
 
 
 IGNORED_DIR_NAMES: frozenset[str] = frozenset({
@@ -197,7 +205,7 @@ def _prepend_leading_lines(
     """Attach preserved directive leading lines to the following statement."""
     if not extra_lines:
         return stmt
-    if hasattr(stmt, "leading_lines"):
+    if isinstance(stmt, (cst.SimpleStatementLine, cst.BaseCompoundStatement)):
         existing = stmt.leading_lines
         return stmt.with_changes(leading_lines=tuple(extra_lines) + tuple(existing))
     return stmt
@@ -415,7 +423,7 @@ def _resolve_relative_module(current_module: str, is_package: bool, level: int, 
     return ".".join(base_parts)
 
 
-def _extract_target_names(target: cst.BaseAssignTargetExpression) -> list[str]:
+def _extract_target_names(target: cst.BaseExpression | cst.BaseAssignTargetExpression | cst.StarredElement) -> list[str]:
     """Extract assigned variable names from an assignment target."""
     if isinstance(target, cst.Name):
         return [target.value]
@@ -545,8 +553,19 @@ def _is_type_checking_guard(node: cst.If) -> bool:
     )
 
 
-def _contains_only_imports(stmt: cst.BaseStatement) -> bool:
+def _suite_stmts(suite: cst.BaseSuite) -> list[cst.BaseStatement]:
+    """Return top-level statements for either an indented block or a one-line suite."""
+    if isinstance(suite, cst.SimpleStatementSuite):
+        return [cst.SimpleStatementLine(body=list(suite.body))]
+    if isinstance(suite, cst.IndentedBlock):
+        return list(suite.body)
+    return []
+
+
+def _contains_only_imports(stmt: cst.BaseStatement | cst.BaseSmallStatement) -> bool:
     """Return True if a top-level compound statement contains only imports/pass."""
+    if isinstance(stmt, (cst.Import, cst.ImportFrom, cst.Pass)):
+        return True
     if isinstance(stmt, cst.SimpleStatementLine):
         return all(isinstance(s, (cst.Import, cst.ImportFrom, cst.Pass)) for s in stmt.body)
     if isinstance(stmt, cst.If):
@@ -919,10 +938,10 @@ def analyze_module(
             if _is_main_guard(stmt):
                 info.has_main_guard = True
                 if mod_name in (pkg_name, f"{pkg_name}.__main__"):
-                    info.main_guard_stmts.extend(stmt.body.body)
+                    info.main_guard_stmts.extend(_suite_stmts(stmt.body))
                 continue
             if _is_type_checking_guard(stmt):
-                for inner in stmt.body.body:
+                for inner in _suite_stmts(stmt.body):
                     if isinstance(inner, cst.SimpleStatementLine):
                         kept_inner: list[cst.BaseSmallStatement] = []
                         for small in inner.body:
@@ -1616,9 +1635,17 @@ def _sort_state_records_respecting_intra_module_order(
     return ordered
 
 
-def _render_cst_stmt(stmt: cst.BaseStatement) -> str:
+def _render_cst_stmt(stmt: cst.BaseStatement | cst.BaseSmallStatement) -> str:
     """Render a LibCST statement cleanly without stray leading/trailing newlines."""
-    mod = cst.Module(body=[stmt])
+    if isinstance(stmt, (cst.SimpleStatementLine, cst.BaseCompoundStatement)):
+        top: cst.SimpleStatementLine | cst.BaseCompoundStatement = stmt
+    elif isinstance(stmt, cst.BaseSmallStatement):
+        top = cst.SimpleStatementLine(body=[stmt])
+    elif isinstance(stmt, cst.SimpleStatementSuite):
+        top = cst.SimpleStatementLine(body=list(stmt.body))
+    else:
+        return ""
+    mod = cst.Module(body=[top])
     return mod.code.strip("\n")
 
 
@@ -2261,11 +2288,11 @@ def _transform_module_worker(
         elif isinstance(stmt, cst.If):
             if _is_main_guard(stmt):
                 if mod_name in (pkg_name, f"{pkg_name}.__main__"):
-                    main_guard_codes = [_render_cst_stmt(s) for s in stmt.body.body]
+                    main_guard_codes = [_render_cst_stmt(s) for s in _suite_stmts(stmt.body)]
                 continue
             if _is_type_checking_guard(stmt):
                 tc_list: list[cst.BaseStatement] = []
-                for inner in stmt.body.body:
+                for inner in _suite_stmts(stmt.body):
                     if isinstance(inner, cst.SimpleStatementLine):
                         kept_tc: list[cst.BaseSmallStatement] = []
                         for small in inner.body:

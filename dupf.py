@@ -28,6 +28,13 @@ from dh import MAX_WORKERS, SKIP_DIRS, atomic_write, fsz
 from loguru import logger
 from xxhash import xxh64
 
+logger.remove()
+logger.add(
+    sys.stderr,
+    level=os.environ.get("LOGURU_LEVEL", "INFO"),
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+)
+
 
 CHUNKSIZE: int = 262144
 HEAD_SIZE: int = 65536
@@ -195,15 +202,31 @@ def save_report(output: Path, root: Path, groups: Sequence[Group]) -> None:
     logger.info(f"saved {len(groups)} group(s) to {output}")
 
 
+def _relpath(target: str | Path, start: str | Path) -> str:
+    t = Path(target).resolve()
+    s = Path(start).resolve()
+    if t.drive != s.drive:
+        raise ValueError(f"path is on mount {t.drive!r}, start on mount {s.drive!r}")
+    t_parts, s_parts = t.parts, s.parts
+    common = 0
+    for a, b in zip(t_parts, s_parts):
+        if a != b:
+            break
+        common += 1
+    up = ("..",) * (len(s_parts) - common)
+    rel_parts = up + t_parts[common:]
+    return str(Path(*rel_parts)) if rel_parts else "."
+
+
 def load_report(output: Path) -> tuple[Path, list[str]] | None:
     """Load report."""
     paths: set[str] = set()
     try:
         data: dict[str, Any] = json.loads(output.read_text(encoding="utf-8"))
-        root = Path(os.path.normpath(data["root"]))
+        root = Path(data["root"]).resolve()
         for rels in data["groups"].values():
             for rel in rels:
-                full = Path(os.path.normpath(root / rel))
+                full = (root / rel).resolve()
                 if full.is_relative_to(root):
                     paths.add(str(full))
                 else:
@@ -240,7 +263,7 @@ def freed_bytes(removed: Sequence[Entry]) -> int:
 def replace_with_symlink(target: str, link: str) -> None:
     temp: str = f"{link}.{os.getpid()}.tmp"
     try:
-        relative: str = os.path.relpath(target, os.path.dirname(link))
+        relative: str = _relpath(target, Path(link).parent)
     except ValueError:
         relative = target
     try:
@@ -273,7 +296,7 @@ def find_duplicates(
     for group in groups:
         emit(f"hash {group.digest} | {fsz(group.size)} x {len(group.paths)}", quiet)
         for path in group.paths:
-            emit(f" - {os.path.relpath(path, root)}", quiet)
+            emit(f" - {_relpath(path, root)}", quiet)
     reclaimable: int = sum(group.size * (len(group.paths) - 1) for group in groups)
     logger.info(f"groups : {len(groups)} | reclaimable : {fsz(reclaimable)} | {elapsed:.2f}s")
     if dry_run:
@@ -314,15 +337,15 @@ def apply_report(output: Path, workers: int, args: argparse.Namespace) -> int:
             key=lambda entry: (sign * entry.mtime_ns, entry.path),
         )
         keeper: Entry = members[0]
-        emit(f"keep    {os.path.relpath(keeper.path, root)}", args.quiet)
+        emit(f"keep    {_relpath(keeper.path, root)}", args.quiet)
         for extra in members[1:]:
             if (extra.dev, extra.ino) == (keeper.dev, keeper.ino):
                 emit(
-                    f"skip    {os.path.relpath(extra.path, root)} (hardlink)",
+                    f"skip    {_relpath(extra.path, root)} (hardlink)",
                     args.quiet,
                 )
                 continue
-            emit(f"{verb:<7} {os.path.relpath(extra.path, root)}", args.quiet)
+            emit(f"{verb:<7} {_relpath(extra.path, root)}", args.quiet)
             plan.append((extra, keeper))
     if not plan:
         logger.info("nothing to do")

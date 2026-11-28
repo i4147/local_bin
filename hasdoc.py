@@ -165,13 +165,18 @@ def _collect_comments(raw: bytes, report: FileReport, config: ScanConfig) -> Non
         report.errors.append(f"Tokenize error: {exc}")
 
 
-def _first_expr(body: object) -> cst.Expr | None:
+def _first_expr(body: cst.BaseSuite | Sequence[cst.BaseStatement]) -> cst.Expr | None:
     """Return the first statement of a suite if it is an expression statement."""
     if isinstance(body, cst.SimpleStatementSuite):
         small = body.body
         return small[0] if small and isinstance(small[0], cst.Expr) else None
 
-    statements = body.body if isinstance(body, cst.IndentedBlock) else body
+    if isinstance(body, cst.IndentedBlock):
+        statements = body.body
+    elif isinstance(body, cst.BaseSuite):
+        return None
+    else:
+        statements = body
     if not statements:
         return None
     first = statements[0]

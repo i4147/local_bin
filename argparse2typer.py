@@ -39,9 +39,18 @@ import re
 import shutil
 import sys
 import tokenize
-from typing import Any
+from typing import Any, Literal, TypeGuard
 
 from dh import atomic_write
+import os
+from loguru import logger
+
+logger.remove()
+logger.add(
+    sys.stderr,
+    level=os.environ.get("LOGURU_LEVEL", "INFO"),
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+)
 
 
 INDENT: str = "    "
@@ -108,7 +117,7 @@ class ConversionError(Exception):
     "Signal an error raised by this module."
 
 
-def literal(node: ast.AST):
+def literal(node: ast.AST | None):
     if node is None:
         return MISSING
     try:
@@ -147,7 +156,7 @@ def is_parse_call(node: ast.AST, var: str) -> bool:
     )
 
 
-def is_main_guard(node: ast.AST) -> bool:
+def is_main_guard(node: ast.AST) -> TypeGuard[ast.If]:
     "Return whether main guard."
     if not (isinstance(node, ast.If) and isinstance(node.test, ast.Compare) and not node.orelse):
         return False
@@ -238,13 +247,15 @@ class Source:
     def pos(self, line: int, col: int) -> int:
         return self.line_starts[line - 1] + col
 
-    def start(self, node: ast.AST) -> int:
+    def start(self, node: ast.stmt | ast.expr) -> int:
         return self.pos(node.lineno, node.col_offset)
 
-    def end(self, node: ast.AST) -> int:
+    def end(self, node: ast.stmt | ast.expr) -> int:
+        assert node.end_lineno is not None
+        assert node.end_col_offset is not None
         return self.pos(node.end_lineno, node.end_col_offset)
 
-    def seg(self, node: ast.AST) -> str:
+    def seg(self, node: ast.stmt | ast.expr) -> str:
         return self.data[self.start(node) : self.end(node)].decode()
 
     def line_start(self, lineno: int) -> int:
@@ -256,8 +267,9 @@ class Source:
     def replace(self, start: int, end: int, new: str) -> None:
         self.edits.append((start, end, new))
 
-    def delete_stmt(self, node: ast.AST) -> None:
+    def delete_stmt(self, node: ast.stmt | ast.expr) -> None:
         "Delete stmt."
+        assert node.end_lineno is not None
         self.replace(self.line_start(node.lineno), self.line_end(node.end_lineno), "")
 
     def after_line(self, lineno: int, text: str) -> None:
@@ -290,7 +302,7 @@ class Ctx:
         self.taken = identifiers_in([tree])
         self.app = self.unique("app")
 
-    def warn(self, node: ast.AST, msg: str) -> None:
+    def warn(self, node: ast.AST | None, msg: str) -> None:
         self.warnings.append(f"line {getattr(node, 'lineno', '?')}: {msg}")
 
     def need(self, *names: str) -> None:
@@ -349,7 +361,7 @@ class Ref:
 class Loc:
     "Store owner, body, creation."
 
-    owner: ast.AST
+    owner: ast.Module | ast.FunctionDef | ast.AsyncFunctionDef | ast.If
     body: list[ast.stmt]
     creation: ast.Assign
 
@@ -367,7 +379,7 @@ class Analysis:
     handled: list[ast.stmt]
 
 
-def convert_type(node: ast.AST, ctx: Ctx) -> tuple[str, str | None]:
+def convert_type(node: ast.expr, ctx: Ctx) -> tuple[str, str | None]:
     "Convert type."
     d = dotted(node)
     if d in {"int", "float", "str", "bool", "Path", "pathlib.Path"}:
@@ -402,7 +414,7 @@ def make_enum(dest: str, choices: list[str], ctx: Ctx) -> tuple[str, dict[str, s
     return cls, members
 
 
-def help_expr(node: ast.AST, default_val: str, ctx: Ctx) -> tuple[str | None, bool]:
+def help_expr(node: ast.expr | None, default_val: Any, ctx: Ctx) -> tuple[str | None, bool]:
     """Returns (source expr, hidden)."""
     if node is None:
         return None, False
@@ -609,7 +621,7 @@ def dedupe(cmd: Cmd, ctx: Ctx) -> None:
     cmd.params = result
 
 
-def str_literal(node: ast.AST) -> str | None:
+def str_literal(node: ast.AST | None) -> str | None:
     v = literal(node)
     return v if isinstance(v, str) else None
 
@@ -622,7 +634,7 @@ def locate_parser(tree: ast.Module) -> Loc:
     if total > 1:
         msg = "more than one ArgumentParser is not supported"
         raise ConversionError(msg)
-    owners: list[ast.AST] = [tree]
+    owners: list[ast.Module | ast.FunctionDef | ast.AsyncFunctionDef | ast.If] = [tree]
     owners += [n for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
     owners += [n for n in tree.body if is_main_guard(n)]
     for owner in owners:
@@ -643,6 +655,8 @@ def locate_parser(tree: ast.Module) -> Loc:
 
 def analyze(loc: Loc, ctx: Ctx) -> Analysis:
     creation = loc.creation
+    assert isinstance(creation.value, ast.Call)
+    assert isinstance(creation.targets[0], ast.Name)
     kw = {k.arg: k.value for k in creation.value.keywords if k.arg}
     root = Cmd(
         help=str_literal(kw.get("description")),
@@ -683,13 +697,14 @@ def analyze(loc: Loc, ctx: Ctx) -> Analysis:
                         )
                     )
                     excl = f.attr == "add_mutually_exclusive_group"
+                    excl_list: list[Param] | None = [] if excl else None
                     group = Ref(
                         "group",
                         ref.cmd,
                         panel=None if excl else (title or ref.panel),
-                        excl=[] if excl else None,
+                        excl=excl_list,
                     )
-                    if excl:
+                    if excl_list is not None:
                         required = (
                             literal(
                                 next(
@@ -699,7 +714,7 @@ def analyze(loc: Loc, ctx: Ctx) -> Analysis:
                             )
                             is True
                         )
-                        ref.cmd.exclusive.append((group.excl, required))
+                        ref.cmd.exclusive.append((excl_list, required))
                     table[tgt] = group
                     an.handled.append(st)
                     continue
@@ -842,7 +857,7 @@ class InlinePlan:
     errors: list[ast.Expr] = field(default_factory=list)
 
 
-def plan_inline(tree: ast.AST, src: Source, loc: Loc, an: Analysis) -> InlinePlan | str:
+def plan_inline(tree: ast.Module, src: Source, loc: Loc, an: Analysis) -> InlinePlan | str:
     if an.subs or an.root.has_subparsers:
         return "sub-parsers need the bridge layout"
     owner, body = loc.owner, loc.body
@@ -945,7 +960,7 @@ def plan_inline(tree: ast.AST, src: Source, loc: Loc, an: Analysis) -> InlinePla
     return plan
 
 
-def apply_inline(tree: ast.AST, src: Source, ctx: Ctx, loc: Loc, an: Analysis, plan: InlinePlan) -> None:
+def apply_inline(tree: ast.Module, src: Source, ctx: Ctx, loc: Loc, an: Analysis, plan: InlinePlan) -> None:
     "Apply inline."
     owner, body, pst, var = loc.owner, loc.body, plan.pst, plan.var
     root = an.root
@@ -986,6 +1001,7 @@ def apply_inline(tree: ast.AST, src: Source, ctx: Ctx, loc: Loc, an: Analysis, p
     for st in [*an.handled, an.creation]:
         src.delete_stmt(st)
     for st in plan.errors:
+        assert isinstance(st.value, ast.Call)
         src.replace(src.start(st), src.start(st.value.args[0]), "raise typer.BadParameter(")
     indent = " " * pst.col_offset
     body_text = "".join(f"{indent}{line}\n" for line in lines)
@@ -993,7 +1009,9 @@ def apply_inline(tree: ast.AST, src: Source, ctx: Ctx, loc: Loc, an: Analysis, p
     deco = f"@{ctx.app}.command({cmd_kwargs(root)})"
     head = f"{app_def(ctx)}\n\n\n{deco}\n"
     entry_guard = f'\n\nif __name__ == "__main__":\n{INDENT}{ctx.app}()\n'
+    assert pst.end_lineno is not None
     if isinstance(owner, ast.FunctionDef):
+        assert plan.entry is not None
         src.replace(
             src.start(owner),
             plan.header_end,
@@ -1017,6 +1035,7 @@ def apply_inline(tree: ast.AST, src: Source, ctx: Ctx, loc: Loc, an: Analysis, p
                             "returned value was an exit code - convert it to `raise typer.Exit(code)` manually",
                         )
     elif is_main_guard(owner):
+        assert owner.end_lineno is not None
         name = ctx.unique("main")
         src.replace(
             src.line_start(owner.lineno),
@@ -1037,17 +1056,19 @@ def apply_inline(tree: ast.AST, src: Source, ctx: Ctx, loc: Loc, an: Analysis, p
             f"\n\n{head}def {name}{sig}:\n{body_text}",
         )
         if tail:
+            tail_end = tail[-1].end_lineno
+            assert tail_end is not None
             inside = string_lines(src.data.decode())
-            for ln in range(pst.end_lineno + 1, tail[-1].end_lineno + 1):
+            for ln in range(pst.end_lineno + 1, tail_end + 1):
                 start, end = src.line_start(ln), src.line_end(ln)
                 if ln not in inside and src.data[start:end].strip():
                     src.replace(start, start, INDENT)
-            src.after_line(tail[-1].end_lineno, entry_guard)
+            src.after_line(tail_end, entry_guard)
         else:
             src.after_line(pst.end_lineno, entry_guard)
 
 
-def find_entry(tree: ast.Module) -> None:
+def find_entry(tree: ast.Module) -> tuple[Literal["guard"], ast.If] | tuple[Literal["call"], ast.Expr] | None:
     "Find entry."
     for st in tree.body:
         if is_main_guard(st):
@@ -1096,6 +1117,7 @@ def render_bridge(ctx: Ctx, an: Analysis, run: str) -> str:
                 )
             )
         for sub in an.subs:
+            assert sub.name is not None
             extra = [(an.sub_dest, q(sub.name))] if an.sub_dest else []
             fname = ctx.unique("cmd_" + py_name(sub.name))
             out.append(
@@ -1110,7 +1132,7 @@ def render_bridge(ctx: Ctx, an: Analysis, run: str) -> str:
     return "\n\n\n".join(part.rstrip() for part in out) + "\n"
 
 
-def apply_bridge(tree: ast.AST, src: Source, ctx: Ctx, loc: Loc, an: Analysis, reason: str) -> None:
+def apply_bridge(tree: ast.Module, src: Source, ctx: Ctx, loc: Loc, an: Analysis, reason: str) -> None:
     "Apply bridge."
     entry = find_entry(tree)
     if loc.owner is tree or entry is None:
@@ -1122,6 +1144,7 @@ def apply_bridge(tree: ast.AST, src: Source, ctx: Ctx, loc: Loc, an: Analysis, r
     ctx.need("SimpleNamespace", "click")
     ctx.extra_defs.append(BRIDGE_DEFS)
     creation = an.creation
+    assert isinstance(creation.targets[0], ast.Name)
     src.replace(
         src.start(creation),
         src.end(creation),
@@ -1130,26 +1153,29 @@ def apply_bridge(tree: ast.AST, src: Source, ctx: Ctx, loc: Loc, an: Analysis, r
     for st in an.handled:
         src.delete_stmt(st)
     run = ctx.unique("_run")
-    kind, node = entry
     block = "\n\n" + render_bridge(ctx, an, run)
-    if kind == "guard":
-        if node.body[0].lineno <= node.lineno:
+    if entry[0] == "guard":
+        guard_node = entry[1]
+        assert guard_node.end_lineno is not None
+        if guard_node.body[0].lineno <= guard_node.lineno:
             msg = "one-line __main__ block is not supported"
             raise ConversionError(msg)
         src.replace(
-            src.line_start(node.lineno),
-            src.line_start(node.body[0].lineno),
+            src.line_start(guard_node.lineno),
+            src.line_start(guard_node.body[0].lineno),
             f"def {run}() -> None:\n",
         )
-        src.after_line(node.end_lineno, block)
+        src.after_line(guard_node.end_lineno, block)
     else:
-        text = "".join(INDENT + line for line in (src.seg(node) + "\n").splitlines(keepends=True))
+        call_node = entry[1]
+        assert call_node.end_lineno is not None
+        text = "".join(INDENT + line for line in (src.seg(call_node) + "\n").splitlines(keepends=True))
         src.replace(
-            src.line_start(node.lineno),
-            src.line_end(node.end_lineno),
+            src.line_start(call_node.lineno),
+            src.line_end(call_node.end_lineno),
             f"\n\ndef {run}() -> None:\n{text}",
         )
-        src.after_line(node.end_lineno, block)
+        src.after_line(call_node.end_lineno, block)
     ctx.warnings.append(
         f"note: used the bridge layout ({reason}); `args = parser.parse_args()` still exists in the output"
     )
@@ -1240,9 +1266,9 @@ def finalize(text: str, ctx: Ctx) -> str:
         block += ("\n" if std else "") + "".join(f"{line}\n" for line in third)
     if ctx.extra_defs:
         block += "\n\n" + "\n\n".join(d.rstrip() + "\n" for d in ctx.extra_defs) + "\n\n"
-    if anchor is not None:
+    if anchor is not None and anchor.end_lineno is not None:
         src.after_line(anchor.end_lineno, block)
-    elif doc is not None:
+    elif doc is not None and doc.end_lineno is not None:
         src.after_line(doc.end_lineno, "\n" + block)
     else:
         pos = 0

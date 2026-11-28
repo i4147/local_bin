@@ -102,6 +102,14 @@ import shutil
 import subprocess
 import sys
 import xml.etree.ElementTree as _ET
+from loguru import logger
+
+logger.remove()
+logger.add(
+    sys.stderr,
+    level=os.environ.get("LOGURU_LEVEL", "INFO"),
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+)
 
 
 __all__: list[str] = [
@@ -2046,7 +2054,7 @@ def execute_plan(
     if interactive is None:
         interactive = sys.stdin.isatty()
     check_authorization(plan, acknowledged=acknowledged, interactive=interactive)
-    executable = filter_repo if os.path.sep in filter_repo else (shutil.which(filter_repo) or "")
+    executable = filter_repo if os.sep in filter_repo else (shutil.which(filter_repo) or "")
     if not executable:
         raise GitError(FILTER_REPO_INSTALL_HINT)
     backup = create_mirror_backup(plan)

@@ -15,10 +15,23 @@ from pathlib import Path
 import re
 import sys
 import tokenize
-from typing import Any
+from typing import Any, TypeVar
 
 from dh import atomic_write
 import libcst as cst
+import os
+from loguru import logger
+
+logger.remove()
+logger.add(
+    sys.stderr,
+    level=os.environ.get("LOGURU_LEVEL", "INFO"),
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+)
+
+_CmtNodeT = TypeVar("_CmtNodeT", cst.EmptyLine, cst.TrailingWhitespace)
+_DefNodeT = TypeVar("_DefNodeT", cst.FunctionDef, cst.ClassDef)
+_BodyItemT = TypeVar("_BodyItemT", bound=cst.CSTNode)
 
 
 # --------------------------------------------------------------------------- #
@@ -30,7 +43,7 @@ _DIRECTIVE_RE = re.compile(
     r"^(?:#!"  # shebang                #!/usr/bin/env python
     r"|#\s*-\*-\s*coding[:=]"  # emacs coding cookie    # -*- coding: utf-8 -*-
     r"|#\s*coding[:=]"  # PEP 263 cookie         # coding: utf-8
-    r"|#\s*type:"  # type comment           # type: ignore
+    r"|#\s*type:"  # type comment (e.g. type-ignore)
     r"|#\s*noqa\b"  # flake8 / ruff
     r"|#\s*nosec\b"  # bandit
     r"|#\s*(?:fmt|isort|yapf|black|ruff)\s*:"
@@ -57,21 +70,21 @@ class _CommentStripper(cst.CSTTransformer):
         super().__init__()
         self.keep_directives = keep_directives
 
-    def _strip(self, node: cst.CSTNode):
+    def _strip(self, node: _CmtNodeT) -> _CmtNodeT:
         if node.comment is None:
             return node
         if self.keep_directives and _is_directive(node.comment.value):
             return node
         return node.with_changes(comment=None)
 
-    def leave_EmptyLine(self, original_node: cst.EmptyLine, updated_node: cst.EmptyLine) -> cst.CSTNode:
+    def leave_EmptyLine(self, original_node: cst.EmptyLine, updated_node: cst.EmptyLine) -> cst.EmptyLine:
         return self._strip(updated_node)
 
     def leave_TrailingWhitespace(
         self,
         original_node: cst.TrailingWhitespace,
         updated_node: cst.TrailingWhitespace,
-    ) -> cst.CSTNode:
+    ) -> cst.TrailingWhitespace:
         return self._strip(updated_node)
 
 
@@ -86,7 +99,7 @@ def _is_string_expr(node: cst.CSTNode) -> bool:
     return isinstance(node, cst.Expr) and isinstance(node.value, _STRING_NODES)
 
 
-def _strip_body_docstring(body: str) -> tuple[Sequence, bool]:
+def _strip_body_docstring(body: Sequence[_BodyItemT]) -> tuple[Sequence[_BodyItemT], bool]:
     """
     Remove the leading docstring from a body sequence.
 
@@ -104,7 +117,7 @@ def _strip_body_docstring(body: str) -> tuple[Sequence, bool]:
             rest_small = first.body[1:]
             if rest_small:  # e.g. ``\"doc\"; x = 1``
                 new_line = first.with_changes(body=rest_small)
-                return (new_line,) + tuple(body[1:]), True
+                return (new_line, *body[1:]), True
             return tuple(body[1:]), True
     elif _is_string_expr(first):  # SimpleStatementSuite case
         return tuple(body[1:]), True
@@ -126,7 +139,7 @@ class _DocstringStripper(cst.CSTTransformer):
         self.replace_with_pass = replace_with_pass
 
     # Module ------------------------------------------------------------- #
-    def leave_Module(self, original_node: cst.Module, updated_node: cst.Module) -> cst.CSTNode:
+    def leave_Module(self, original_node: cst.Module, updated_node: cst.Module) -> cst.Module:
         if not self.strip_module:
             return updated_node
         new_body, removed = _strip_body_docstring(updated_node.body)
@@ -137,13 +150,13 @@ class _DocstringStripper(cst.CSTTransformer):
         return updated_node.with_changes(body=new_body)
 
     # Functions & classes ------------------------------------------------- #
-    def leave_FunctionDef(self, original_node: cst.FunctionDef, updated_node: cst.FunctionDef) -> cst.CSTNode:
+    def leave_FunctionDef(self, original_node: cst.FunctionDef, updated_node: cst.FunctionDef) -> cst.FunctionDef:
         return updated_node if not self.strip_function else self._strip_scoped_body(updated_node)
 
-    def leave_ClassDef(self, original_node: cst.ClassDef, updated_node: cst.ClassDef) -> cst.CSTNode:
+    def leave_ClassDef(self, original_node: cst.ClassDef, updated_node: cst.ClassDef) -> cst.ClassDef:
         return updated_node if not self.strip_class else self._strip_scoped_body(updated_node)
 
-    def _strip_scoped_body(self, node: cst.CSTNode):
+    def _strip_scoped_body(self, node: _DefNodeT) -> _DefNodeT:
         body = node.body
         if isinstance(body, cst.IndentedBlock):
             new_body, removed = _strip_body_docstring(body.body)

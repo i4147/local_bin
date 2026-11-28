@@ -91,54 +91,25 @@ import re
 import ssl
 import sys
 from types import SimpleNamespace
-from typing import TYPE_CHECKING, Annotated, Any, NoReturn
+from typing import IO, TYPE_CHECKING, Annotated, Any, NoReturn
 import urllib.error
 from urllib.parse import urljoin
 import urllib.request
 
-import click
 from dh import atomic_write
-import typer
 
 
-if TYPE_CHECKING:
-    import argparse
+import argparse
+import os
+from loguru import logger
 
+logger.remove()
+logger.add(
+    sys.stderr,
+    level=os.environ.get("LOGURU_LEVEL", "INFO"),
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+)
 
-def _version_callback(value: bool) -> None:
-    if value:
-        typer.echo("monolith.py 2.0.0")
-        raise typer.Exit
-
-
-_STATE: dict[str, object] = {}
-
-
-class _Args(SimpleNamespace):
-    """argparse.Namespace look-alike: unknown attributes read as None."""
-
-    def __getattr__(self, name: str) -> None:
-        if name.startswith("__"):
-            raise AttributeError(name)
-
-
-class _ParserShim:
-    """Stand-in for the removed argparse parser; hands back what Typer parsed."""
-
-    def parse_args(self, args: list[Any] | None = None, namespace: Any = None) -> _Args:
-        "Parse args."
-        return _Args(**_STATE)
-
-    def error(self, message: str) -> NoReturn:
-        raise typer.BadParameter(message)
-
-    def print_help(self, file: Path | None = None) -> None:
-        "Print help."
-        typer.echo(click.get_current_context().get_help(), file=file)
-
-    def print_usage(self, file: Path | None = None) -> None:
-        "Print usage."
-        typer.echo(click.get_current_context().get_usage(), file=file)
 
 
 __all__: list[str] = ["AssetFetchError", "FetchResult", "Monolith", "default_fetcher"]
@@ -932,11 +903,31 @@ class Monolith:
 # CLI
 # --------------------------------------------------------------------------- #
 def build_parser() -> argparse.ArgumentParser:
-    "Build parser."
-    p = _ParserShim()
-    # resource exclusion flags
-    # behavior flags
-    return p
+    """Build parser."""
+    parser = argparse.ArgumentParser(description='Save a web page as a single self-contained HTML file (pure-stdlib port of Y2Z/monolith).')
+    parser.add_argument('url', help="URL to fetch, or '-' to read HTML from stdin")
+    parser.add_argument('-o', '--output', default=None, help="write output to file ('-' for stdout; default stdout)")
+    parser.add_argument('-a', '--no-audio', action="store_true", default=False, help='exclude audio')
+    parser.add_argument('-s', '--no-css', action="store_true", default=False, help='exclude CSS (upstream: -s exclude styles)')
+    parser.add_argument('-f', '--no-fonts', action="store_true", default=False, help='exclude fonts')
+    parser.add_argument('-F', '--no-frames', action="store_true", default=False, help='exclude iframes (extension)')
+    parser.add_argument('-i', '--no-images', action="store_true", default=False, help='exclude images')
+    parser.add_argument('-j', '--no-js', action="store_true", default=False, help='exclude JavaScript')
+    parser.add_argument('-l', '--no-links', action="store_true", default=False, help='strip link/anchor hrefs (extension)')
+    parser.add_argument('-M', '--no-metadata', action="store_true", default=False, help="don't add timestamp/URL comment (upstream -M)")
+    parser.add_argument('-v', '--no-video', action="store_true", default=False, help='exclude video (extension)')
+    parser.add_argument('-q', '--silent', action="store_true", default=False, help='suppress informational output (upstream: -q quiet)')
+    parser.add_argument('-t', '--timeout', type=float, default=DEFAULT_TIMEOUT, help='network request timeout in seconds')
+    parser.add_argument('-u', '--user-agent', default=DEFAULT_USER_AGENT, help='custom User-Agent string')
+    parser.add_argument('-b', '--base-url', default=None, help='custom base URL for resolving relative refs')
+    parser.add_argument('-E', '--encoding', default=None, help='output encoding (upstream -E; default utf-8)')
+    parser.add_argument('-I', '--isolate', action="store_true", default=False, help='isolate the document (inject strict CSP)')
+    parser.add_argument('--no-color', action="store_true", default=False, help='suppress ANSI color in stderr messages (extension)')
+    parser.add_argument('-D', '--make-dirs', action="store_true", default=False, help='create missing directories in the output path')
+    parser.add_argument('-e', '--ignore-network-errors', action="store_true", default=False, help='ignore network errors when fetching assets')
+    parser.add_argument('-k', '--insecure', action="store_true", default=False, help='accept invalid X.509 (TLS) certificates')
+    parser.add_argument('-V', '--version', action="version", version='monolith.py 2.0.0', help="show program's version number and exit")
+    return parser
 
 
 def _ansi(code: str, text: str, enabled: bool) -> str:
@@ -994,127 +985,5 @@ def main(argv: list[str] | None = None) -> int:
         sys.stderr.flush()
     return 1
 
-
-def _run() -> None:
-    raise SystemExit(main())
-
-
-app = typer.Typer(
-    add_completion=False,
-    context_settings={"help_option_names": ["-h", "--help"]},
-    pretty_exceptions_show_locals=False,
-)
-
-
-@app.command(help="Save a web page as a single self-contained HTML file (pure-stdlib port of Y2Z/monolith).")
-def cli(
-    url: Annotated[str, typer.Argument(help="URL to fetch, or '-' to read HTML from stdin")],
-    output: Annotated[
-        str | None,
-        typer.Option(
-            "-o",
-            "--output",
-            help="write output to file ('-' for stdout; default stdout)",
-        ),
-    ] = None,
-    no_audio: Annotated[bool, typer.Option("-a", "--no-audio", help="exclude audio")] = False,
-    no_css: Annotated[
-        bool,
-        typer.Option("-s", "--no-css", help="exclude CSS (upstream: -s exclude styles)"),
-    ] = False,
-    no_fonts: Annotated[bool, typer.Option("-f", "--no-fonts", help="exclude fonts")] = False,
-    no_frames: Annotated[bool, typer.Option("-F", "--no-frames", help="exclude iframes (extension)")] = False,
-    no_images: Annotated[bool, typer.Option("-i", "--no-images", help="exclude images")] = False,
-    no_js: Annotated[bool, typer.Option("-j", "--no-js", help="exclude JavaScript")] = False,
-    no_links: Annotated[
-        bool,
-        typer.Option("-l", "--no-links", help="strip link/anchor hrefs (extension)"),
-    ] = False,
-    no_metadata: Annotated[
-        bool,
-        typer.Option("-M", "--no-metadata", help="don't add timestamp/URL comment (upstream -M)"),
-    ] = False,
-    no_video: Annotated[bool, typer.Option("-v", "--no-video", help="exclude video (extension)")] = False,
-    silent: Annotated[
-        bool,
-        typer.Option("-q", "--silent", help="suppress informational output (upstream: -q quiet)"),
-    ] = False,
-    timeout: Annotated[
-        float,
-        typer.Option("-t", "--timeout", help="network request timeout in seconds"),
-    ] = DEFAULT_TIMEOUT,
-    user_agent: Annotated[
-        str, typer.Option("-u", "--user-agent", help="custom User-Agent string")
-    ] = DEFAULT_USER_AGENT,
-    base_url: Annotated[
-        str | None,
-        typer.Option("-b", "--base-url", help="custom base URL for resolving relative refs"),
-    ] = None,
-    encoding: Annotated[
-        str | None,
-        typer.Option("-E", "--encoding", help="output encoding (upstream -E; default utf-8)"),
-    ] = None,
-    isolate: Annotated[
-        bool,
-        typer.Option("-I", "--isolate", help="isolate the document (inject strict CSP)"),
-    ] = False,
-    no_color: Annotated[
-        bool,
-        typer.Option("--no-color", help="suppress ANSI color in stderr messages (extension)"),
-    ] = False,
-    make_dirs: Annotated[
-        bool,
-        typer.Option("-D", "--make-dirs", help="create missing directories in the output path"),
-    ] = False,
-    ignore_network_errors: Annotated[
-        bool,
-        typer.Option(
-            "-e",
-            "--ignore-network-errors",
-            help="ignore network errors when fetching assets",
-        ),
-    ] = False,
-    insecure: Annotated[
-        bool,
-        typer.Option("-k", "--insecure", help="accept invalid X.509 (TLS) certificates"),
-    ] = False,
-    version: Annotated[
-        bool,
-        typer.Option(
-            "-V",
-            "--version",
-            callback=_version_callback,
-            is_eager=True,
-            help="show program's version number and exit",
-        ),
-    ] = False,
-) -> None:
-    """Run the command-line interface."""
-    _STATE.update(
-        url=url,
-        output=output,
-        no_audio=no_audio,
-        no_css=no_css,
-        no_fonts=no_fonts,
-        no_frames=no_frames,
-        no_images=no_images,
-        no_js=no_js,
-        no_links=no_links,
-        no_metadata=no_metadata,
-        no_video=no_video,
-        silent=silent,
-        timeout=timeout,
-        user_agent=user_agent,
-        base_url=base_url,
-        encoding=encoding,
-        isolate=isolate,
-        no_color=no_color,
-        make_dirs=make_dirs,
-        ignore_network_errors=ignore_network_errors,
-        insecure=insecure,
-    )
-    _run()
-
-
 if __name__ == "__main__":
-    app()
+    raise SystemExit(main())

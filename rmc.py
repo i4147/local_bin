@@ -7,6 +7,7 @@ when no inputs are supplied, and reports per-file bytes reduced with Rich.
 """
 
 from __future__ import annotations
+import argparse
 import ast
 import codecs
 from concurrent.futures import ProcessPoolExecutor
@@ -35,7 +36,6 @@ from loguru import logger
 from rich.console import Console
 from rich.table import Table
 from rich.text import Text
-import typer
 
 
 if TYPE_CHECKING:
@@ -734,93 +734,130 @@ def configure_logging(options: Options) -> None:
     logger.add(sys.stderr, level=level, format="<level>{level: <8}</level> {message}")
 
 
-app = typer.Typer(
-    add_completion=False,
-    no_args_is_help=False,
-    help=(
-        "Strip comments, docstrings, and annotations from Python files. "
-        "With no paths, process Python files under the current directory recursively."
-    ),
-)
-
-
-def _version_callback(value: bool) -> None:
-    """Print the program version and stop when --version is provided."""
-    if value:
-        typer.echo(f"rmc {VERSION}")
-        raise typer.Exit
-
-
-@app.command()
-def main(
-    paths: list[Path] = typer.Argument(
-        None,
+def build_parser() -> argparse.ArgumentParser:
+    """Build the command-line argument parser."""
+    parser = argparse.ArgumentParser(
+        prog="rmc",
+        description=(
+            "Strip comments, docstrings, and annotations from Python files. "
+            "With no paths, process Python files under the current directory recursively."
+        ),
+    )
+    parser.add_argument(
+        "paths",
+        nargs="*",
+        type=Path,
         help="Files or directories; defaults to the current directory recursively.",
-    ),
-    comments: bool = typer.Option(
-        False,
+    )
+    parser.add_argument(
         "-c",
         "--comments",
+        action="store_true",
         help="Remove comments (default if no mode flag is given).",
-    ),
-    docstrings: bool = typer.Option(False, "-d", "--docstrings", help="Remove function and class docstrings."),
-    annotations: bool = typer.Option(False, "-t", "--annotations", help="Remove type annotations."),
-    all_content: bool = typer.Option(False, "-a", "--all", help="Remove comments, docstrings, and annotations."),
-    stats: bool = typer.Option(False, "-n", "--stats", help="Show scan status counts."),
-    dry_run: bool = typer.Option(False, "--dry-run", help="Do not write files."),
-    diff: bool = typer.Option(False, "--diff", help="Print unified diffs; implies --dry-run."),
-    check: bool = typer.Option(False, "--check", help="Never write; exit 1 if any file would change."),
-    backup: bool = typer.Option(False, "--backup", help="Write FILE.bak before modifying."),
-    backup_dir: Path | None = typer.Option(
-        None,
+    )
+    parser.add_argument(
+        "-d",
+        "--docstrings",
+        action="store_true",
+        help="Remove function and class docstrings.",
+    )
+    parser.add_argument(
+        "-t",
+        "--annotations",
+        action="store_true",
+        help="Remove type annotations.",
+    )
+    parser.add_argument(
+        "-a",
+        "--all",
+        dest="all_content",
+        action="store_true",
+        help="Remove comments, docstrings, and annotations.",
+    )
+    parser.add_argument("-n", "--stats", action="store_true", help="Show scan status counts.")
+    parser.add_argument("--dry-run", action="store_true", help="Do not write files.")
+    parser.add_argument(
+        "--diff",
+        action="store_true",
+        help="Print unified diffs; implies --dry-run.",
+    )
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="Never write; exit 1 if any file would change.",
+    )
+    parser.add_argument("--backup", action="store_true", help="Write FILE.bak before modifying.")
+    parser.add_argument(
         "--backup-dir",
+        type=Path,
+        default=None,
         help="Copy originals into this directory before modifying.",
-    ),
-    includes: list[str] = typer.Option(None, "--include", help="Repeatable include glob."),
-    excludes: list[str] = typer.Option(None, "--exclude", help="Repeatable exclude glob."),
-    recursive: bool = typer.Option(
-        True,
-        "--recursive/--no-recursive",
+    )
+    parser.add_argument(
+        "--include",
+        dest="includes",
+        action="append",
+        default=None,
+        help="Repeatable include glob.",
+    )
+    parser.add_argument(
+        "--exclude",
+        dest="excludes",
+        action="append",
+        default=None,
+        help="Repeatable exclude glob.",
+    )
+    parser.add_argument(
+        "--recursive",
+        action=argparse.BooleanOptionalAction,
+        default=True,
         help="Descend into directories (enabled by default).",
-    ),
-    json_output: bool = typer.Option(False, "--json", help="Write machine-readable JSON instead of the Rich table."),
-    quiet: bool = typer.Option(False, "-q", "--quiet", help="Suppress the per-file Rich table."),
-    verbose: bool = typer.Option(False, "-v", "--verbose", help="Enable debug logging."),
-    version: bool = typer.Option(
-        False,
+    )
+    parser.add_argument(
+        "--json",
+        dest="json_output",
+        action="store_true",
+        help="Write machine-readable JSON instead of the Rich table.",
+    )
+    parser.add_argument("-q", "--quiet", action="store_true", help="Suppress the per-file Rich table.")
+    parser.add_argument("-v", "--verbose", action="store_true", help="Enable debug logging.")
+    parser.add_argument(
         "--version",
-        callback=_version_callback,
-        is_eager=True,
+        action="version",
+        version=f"rmc {VERSION}",
         help="Show the version and exit.",
-    ),
-) -> None:
+    )
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
     """Process Python files and report per-file and total bytes removed."""
-    del version  # The eager callback handles this option before command execution.
-    if quiet and verbose:
-        msg = "--quiet and --verbose cannot be used together"
-        raise typer.BadParameter(msg)
-    input_paths = tuple(paths or [Path.cwd()])
-    any_mode_flag = bool(comments or docstrings or annotations or all_content)
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    if args.quiet and args.verbose:
+        parser.error("--quiet and --verbose cannot be used together")
+    input_paths = tuple(args.paths or [Path.cwd()])
+    any_mode_flag = bool(args.comments or args.docstrings or args.annotations or args.all_content)
     mode = Mode(
-        comments=bool(comments or all_content or not any_mode_flag),
-        docstrings=bool(docstrings or all_content),
-        annotations=bool(annotations or all_content),
+        comments=bool(args.comments or args.all_content or not any_mode_flag),
+        docstrings=bool(args.docstrings or args.all_content),
+        annotations=bool(args.annotations or args.all_content),
     )
     options = Options(
         paths=input_paths,
         mode=mode,
-        stats=stats,
-        dry_run=dry_run,
-        diff=diff,
-        check=check,
-        backup=backup or backup_dir is not None,
-        backup_dir=backup_dir,
-        quiet=quiet,
-        verbose=verbose,
-        includes=tuple(includes or ()),
-        excludes=tuple(excludes or ()),
-        recursive=recursive,
-        json_output=json_output,
+        stats=args.stats,
+        dry_run=args.dry_run,
+        diff=args.diff,
+        check=args.check,
+        backup=args.backup or args.backup_dir is not None,
+        backup_dir=args.backup_dir,
+        quiet=args.quiet,
+        verbose=args.verbose,
+        includes=tuple(args.includes or ()),
+        excludes=tuple(args.excludes or ()),
+        recursive=args.recursive,
+        json_output=args.json_output,
     )
     configure_logging(options)
     discovered, missing = discover(options)
@@ -841,7 +878,7 @@ def main(
         results = run_jobs(jobs, MAX_WORKERS)
     except KeyboardInterrupt:
         logger.error("interrupted")
-        raise typer.Exit(code=2) from None
+        return 2
     results.sort(key=lambda item: item.path.as_posix())
     summary = summarize(results)
     log_results(results)
@@ -849,10 +886,8 @@ def main(
         render_json(results, summary, options)
     else:
         render_text(results, summary, options)
-    code = exit_code(summary, options, missing)
-    if code:
-        raise typer.Exit(code=code)
+    return exit_code(summary, options, missing)
 
 
 if __name__ == "__main__":
-    app()
+    raise SystemExit(main())

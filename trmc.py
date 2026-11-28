@@ -12,52 +12,24 @@ import re
 import sys
 import tokenize
 from types import SimpleNamespace
-from typing import TYPE_CHECKING, Annotated, Any, NoReturn
+import math
+from typing import IO, TYPE_CHECKING, Annotated, Any, NoReturn
 
-import click
 from dh import MAX_WORKERS, SKIP_DIRS, atomic_write
-import typer
 
+
+import argparse
+from loguru import logger
+
+logger.remove()
+logger.add(
+    sys.stderr,
+    level=os.environ.get("LOGURU_LEVEL", "INFO"),
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+)
 
 if TYPE_CHECKING:
-    import argparse
     from collections.abc import Iterable, Sequence
-
-
-def _version_callback(value: bool) -> None:
-    if value:
-        typer.echo(f"{PROG} {__version__}")
-        raise typer.Exit
-
-
-_STATE: dict[str, object] = {}
-
-
-class _Args(SimpleNamespace):
-    """argparse.Namespace look-alike: unknown attributes read as None."""
-
-    def __getattr__(self, name: str) -> None:
-        if name.startswith("__"):
-            raise AttributeError(name)
-
-
-class _ParserShim:
-    """Stand-in for the removed argparse parser; hands back what Typer parsed."""
-
-    def parse_args(self, args: list[Any] | None = None, namespace: Any = None) -> _Args:
-        "Parse args."
-        return _Args(**_STATE)
-
-    def error(self, message: str) -> NoReturn:
-        raise typer.BadParameter(message)
-
-    def print_help(self, file: Path | None = None) -> None:
-        "Print help."
-        typer.echo(click.get_current_context().get_help(), file=file)
-
-    def print_usage(self, file: Path | None = None) -> None:
-        "Print usage."
-        typer.echo(click.get_current_context().get_usage(), file=file)
 
 
 try:
@@ -369,7 +341,19 @@ def _color(text: str, code: str, enabled: bool) -> str:
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    parser = _ParserShim()
+    parser = argparse.ArgumentParser(description='Strip comments (and optionally docstrings/blank lines) from Python sources.')
+    parser.add_argument('paths', nargs="+", type=Path, help='Files or directories to process')
+    parser.add_argument('--remove-all', '-a', action="store_true", default=False, help='Also strip docstrings')
+    parser.add_argument('--collapse-blanks', '-b', action="store_true", default=False, help='Collapse runs of blank lines to a single blank line')
+    parser.add_argument('--dry-run', '-n', action="store_true", default=False, help='Report changes without writing files')
+    parser.add_argument('--no-backup', action="store_true", default=False, help='Do not write .pystripbak backup files')
+    parser.add_argument('--no-color', action="store_true", default=False, help='Disable colorized output')
+    parser.add_argument('-v', '--verbose', action="count", default=0, help='Increase verbosity (repeatable)')
+    parser.add_argument('-q', '--quiet', action="store_true", default=False, help='Suppress per-file output, only show summary')
+    parser.add_argument('--version', action="version", version=f'{PROG} {__version__}', help="show program's version number and exit")
+    parser.add_argument('-j', '--jobs', type=int, default=8, help='Max worker processes (default: 8)')
+    parser.add_argument('--chunksize', type=int, default=8, help='Chunk size for parallel processing (default: 8)')
+    parser.add_argument('--no-parallel', action="store_true", default=False, help='Disable parallel processing')
     return parser
 
 
@@ -472,76 +456,5 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     return 1 if counts["error"] else 0
 
-
-def _run() -> None:
-    raise SystemExit(main())
-
-
-app = typer.Typer(
-    add_completion=False,
-    context_settings={"help_option_names": ["-h", "--help"]},
-    pretty_exceptions_show_locals=False,
-)
-
-
-@app.command(help="Strip comments (and optionally docstrings/blank lines) from Python sources.")
-def cli(
-    paths: Annotated[list[Path], typer.Argument(help="Files or directories to process")],
-    remove_all: Annotated[bool, typer.Option("--remove-all", "-a", help="Also strip docstrings")] = False,
-    collapse_blanks: Annotated[
-        bool,
-        typer.Option(
-            "--collapse-blanks",
-            "-b",
-            help="Collapse runs of blank lines to a single blank line",
-        ),
-    ] = False,
-    dry_run: Annotated[
-        bool,
-        typer.Option("--dry-run", "-n", help="Report changes without writing files"),
-    ] = False,
-    no_backup: Annotated[bool, typer.Option("--no-backup", help="Do not write .pystripbak backup files")] = False,
-    no_color: Annotated[bool, typer.Option("--no-color", help="Disable colorized output")] = False,
-    verbose: Annotated[
-        int,
-        typer.Option("-v", "--verbose", count=True, help="Increase verbosity (repeatable)"),
-    ] = 0,
-    quiet: Annotated[
-        bool,
-        typer.Option("-q", "--quiet", help="Suppress per-file output, only show summary"),
-    ] = False,
-    version: Annotated[
-        bool,
-        typer.Option(
-            "--version",
-            callback=_version_callback,
-            is_eager=True,
-            help="show program's version number and exit",
-        ),
-    ] = False,
-    jobs: Annotated[int, typer.Option("-j", "--jobs", help="Max worker processes (default: 8)")] = 8,
-    chunksize: Annotated[
-        int,
-        typer.Option("--chunksize", help="Chunk size for parallel processing (default: 8)"),
-    ] = 8,
-    no_parallel: Annotated[bool, typer.Option("--no-parallel", help="Disable parallel processing")] = False,
-) -> None:
-    """Run the command-line interface."""
-    _STATE.update(
-        paths=paths,
-        remove_all=remove_all,
-        collapse_blanks=collapse_blanks,
-        dry_run=dry_run,
-        no_backup=no_backup,
-        no_color=no_color,
-        verbose=verbose,
-        quiet=quiet,
-        jobs=jobs,
-        chunksize=chunksize,
-        no_parallel=no_parallel,
-    )
-    _run()
-
-
 if __name__ == "__main__":
-    app()
+    raise SystemExit(main())

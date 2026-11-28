@@ -14,7 +14,7 @@ Install any one, e.g. `pip install weasyprint`.
 
 from __future__ import annotations
 import argparse
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from datetime import datetime
 import importlib
 import os
@@ -23,6 +23,14 @@ import pydoc
 import sys
 import sysconfig
 from typing import Any
+from loguru import logger
+
+logger.remove()
+logger.add(
+    sys.stderr,
+    level=os.environ.get("LOGURU_LEVEL", "INFO"),
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+)
 
 
 BLACKLIST: set[str] = {
@@ -49,17 +57,16 @@ def get_module_names():
         names = list(sys.stdlib_module_names)
     else:
         names = []
-        stdlib = sysconfig.get_paths()["stdlib"]
-        for entry in os.listdir(stdlib):
-            full = os.path.join(stdlib, entry)
-            if entry.endswith(".py"):
-                names.append(entry[:-3])
-            elif Path(full).is_dir() and Path(os.path.join(full, "__init__.py").exists()):
-                names.append(entry)
+        stdlib = Path(sysconfig.get_paths()["stdlib"])
+        for full in stdlib.iterdir():
+            if full.suffix == ".py":
+                names.append(full.stem)
+            elif full.is_dir() and (full / "__init__.py").exists():
+                names.append(full.name)
     return sorted({n for n in names if not n.startswith("_") and n not in BLACKLIST})
 
 
-def render_module(name: str) -> None:
+def render_module(name: str) -> str | None:
     """Import a module and return its pydoc HTML body, or None on failure."""
     try:
         module = importlib.import_module(name)
@@ -72,7 +79,7 @@ def render_module(name: str) -> None:
     return body or None
 
 
-def build_html(sections: Iterable[Any]) -> str:
+def build_html(sections: Sequence[tuple[str, str]]) -> str:
     """Build html."""
     version = sys.version.split()[0]
     generated = datetime.now().isoformat(timespec="seconds")
@@ -110,14 +117,14 @@ def build_html(sections: Iterable[Any]) -> str:
 def html_to_pdf(html_path: Path, pdf_path: Path) -> str | None:
     """Try several backends; return the backend name on success, else None."""
     try:
-        from weasyprint import HTML  # type: ignore
+        from weasyprint import HTML
 
         HTML(filename=html_path).write_pdf(pdf_path)
         return "weasyprint"
     except ImportError:
         pass
     try:
-        from xhtml2pdf import pisa  # type: ignore
+        from xhtml2pdf import pisa
 
         with open(html_path, "rb") as src, open(pdf_path, "wb") as dst:
             result = pisa.CreatePDF(src, dest=dst)
@@ -127,7 +134,7 @@ def html_to_pdf(html_path: Path, pdf_path: Path) -> str | None:
     except ImportError:
         pass
     try:
-        import pdfkit  # type: ignore
+        import pdfkit
 
         pdfkit.from_file(html_path, pdf_path)
         return "pdfkit"
@@ -159,16 +166,15 @@ def main() -> None:
             sections.append((name, body))
     print(f"Rendered {len(sections)} modules. Writing HTML...", file=sys.stderr)
     html = build_html(sections)
-    out_path = os.path.abspath(args.output)
-    with open(out_path, "w", encoding="utf-8") as f:
-        f.write(html)
-    print(f"Wrote {out_path} ({os.path.getsize(out_path) / 1024:.1f} KB)")
+    out_path = Path(args.output).resolve()
+    out_path.write_text(html, encoding="utf-8")
+    print(f"Wrote {out_path} ({out_path.stat().st_size / 1024:.1f} KB)")
     if args.pdf:
-        pdf_path = os.path.splitext(out_path)[0] + ".pdf"
+        pdf_path = out_path.with_suffix(".pdf")
         print("Generating PDF...", file=sys.stderr)
         backend = html_to_pdf(out_path, pdf_path)
         if backend:
-            print(f"Wrote {pdf_path} ({os.path.getsize(pdf_path) / 1024:.1f} KB) via {backend}")
+            print(f"Wrote {pdf_path} ({pdf_path.stat().st_size / 1024:.1f} KB) via {backend}")
         else:
             print(
                 "PDF generation requires one of: weasyprint, xhtml2pdf, or "

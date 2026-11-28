@@ -40,81 +40,27 @@ import re
 import shutil
 import sys
 from types import SimpleNamespace
-from typing import TYPE_CHECKING, Annotated, Any, Literal, NoReturn
+from typing import IO, TYPE_CHECKING, Annotated, Any, Literal, NoReturn, TypeAlias
 
-import click
-import typer
 
+import argparse
+from loguru import logger
+
+logger.remove()
+logger.add(
+    sys.stderr,
+    level=os.environ.get("LOGURU_LEVEL", "INFO"),
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+)
 
 if TYPE_CHECKING:
-    import argparse
     from collections.abc import Iterable, Iterator, Sequence
-
-
-class Sort(StrEnum):
-    "Enumerate the supported Sort values."
-
-    files = "files"
-    lines = "lines"
-    blanks = "blanks"
-    code = "code"
-    comments = "comments"
-
-
-class Output(StrEnum):
-    "Enumerate the supported Output values."
-
-    terminal = "terminal"
-    json = "json"
-    yaml = "yaml"
-    toml = "toml"
-    csv = "csv"
-
-
-def _version_callback(value: bool) -> None:
-    if value:
-        typer.echo(f"tokei.py {__version__} (single-file Python tokei)")
-        raise typer.Exit
-
-
-_STATE: dict[str, object] = {}
-
-
-class _Args(SimpleNamespace):
-    """argparse.Namespace look-alike: unknown attributes read as None."""
-
-    def __getattr__(self, name: str) -> None:
-        if name.startswith("__"):
-            raise AttributeError(name)
-
-
-class _ParserShim:
-    """Stand-in for the removed argparse parser; hands back what Typer parsed."""
-
-    def parse_args(self, args: list[Any] | None = None, namespace: Any = None) -> _Args:
-        "Parse args."
-        return _Args(**_STATE)
-
-    def error(self, message: str) -> NoReturn:
-        raise typer.BadParameter(message)
-
-    def print_help(self, file: Path | None = None) -> None:
-        "Print help."
-        typer.echo(click.get_current_context().get_help(), file=file)
-
-    def print_usage(self, file: Path | None = None) -> None:
-        "Print usage."
-        typer.echo(click.get_current_context().get_usage(), file=file)
 
 
 __version__: str = "1.0.0"
 
-if sys.version_info >= (3, 12):
-    # PEP 695 ``type`` aliases; exec'd so this file still parses on Python < 3.12.
-    exec("type LanguageName = str\ntype SortColumn = Literal['files', 'lines', 'blanks', 'code', 'comments']")
-else:
-    LanguageName = str
-    SortColumn = Literal["files", "lines", "blanks", "code", "comments"]
+LanguageName: TypeAlias = str
+SortColumn: TypeAlias = Literal["files", "lines", "blanks", "code", "comments"]
 
 
 # --------------------------------------------------------------------------- #
@@ -1223,8 +1169,9 @@ def _terminal_columns(opts: Options) -> int:
 
 def _sorted_items(results: dict[str, Stats], opts: Options) -> list[tuple[str, Stats]]:
     items = sorted(results.items())  # tokei's default: alphabetical
-    if opts.sort:
-        items.sort(key=lambda kv: -getattr(kv[1], opts.sort))
+    sort_col = opts.sort
+    if sort_col:
+        items.sort(key=lambda kv: -getattr(kv[1], sort_col))
     return items
 
 
@@ -1280,7 +1227,7 @@ def render_json(
     "Render json."
     obj: dict[str, object] = {}
     for name in sorted(results):
-        entry: dict[str, object] = results[name].as_dict()
+        entry: dict[str, object] = dict(results[name].as_dict())
         if opts.files and name in reports:
             entry["reports"] = [{"location": p, "stats": fst.as_dict()} for p, fst in sorted(reports[name])]
         obj[name] = entry
@@ -1362,9 +1309,22 @@ examples:
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
-    "Build arg parser."
-    ap = _ParserShim()
-    return ap
+    """Build arg parser."""
+    parser = argparse.ArgumentParser(description='tokei.py -- a single-file Python reimplementation of tokei (https://github.com/XAMPPRocky/tokei). Counts files, lines, code, comments and blanks, grouped by language.')
+    parser.add_argument('input', nargs="*", type=Path, metavar='PATH', help='file or directory to count (default: current directory)')
+    parser.add_argument('-f', '--files', action="store_true", default=False, help='print statistics for individual files')
+    parser.add_argument('-t', '--type', action="append", default=[], metavar='LANG', help='filter output by language type, comma separated (e.g. -t=Rust,Markdown)')
+    parser.add_argument('-e', '--exclude', action="append", default=[], metavar='PATTERN', help='ignore all files and directories matching PATTERN (gitignore semantics)')
+    parser.add_argument('--hidden', action="store_true", default=False, help='count hidden files')
+    parser.add_argument('--no-ignore', action="store_true", default=False, help="don't respect ignore files (.gitignore, .ignore, .tokeignore)")
+    parser.add_argument('-s', '--sort', choices=['files', 'lines', 'blanks', 'code', 'comments'], default=None, help='sort languages by column (default: alphabetical)')
+    parser.add_argument('-o', '--output', choices=['terminal', 'json', 'yaml', 'toml', 'csv'], default='terminal', help='output format (default: terminal)')
+    parser.add_argument('-c', '--columns', type=int, default=None, metavar='N', help='strict column width for terminal output')
+    parser.add_argument('-j', '--jobs', type=int, default=None, metavar='N', help='worker processes for counting (default: auto on big inputs)')
+    parser.add_argument('-l', '--languages', action="store_true", default=False, help='print the supported languages and their extensions')
+    parser.add_argument('-v', '--verbose', action="store_true", default=False, help='list files whose type could not be recognized')
+    parser.add_argument('--version', action="version", version=f'tokei.py {__version__} (single-file Python tokei)', help="show program's version number and exit")
+    return parser
 
 
 def _canonical_types(raw: list[str], ap: argparse.ArgumentParser) -> set[str]:
@@ -1402,8 +1362,10 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
 
     for stream in (sys.stdout, sys.stderr):
-        with contextlib.suppress(AttributeError, ValueError, OSError):
-            stream.reconfigure(errors="replace")
+        reconfigure = getattr(stream, "reconfigure", None)
+        if callable(reconfigure):
+            with contextlib.suppress(AttributeError, ValueError, OSError):
+                reconfigure(errors="replace")
 
     if args.languages:
         _print_languages()
@@ -1456,8 +1418,7 @@ def main(argv: list[str] | None = None) -> int:
     print(out)
     return 0
 
-
-def _run() -> None:
+if __name__ == "__main__":
     try:
         raise SystemExit(main())
     except BrokenPipeError:  # e.g. piped into head(1)
@@ -1466,125 +1427,3 @@ def _run() -> None:
         sys.exit(0)
     except KeyboardInterrupt:
         sys.exit(130)
-
-
-app = typer.Typer(
-    add_completion=False,
-    context_settings={"help_option_names": ["-h", "--help"]},
-    pretty_exceptions_show_locals=False,
-)
-
-
-@app.command(
-    help="tokei.py -- a single-file Python reimplementation of tokei (https://github.com/XAMPPRocky/tokei). Counts files, lines, code, comments and blanks, grouped by language."
-)
-def cli(
-    input: Annotated[
-        list[Path] | None,
-        typer.Argument(
-            help="file or directory to count (default: current directory)",
-            metavar="PATH",
-        ),
-    ] = None,
-    files: Annotated[
-        bool,
-        typer.Option("-f", "--files", help="print statistics for individual files"),
-    ] = False,
-    type: Annotated[
-        list[str] | None,
-        typer.Option(
-            "-t",
-            "--type",
-            help="filter output by language type, comma separated (e.g. -t=Rust,Markdown)",
-            metavar="LANG",
-        ),
-    ] = None,
-    exclude: Annotated[
-        list[str] | None,
-        typer.Option(
-            "-e",
-            "--exclude",
-            help="ignore all files and directories matching PATTERN (gitignore semantics)",
-            metavar="PATTERN",
-        ),
-    ] = None,
-    hidden: Annotated[bool, typer.Option("--hidden", help="count hidden files")] = False,
-    no_ignore: Annotated[
-        bool,
-        typer.Option(
-            "--no-ignore",
-            help="don't respect ignore files (.gitignore, .ignore, .tokeignore)",
-        ),
-    ] = False,
-    sort: Annotated[
-        Sort | None,
-        typer.Option("-s", "--sort", help="sort languages by column (default: alphabetical)"),
-    ] = None,
-    output: Annotated[
-        Output, typer.Option("-o", "--output", help="output format (default: terminal)")
-    ] = Output.terminal,
-    columns: Annotated[
-        int | None,
-        typer.Option(
-            "-c",
-            "--columns",
-            help="strict column width for terminal output",
-            metavar="N",
-        ),
-    ] = None,
-    jobs: Annotated[
-        int | None,
-        typer.Option(
-            "-j",
-            "--jobs",
-            help="worker processes for counting (default: auto on big inputs)",
-            metavar="N",
-        ),
-    ] = None,
-    languages: Annotated[
-        bool,
-        typer.Option(
-            "-l",
-            "--languages",
-            help="print the supported languages and their extensions",
-        ),
-    ] = False,
-    verbose: Annotated[
-        bool,
-        typer.Option("-v", "--verbose", help="list files whose type could not be recognized"),
-    ] = False,
-    version: Annotated[
-        bool,
-        typer.Option(
-            "--version",
-            callback=_version_callback,
-            is_eager=True,
-            help="show program's version number and exit",
-        ),
-    ] = False,
-) -> None:
-    """Run the command-line interface."""
-    if exclude is None:
-        exclude = []
-    if type is None:
-        type = []
-    input = input or []
-    _STATE.update(
-        input=input,
-        files=files,
-        type=type,
-        exclude=exclude,
-        hidden=hidden,
-        no_ignore=no_ignore,
-        sort=sort,
-        output=output,
-        columns=columns,
-        jobs=jobs,
-        languages=languages,
-        verbose=verbose,
-    )
-    _run()
-
-
-if __name__ == "__main__":
-    app()

@@ -12,11 +12,20 @@ Non-shebang files are streamed through unchanged.
 from __future__ import annotations
 
 import os
+from pathlib import Path
 import sys
+from loguru import logger
+
+logger.remove()
+logger.add(
+    sys.stderr,
+    level=os.environ.get("LOGURU_LEVEL", "INFO"),
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+)
 
 
 PREFIX = os.environ.get("PREFIX", "/data/data/com.termux/files/usr")
-BIN_DIR = os.path.join(PREFIX, "bin")
+BIN_DIR = Path(PREFIX) / "bin"
 CHUNK = 65536
 
 
@@ -29,7 +38,7 @@ def copy_rest(src, dst):
 
 
 def clean(interp, rest):
-    base = os.path.basename(interp)
+    base = Path(interp).name
     if rest:
         return f"#!/usr/bin/env -S {base} {rest}"
     return f"#!/usr/bin/env {base}"
@@ -46,8 +55,8 @@ def smudge(interp, rest):
     parts = rest.split(None, 1)
     cmd = parts[0]
     args = parts[1] if len(parts) > 1 else ""
-    target = os.path.join(BIN_DIR, cmd)
-    if not os.path.isfile(target):
+    target = BIN_DIR / cmd
+    if not target.is_file():
         return None  # interpreter not installed — leave as-is
     return f"#!{target}" + (" " + args if args else "")
 
@@ -78,7 +87,7 @@ def main():
 
     new = None
     if interp:
-        if mode == "clean" and interp.startswith("/") and os.path.basename(interp) != "env":
+        if mode == "clean" and interp.startswith("/") and Path(interp).name != "env":
             new = clean(interp, rest)
         elif mode == "smudge":
             new = smudge(interp, rest)

@@ -3,6 +3,7 @@
 "Optimized Zip Brute-Forcer for Python 3.11+"
 
 from __future__ import annotations
+import argparse
 from dataclasses import dataclass, field
 from itertools import islice
 import multiprocessing
@@ -11,8 +12,16 @@ import sys
 import time
 from typing import TYPE_CHECKING, Annotated, Final
 import zipfile
+import zlib
+import os
+from loguru import logger
 
-import typer
+logger.remove()
+logger.add(
+    sys.stderr,
+    level=os.environ.get("LOGURU_LEVEL", "INFO"),
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+)
 
 
 if TYPE_CHECKING:
@@ -66,7 +75,7 @@ def check_password_batch(zip_path: Path, passwords: list[str]) -> tuple[str | No
                     with zf.open(first_file, pwd=pwd.encode()) as f:
                         f.read(1)
                     return (pwd, tested)
-                except (RuntimeError, zipfile.BadZipFile, zf.error):
+                except (RuntimeError, zipfile.BadZipFile, zlib.error):
                     continue
     except Exception:
         pass
@@ -163,49 +172,57 @@ def brute_force_zip(
     return result
 
 
-app = typer.Typer(
-    add_completion=False,
-    context_settings={"help_option_names": ["-h", "--help"]},
-    pretty_exceptions_show_locals=False,
-)
+def build_parser() -> argparse.ArgumentParser:
+    """Build the command-line argument parser."""
+    parser = argparse.ArgumentParser(description="Optimized Zip Brute-Forcer for Python 3.11+")
+    parser.add_argument("zip_file", type=Path, help="Path to the protected zip file")
+    parser.add_argument(
+        "-w",
+        "--wordlist",
+        type=Path,
+        default=Path("wordlist.txt"),
+        help="Path to the password wordlist",
+    )
+    parser.add_argument(
+        "-p",
+        "--processes",
+        type=int,
+        default=None,
+        help="Number of parallel processes (default: CPU count)",
+    )
+    parser.add_argument(
+        "-b",
+        "--batch-size",
+        type=int,
+        default=DEFAULT_BATCH_SIZE,
+        help="Passwords per worker batch",
+    )
+    parser.add_argument(
+        "-i",
+        "--interval",
+        type=float,
+        default=DEFAULT_UPDATE_INTERVAL,
+        help="Status update interval in seconds",
+    )
+    return parser
 
 
-@app.command(help="Optimized Zip Brute-Forcer for Python 3.11+")
-def main(
-    zip_file: Annotated[Path, typer.Argument(help="Path to the protected zip file")],
-    wordlist: Annotated[Path, typer.Option("-w", "--wordlist", help="Path to the password wordlist")] = Path(
-        "wordlist.txt"
-    ),
-    processes: Annotated[
-        int | None,
-        typer.Option(
-            "-p",
-            "--processes",
-            help="Number of parallel processes (default: CPU count)",
-        ),
-    ] = None,
-    batch_size: Annotated[
-        int, typer.Option("-b", "--batch-size", help="Passwords per worker batch")
-    ] = DEFAULT_BATCH_SIZE,
-    interval: Annotated[
-        float,
-        typer.Option("-i", "--interval", help="Status update interval in seconds"),
-    ] = DEFAULT_UPDATE_INTERVAL,
-) -> None:
+def main(argv: list[str] | None = None) -> int:
     "Run the command-line interface."
+    args = build_parser().parse_args(argv)
     try:
         result = brute_force_zip(
-            zip_file,
-            wordlist,
-            num_processes=processes,
-            batch_size=batch_size,
-            update_interval=interval,
+            args.zip_file,
+            args.wordlist,
+            num_processes=args.processes,
+            batch_size=args.batch_size,
+            update_interval=args.interval,
         )
-        sys.exit(0 if result.success else 1)
+        return 0 if result.success else 1
     except Exception as e:
         print(f"Fatal error: {e}")
-        sys.exit(1)
+        return 1
 
 
 if __name__ == "__main__":
-    app()
+    raise SystemExit(main())

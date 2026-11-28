@@ -29,6 +29,14 @@ import libcst as cst
 from libcst.codemod import CodemodContext
 from libcst.codemod.visitors import AddImportsVisitor
 from libcst.helpers import filter_node_fields
+from loguru import logger
+
+logger.remove()
+logger.add(
+    sys.stderr,
+    level=os.environ.get("LOGURU_LEVEL", "INFO"),
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+)
 
 
 if TYPE_CHECKING:
@@ -3676,8 +3684,16 @@ class _AnnotationRemover(cst.CSTTransformer):
         if updated_node.value is None:
             return cst.RemoveFromParent()
         equal = updated_node.equal
-        before = equal.whitespace_before if isinstance(equal, cst.AssignEqual) else cst.SimpleWhitespace(" ")
-        after = equal.whitespace_after if isinstance(equal, cst.AssignEqual) else cst.SimpleWhitespace(" ")
+        before = (
+            equal.whitespace_before
+            if isinstance(equal, cst.AssignEqual) and isinstance(equal.whitespace_before, cst.SimpleWhitespace)
+            else cst.SimpleWhitespace(" ")
+        )
+        after = (
+            equal.whitespace_after
+            if isinstance(equal, cst.AssignEqual) and isinstance(equal.whitespace_after, cst.SimpleWhitespace)
+            else cst.SimpleWhitespace(" ")
+        )
         return cst.Assign(
             targets=[
                 cst.AssignTarget(
@@ -4167,7 +4183,7 @@ def atomic_write(path: Path, payload: bytes) -> str:
     written through, matching ``Path.write_bytes`` semantics. Returns an error
     string on any failure, or an empty string on success.
     """
-    target = Path(os.path.realpath(path))
+    target = Path(path).resolve()
     tmp: Path | None = None
     try:
         fd, tmp_name = tempfile.mkstemp(dir=str(target.parent), prefix=f".{target.name}.", suffix=".tmp")

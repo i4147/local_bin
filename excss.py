@@ -62,51 +62,51 @@ try:
     import tomllib as _toml
 except ImportError:  # pragma: no cover
     try:
-        import tomli as _toml  # type: ignore
+        import tomli as _toml
     except ImportError:
-        _toml = None  # type: ignore
+        _toml = None
 try:
-    import yaml as _yaml  # type: ignore
+    import yaml as _yaml
 except ImportError:
-    _yaml = None  # type: ignore
+    _yaml = None
 try:
-    import charset_normalizer as _cn  # type: ignore
+    import charset_normalizer as _cn
 
     _CN_API = "charset_normalizer"
 except ImportError:  # pragma: no cover
-    _cn = None  # type: ignore
+    _cn = None
     try:
-        import chardet as _cn  # type: ignore
+        import chardet as _cn
 
         _CN_API = "chardet"
     except ImportError:
         _CN_API = None
 try:
-    from tqdm import tqdm as _tqdm  # type: ignore
+    from tqdm import tqdm as _tqdm
 except ImportError:
-    _tqdm = None  # type: ignore
+    _tqdm = None
 try:
-    import brotli as _brotli  # type: ignore
+    import brotli as _brotli
 except ImportError:
-    _brotli = None  # type: ignore
+    _brotli = None
 try:
-    import zstandard as _zstd  # type: ignore
+    import zstandard as _zstd
 except ImportError:
-    _zstd = None  # type: ignore
+    _zstd = None
 try:
-    from rcssmin import cssmin as _cssmin  # type: ignore
-    from rjsmin import jsmin as _jsmin  # type: ignore
+    from rcssmin import cssmin as _cssmin
+    from rjsmin import jsmin as _jsmin
 except ImportError:
-    _jsmin = _cssmin = None  # type: ignore
+    _jsmin = _cssmin = None
 try:
-    import cssbeautifier as _cssbeautifier  # type: ignore
-    import jsbeautifier as _jsbeautifier  # type: ignore
+    import cssbeautifier as _cssbeautifier
+    import jsbeautifier as _jsbeautifier
 except ImportError:
-    _jsbeautifier = _cssbeautifier = None  # type: ignore
+    _jsbeautifier = _cssbeautifier = None
 try:
-    import pathspec as _pathspec  # type: ignore
+    import pathspec as _pathspec
 except ImportError:
-    _pathspec = None  # type: ignore
+    _pathspec = None
 __version__: str = "2.0.0"
 log = logger
 _DATA_URI_RE = re.compile(r"^data:(?P<meta>[^,]*),(?P<body>.*)$", re.DOTALL)
@@ -224,7 +224,16 @@ def apply_edits(source: str, edits: Sequence[Edit]) -> str:
 
 def rel_href(from_file: Path, to_file: Path) -> str:
     """POSIX-style relative path from one file to another."""
-    return os.path.relpath(to_file, from_file.parent).replace(os.sep, "/")
+    src_parts = from_file.parent.resolve().parts
+    dst_parts = to_file.resolve().parts
+    common = 0
+    for a, b in zip(src_parts, dst_parts):
+        if a != b:
+            break
+        common += 1
+    up = ("..",) * (len(src_parts) - common)
+    rel_parts = up + dst_parts[common:]
+    return Path(*rel_parts).as_posix() if rel_parts else "."
 
 
 def decode_bytes(raw: bytes, declared: str | None) -> tuple[str, str]:
@@ -248,15 +257,16 @@ def decode_bytes(raw: bytes, declared: str | None) -> tuple[str, str]:
         except LookupError:
             pass
     if _cn is not None:
+        cn: Any = _cn
         try:
             if _CN_API == "charset_normalizer":
-                r = _cn.from_bytes(raw).best()  # type: ignore[union-attr]
+                r = cn.from_bytes(raw).best()
                 if r and r.encoding:
                     return raw.decode(r.encoding, "replace"), r.encoding
             else:
-                r = _cn.detect(raw)  # type: ignore[union-attr]
-                if r and r.get("encoding"):
-                    enc = r["encoding"]
+                r = cn.detect(raw)
+                enc = r.get("encoding") if isinstance(r, dict) else None
+                if isinstance(enc, str) and enc:
                     return raw.decode(enc, "replace"), enc
         except Exception:
             pass
@@ -511,7 +521,7 @@ class AssetStore:
             parsed = urllib.parse.urlparse(url)
             host = (parsed.netloc or "unknown").replace(":", "_")
             tail = Path(parsed.path).name or f"asset{Path(name).suffix}"
-            p = self.root / "_remote" / host / _short_hash(url) + "_" + tail
+            p = self.root / "_remote" / host / f"{_short_hash(url)}_{tail}"
             with self._lock:
                 self._url_cache[url] = p
             return p
@@ -528,7 +538,7 @@ class AssetStore:
 
     def write(self, path: Path, data: bytes) -> None:
         if self.opts.dry_run:
-            log.info("[dry-run] would write %s (%d bytes)", path, len(data))
+            log.info("[dry-run] would write {} ({} bytes)", path, len(data))
             return
         if self.opts.skip_existing and path.exists():
             return
@@ -541,7 +551,7 @@ class AssetStore:
             tmp.replace(path)
         else:
             atomic_write(path, data)
-        log.info("wrote %s (%d bytes)", path, len(data))
+        log.info("wrote {} ({} bytes)", path, len(data))
 
 
 class Fetcher:
@@ -1221,11 +1231,11 @@ class PageProcessor:
             out_html = self._out_path_for(html_path)
             payload = new_source.encode(charset, "replace") if charset else new_source.encode("utf-8")
             if self.opts.dry_run:
-                log.info("[dry-run] would write %s (%d bytes)", out_html, len(payload))
+                log.info("[dry-run] would write {} ({} bytes)", out_html, len(payload))
             else:
                 out_html.parent.mkdir(parents=True, exist_ok=True)
                 atomic_write(out_html, payload)
-                log.info("rewrote %s (%d bytes)", out_html, len(payload))
+                log.info("rewrote {} ({} bytes)", out_html, len(payload))
             result.out_path = out_html
         return result
 
@@ -1269,12 +1279,13 @@ class PageProcessor:
         edits: list[Edit],
         result: PageResult,
     ) -> None:
-        assert self.fetcher is not None
+        fetcher = self.fetcher
+        assert fetcher is not None
         referer = html_path.as_uri() if self.opts.referer_from_page and html_path.is_absolute() else None
 
         def work(ref: Ref) -> Ref:
             try:
-                data, mime = self.fetcher.fetch(ref.url, referer=referer)
+                data, mime = fetcher.fetch(ref.url, referer=referer)
                 ref.mime = mime
                 ref.size = len(data)
                 ref.sha256 = _sha256(data)
@@ -1300,7 +1311,7 @@ class PageProcessor:
                 else:
                     ref.error = str(e)
                     result.errors.append(f"{ref.url}: {e}")
-                    log.warning("fetch failed %s: %s", ref.url, e)
+                    log.warning("fetch failed {}: {}", ref.url, e)
             return ref
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=self.opts.jobs) as pool:
@@ -1443,7 +1454,7 @@ def write_manifest(path: Path, store: AssetStore, pages: list[PageResult]) -> No
         data["pages"].append(entry)
     path.parent.mkdir(parents=True, exist_ok=True)
     atomic_write(path, json.dumps(data, indent=2, default=str))
-    log.info("manifest → %s", path)
+    log.info("manifest → {}", path)
 
 
 def write_report(path: Path, fmt: str, pages: list[PageResult]) -> None:
@@ -1505,7 +1516,7 @@ def write_report(path: Path, fmt: str, pages: list[PageResult]) -> None:
             w.writeheader()
             for r in rows:
                 w.writerow(r)
-    log.info("report (%s) → %s", fmt, path)
+    log.info("report ({}) → {}", fmt, path)
 
 
 def write_checksums(assets_dir: Path) -> None:
@@ -1521,7 +1532,7 @@ def write_checksums(assets_dir: Path) -> None:
             continue
         lines.append(f"{h}  {rel}")
     atomic_write((assets_dir / "SHA256SUMS"), "\n".join(lines) + "\n")
-    log.info("SHA256SUMS → %d entries", len(lines))
+    log.info("SHA256SUMS → {} entries", len(lines))
 
 
 def zip_assets(assets_dir: Path) -> None:
@@ -1530,7 +1541,7 @@ def zip_assets(assets_dir: Path) -> None:
         for p in assets_dir.rglob("*"):
             if p.is_file():
                 z.write(p, p.relative_to(assets_dir).as_posix())
-    log.info("zip → %s", zpath)
+    log.info("zip → {}", zpath)
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -1687,7 +1698,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
 def _load_config(path: Path) -> dict[str, Any]:
     if not path.exists():
-        log.warning("config file not found: %s", path)
+        log.warning("config file not found: {}", path)
         return {}
     suffix = path.suffix.lower()
     if suffix in (".toml",) and _toml is not None:
@@ -1697,7 +1708,7 @@ def _load_config(path: Path) -> dict[str, Any]:
     try:
         return json.loads(path.read_text())
     except Exception:
-        log.warning("cannot parse config file: %s", path)
+        log.warning("cannot parse config file: {}", path)
         return {}
 
 
@@ -1851,21 +1862,17 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(json.dumps(vars(args), indent=2, default=str))
         return 0
     opts = _to_options(args)
-    level = (
-        logging.WARNING
-        if opts.quiet
-        else (logging.DEBUG if opts.verbose >= 2 else logging.INFO if opts.verbose == 1 else logging.INFO)
-    )
-    handlers: list[logging.Handler] = [logging.StreamHandler(sys.stderr)]
+    level = "WARNING" if opts.quiet else ("DEBUG" if opts.verbose >= 2 else "INFO")
+    logger.remove()
+    logger.add(sys.stderr, level=level, format="{level} {message}")
     if opts.log_file:
-        handlers.append(logging.FileHandler(opts.log_file))
-    logging.basicConfig(level=level, format="%(levelname)s %(message)s", handlers=handlers)
+        logger.add(opts.log_file, level=level, format="{level} {message}")
     if opts.clean and opts.out.exists() and not opts.dry_run:
-        log.info("cleaning %s", opts.out)
+        log.info("cleaning {}", opts.out)
         shutil.rmtree(opts.out)
     opts.out.mkdir(parents=True, exist_ok=True)
     files = discover_html_files(opts)
-    log.info("found %d HTML file(s) under %s", len(files), opts.root)
+    log.info("found {} HTML file(s) under {}", len(files), opts.root)
     fetcher = Fetcher(opts) if opts.remote else None
     store = AssetStore(opts)
     processor = PageProcessor(opts, store, fetcher, opts.root)
@@ -1881,7 +1888,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             if pr.errors:
                 failed += 1
         except Exception as e:
-            log.exception("failed on %s: %s", html_path, e)
+            log.exception("failed on {}: {}", html_path, e)
             failed += 1
     if opts.manifest_file:
         write_manifest(opts.manifest_file, store, pages)
@@ -1897,7 +1904,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     total_inline = sum(len(p.inline_css) + len(p.inline_js) for p in pages)
     total_data = sum(len(p.data_uris) for p in pages)
     log.info(
-        "done: %d page(s), %d inline block(s), %d ref(s), %d data URI(s), %d failed",
+        "done: {} page(s), {} inline block(s), {} ref(s), {} data URI(s), {} failed",
         len(pages),
         total_inline,
         total_refs,

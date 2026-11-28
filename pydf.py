@@ -6,6 +6,7 @@ table."""
 
 from __future__ import annotations
 
+import argparse
 from math import log
 import os
 from pathlib import Path
@@ -15,11 +16,15 @@ import subprocess
 import sys
 from typing import Any
 import unicodedata
+from loguru import logger
 
-import typer
+logger.remove()
+logger.add(
+    sys.stderr,
+    level=os.environ.get("LOGURU_LEVEL", "INFO"),
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+)
 
-
-app = typer.Typer(add_help_option=False)
 
 COLOURS: dict[str, str] = {
     "none": "",
@@ -115,12 +120,16 @@ def get_terminal_width() -> int:
 
 def find_mountpoint(path: str) -> str | None:
     """Find mountpoint."""
-    if not os.path.lexists(path):
+    p = Path(path)
+    if not (p.exists() or p.is_symlink()):
         sys.stderr.write(f"pydf: {path!r}: No such file or directory\n")
         return None
-    while not os.path.ismount(path):
-        path = os.path.dirname(path)
-    return path
+    while not p.is_mount():
+        parent = p.parent
+        if parent == p:
+            break
+        p = parent
+    return str(p)
 
 
 def sanitize_output(s: str) -> str:
@@ -303,24 +312,78 @@ BARCHAR: str = "#"
 BAR_FILLCHAR: str = "."
 
 
-@app.command()
-def main(
-    all_fss: bool = typer.Option(False, "--all", "-a", help="include filesystems having 0 blocks"),
-    human_readable: bool = typer.Option(False, "--human-readable", "-h", help="print sizes in human readable format"),
-    si: bool = typer.Option(False, "--si", "-H", help="use powers of 1000 not 1024"),
-    blocksize: int = typer.Option(0, "--block-size", "-b", help="use BLOCKSIZE-byte blocks"),
-    local_only: bool = typer.Option(False, "--local", "-l", help="limit listing to local filesystems"),
-    kilobytes: bool = typer.Option(False, "--kilobytes", "-k", help="like --block-size=1024"),
-    megabytes: bool = typer.Option(False, "--megabytes", "-m", help="like --block-size=1048576"),
-    gigabytes: bool = typer.Option(False, "--gigabytes", "-g", help="like --block-size=1073741824"),
-    blocks: bool = typer.Option(False, "--blocks", help="use filesystem native block size"),
-    bw: bool = typer.Option(False, "--bw", help="do not use colours"),
-    mounts_file: str | None = typer.Option(None, "--mounts", help="File to get mount information from"),
-    show_binds: bool = typer.Option(True, "--show-binds", "-B", help="show 'mount --bind' mounts"),
-    inodes: bool = typer.Option(False, "--inodes", "-i", help="show inode instead of block usage"),
-    args: list[str] = typer.Argument(None),
-) -> None:
+def build_parser() -> argparse.ArgumentParser:
+    """Build the command-line argument parser."""
+    parser = argparse.ArgumentParser(
+        description="df-style filesystem usage report with colourised terminal output.",
+        add_help=False,
+    )
+    parser.add_argument("--help", action="help", help="show this help message and exit")
+    parser.add_argument("-a", "--all", dest="all_fss", action="store_true", help="include filesystems having 0 blocks")
+    parser.add_argument(
+        "-h",
+        "--human-readable",
+        dest="human_readable",
+        action="store_true",
+        help="print sizes in human readable format",
+    )
+    parser.add_argument("-H", "--si", action="store_true", help="use powers of 1000 not 1024")
+    parser.add_argument(
+        "-b",
+        "--block-size",
+        dest="blocksize",
+        type=int,
+        default=0,
+        help="use BLOCKSIZE-byte blocks",
+    )
+    parser.add_argument(
+        "-l",
+        "--local",
+        dest="local_only",
+        action="store_true",
+        help="limit listing to local filesystems",
+    )
+    parser.add_argument("-k", "--kilobytes", action="store_true", help="like --block-size=1024")
+    parser.add_argument("-m", "--megabytes", action="store_true", help="like --block-size=1048576")
+    parser.add_argument("-g", "--gigabytes", action="store_true", help="like --block-size=1073741824")
+    parser.add_argument("--blocks", action="store_true", help="use filesystem native block size")
+    parser.add_argument("--bw", action="store_true", help="do not use colours")
+    parser.add_argument(
+        "--mounts",
+        dest="mounts_file",
+        default=None,
+        help="File to get mount information from",
+    )
+    parser.add_argument(
+        "-B",
+        "--show-binds",
+        dest="show_binds",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="show 'mount --bind' mounts",
+    )
+    parser.add_argument("-i", "--inodes", action="store_true", help="show inode instead of block usage")
+    parser.add_argument("args", nargs="*", help="Filesystems or mount points to display")
+    return parser
+
+
+def main(argv: list[str] | None = None) -> None:
     """Run the command-line interface."""
+    ns = build_parser().parse_args(argv)
+    all_fss: bool = ns.all_fss
+    human_readable: bool = ns.human_readable
+    si: bool = ns.si
+    blocksize: int = ns.blocksize
+    local_only: bool = ns.local_only
+    kilobytes: bool = ns.kilobytes
+    megabytes: bool = ns.megabytes
+    gigabytes: bool = ns.gigabytes
+    blocks: bool = ns.blocks
+    bw: bool = ns.bw
+    mounts_file: str | None = ns.mounts_file
+    show_binds: bool = ns.show_binds
+    inodes: bool = ns.inodes
+    args: list[str] = ns.args
     sizeformat = "-h"
     if human_readable:
         sizeformat = "-h"
@@ -374,7 +437,7 @@ def main(
         "bar": Bar(header=True),
     }
 
-    def get_row_mp(mp: str | None) -> list[tuple[str, Any]] | None:
+    def get_row_mp(mp: str | None) -> list[list[Any]] | None:
         if mp:
             if mp in mountpoints:
                 device, fstype, opts = mountpoints[mp]
@@ -465,13 +528,13 @@ def main(
                     text = sanitize_output(str(text))
             else:
                 text = header_dict[col_name]
-                if col_name == "bar":
+                if col_name == "bar" and isinstance(text, Bar):
                     text.width = int(width_val)
 
             row.append([current_colour, text])
         return row
 
-    def squeeze_table(table: list[list[tuple[str, Any]]], desired_width: int) -> None:
+    def squeeze_table(table: list[list[list[Any]]], desired_width: int) -> None:
         cols = len(table[0])
         minrow = []
         for j in fmt_def:
@@ -513,7 +576,7 @@ def main(
                 else:
                     row[col][1] = manglestring(str(cell_content), new_maxrow[col], fmt_def[col][2])
 
-    def display_table(table: list[list[tuple[str, Any]]]) -> None:
+    def display_table(table: list[list[list[Any]]]) -> None:
         squeeze_table(table, terminal_width - 1)
         colsepcol = makecolour("none")
         for row in table:
@@ -531,7 +594,7 @@ def main(
             out("\n")
 
     if args:
-        mp_to_display = [find_mountpoint(os.path.realpath(x)) for x in args]
+        mp_to_display = [find_mountpoint(str(Path(x).resolve())) for x in args]
         mp_to_display = [x for x in mp_to_display if x is not None]
     else:
         mp_to_display = list(mountpoints.keys())
@@ -539,7 +602,9 @@ def main(
             mp_to_display = [x for x in mp_to_display if not is_remote_fs(mountpoints[x][1])]
         mp_to_display.sort()
 
-    table = [get_row_mp(None)]
+    header_row = get_row_mp(None)
+    assert header_row is not None
+    table: list[list[list[Any]]] = [header_row]
     for mp in mp_to_display:
         r = get_row_mp(mp)
         if r is not None:
@@ -549,4 +614,4 @@ def main(
 
 
 if __name__ == "__main__":
-    app()
+    main()

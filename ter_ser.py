@@ -25,6 +25,15 @@ from dh import MAX_WORKERS, SKIP_DIRS
 from rich.console import Console
 from rich.panel import Panel
 from rich.text import Text
+import sys
+from loguru import logger
+
+logger.remove()
+logger.add(
+    sys.stderr,
+    level=os.environ.get("LOGURU_LEVEL", "INFO"),
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+)
 
 
 __version__: str = "1.4.7"

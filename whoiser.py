@@ -22,76 +22,22 @@ import time
 import tomllib
 import traceback
 from types import SimpleNamespace
-from typing import Annotated, Any, NoReturn
+from typing import IO, Annotated, Any, NoReturn
 from urllib.parse import urlencode
 
-import click
 from dh import atomic_write
 from pygments import highlight
-from pygments.formatters import TerminalFormatter
-from pygments.lexers import JsonLexer
+from pygments.formatters.terminal import TerminalFormatter
+from pygments.lexers.data import JsonLexer
 import requests
-import typer
+from loguru import logger
 
-
-def _version_callback(value: bool) -> None:
-    if value:
-        typer.echo(f"{MYNAME} ver. {VERSION}\n    (c) WhoisXML API Inc.")
-        raise typer.Exit
-
-
-class Rawtext(StrEnum):
-    "Enumerate the supported Rawtext values."
-
-    none = "none"
-    stripped = "stripped"
-    full = "full"
-
-
-class Color(StrEnum):
-    "Enumerate the supported Color values."
-
-    auto = "auto"
-    always = "always"
-    never = "never"
-
-
-class Shell_completion(StrEnum):
-    "Enumerate the supported Shell completion values."
-
-    bash = "bash"
-    zsh = "zsh"
-    fish = "fish"
-
-
-_STATE: dict[str, object] = {}
-
-
-class _Args(SimpleNamespace):
-    """argparse.Namespace look-alike: unknown attributes read as None."""
-
-    def __getattr__(self, name: str) -> None:
-        if name.startswith("__"):
-            raise AttributeError(name)
-
-
-class _ParserShim:
-    """Stand-in for the removed argparse parser; hands back what Typer parsed."""
-
-    def parse_args(self, args: list[Any] | None = None, namespace: Any = None) -> _Args:
-        "Parse args."
-        return _Args(**_STATE)
-
-    def error(self, message: str) -> NoReturn:
-        raise typer.BadParameter(message)
-
-    def print_help(self, file: Path | None = None) -> None:
-        "Print help."
-        typer.echo(click.get_current_context().get_help(), file=file)
-
-    def print_usage(self, file: Path | None = None) -> None:
-        "Print usage."
-        typer.echo(click.get_current_context().get_usage(), file=file)
+logger.remove()
+logger.add(
+    sys.stderr,
+    level=os.environ.get("LOGURU_LEVEL", "INFO"),
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+)
 
 
 try:
@@ -773,7 +719,8 @@ def write_output(results: list[QueryResult], args: argparse.Namespace, color_on:
             try:
                 _write_to_stream(results, args, color_on, theme, proc.stdin)
             finally:
-                proc.stdin.close()  # type: ignore[union-attr]
+                if proc.stdin is not None:
+                    proc.stdin.close()
                 proc.wait()
             return
         except OSError:
@@ -1036,10 +983,85 @@ def generate_completion(parser: argparse.ArgumentParser, shell: str) -> str:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    "Build parser."
-    p = _ParserShim()
-
-    return p
+    """Build parser."""
+    parser = argparse.ArgumentParser(description='Command-line utility to query domains in the WhoisXML API WHOIS service similarly to the whois command.')
+    parser.add_argument('domainName', nargs="?", default=None, help='The domain to be queried (or @FILE, or - for stdin). Unicode/IDN accepted.')
+    parser.add_argument('--version', action="version", version=f'{MYNAME} ver. {VERSION}\n    (c) WhoisXML API Inc.', help="show program's version number and exit")
+    parser.add_argument('--version-full', action="store_true", default=False, help='Print version, Python version, and platform, then exit.')
+    parser.add_argument('--changelog', action="store_true", default=False, help='Print changelog and exit.')
+    parser.add_argument('--rcfile', type=Path, default=None, help='Use this rc file (plain text API key). Overrides default rc locations.')
+    parser.add_argument('--config', type=Path, default=None, help='Use this TOML config file.')
+    parser.add_argument('--profile', default=None, help='Named section in the TOML config to use.')
+    parser.add_argument('--dotenv', type=Path, default=None, help='Load environment from this .env file.')
+    parser.add_argument('--apikey', default=None, help='Directly specify the API key. Overrides any other source.')
+    parser.add_argument('--print-key-source', action="store_true", default=False, help='Print which source the API key came from.')
+    parser.add_argument('--print-config', action="store_true", default=False, help='Print resolved configuration and exit.')
+    parser.add_argument('--check-key', action="store_true", default=False, help='Check API key and print account balance, then exit.')
+    parser.add_argument('--balance', action="store_true", default=False, help='Alias for --check-key.')
+    parser.add_argument('--file', type=Path, default=None, help="Read domains from file (one per line, '#' comments allowed).")
+    parser.add_argument('--stdin', action="store_true", default=False, help='Read domains from standard input.')
+    parser.add_argument('--batch', action="store_true", default=False, help='Emit one NDJSON object per domain (default for multi-domain inputs).')
+    parser.add_argument('--parallel', type=int, default=None, metavar='N', help='Process N domains concurrently (default 1).')
+    parser.add_argument('--rate-limit', type=float, default=None, metavar='N', help='Global requests-per-second limit.')
+    parser.add_argument('--stop-on-error', action="store_true", default=False, help='Stop processing on the first error.')
+    parser.add_argument('--skip-empty', action="store_true", default=False, help='Skip records that resolve to empty results.')
+    parser.add_argument('--ip', default=None, metavar='ADDRESS', help='Query an IP address instead of a domain.')
+    parser.add_argument('--dns', action="store_true", default=False, help='Query the DNS API instead of WHOIS.')
+    parser.add_argument('--reverse', default=None, metavar='TYPE:VALUE', help='Reverse WHOIS lookup, e.g. email:user@example.com or org:"Example Inc".')
+    parser.add_argument('--history', action="store_true", default=False, help='Get historic records from the history API. Implied by date filters.')
+    parser.add_argument('--since-date', type=valid_date, default=None, metavar='YYYY-MM-DD', help='(history) Search activities discovered since this date.')
+    parser.add_argument('--created-date-from', type=valid_date, default=None, metavar='YYYY-MM-DD', help='(history) Domains created after this date.')
+    parser.add_argument('--created-date-to', type=valid_date, default=None, metavar='YYYY-MM-DD', help='(history) Domains created before this date.')
+    parser.add_argument('--updated-date-from', type=valid_date, default=None, metavar='YYYY-MM-DD', help='(history) Domains updated after this date.')
+    parser.add_argument('--updated-date-to', type=valid_date, default=None, metavar='YYYY-MM-DD', help='(history) Domains updated before this date.')
+    parser.add_argument('--expired-date-from', type=valid_date, default=None, metavar='YYYY-MM-DD', help='(history) Domains expired after this date.')
+    parser.add_argument('--expired-date-to', type=valid_date, default=None, metavar='YYYY-MM-DD', help='(history) Domains expired before this date.')
+    parser.add_argument('--history-limit', type=int, default=None, metavar='N', help='(history) Maximum number of records to return.')
+    parser.add_argument('--history-offset', type=int, default=None, metavar='N', help='(history) Pagination offset.')
+    parser.add_argument('--history-sort', default=None, metavar='FIELD', help='(history) Sort field if supported by the API.')
+    parser.add_argument('--rawtext', choices=['none', 'stripped', 'full'], default=None, help='Raw-text handling: none (default), stripped (first 64 chars), full.')
+    parser.add_argument('--fullrawtext', action="store_true", default=False, help=argparse.SUPPRESS)
+    parser.add_argument('--strippedrawtext', action="store_true", default=False, help=argparse.SUPPRESS)
+    parser.add_argument('--keep-empty', action="store_true", default=False, help='Keep and display fields with empty and null values.')
+    parser.add_argument('--keep-null', action="store_true", default=False, help='Keep null fields while still removing empty strings/collections.')
+    parser.add_argument('--no-purge-nested', action="store_true", default=False, help='Only purge empty fields at the top level; do not recurse.')
+    parser.add_argument('--text', action="store_true", default=False, help='Print a textual output instead of JSON.')
+    parser.add_argument('--json', action="store_true", default=False, help='Force machine-readable JSON (disables coloring).')
+    parser.add_argument('--yaml', action="store_true", default=False, help='Print YAML instead of JSON.')
+    parser.add_argument('--csv', action="store_true", default=False, help='Print CSV (flattened records, one row each).')
+    parser.add_argument('--raw-whois', action="store_true", default=False, help='Print only the raw WHOIS text.')
+    parser.add_argument('--jsonpath', default=None, metavar='EXPR', help='Select a subset of the record using a JSONPath expression.')
+    parser.add_argument('--fields', default=None, metavar='A,B.C,...', help='Only output the given dotted-path fields.')
+    parser.add_argument('--exclude-fields', default=None, metavar='A,B.C,...', help='Drop the given dotted-path fields.')
+    parser.add_argument('--compact', action="store_true", default=False, help='Compact JSON output.')
+    parser.add_argument('--indent', type=int, default=None, metavar='N', help='JSON indent (default 1).')
+    parser.add_argument('--sort-keys', action="store_true", default=False, help='Sort JSON keys.')
+    parser.add_argument('--theme', default=None, metavar='NAME', help='Pygments style name (e.g. monokai, dracula).')
+    parser.add_argument('--nocolor', action="store_true", default=False, help=argparse.SUPPRESS)
+    parser.add_argument('--color', choices=['auto', 'always', 'never'], default='auto', help='Colorize output.')
+    parser.add_argument('--no-header', action="store_true", default=False, help='Suppress the historic-record header.')
+    parser.add_argument('--quiet', '-q', action="store_true", default=False, help='Suppress informational output.')
+    parser.add_argument('--verbose', '-v', action="store_true", default=False, help='Print verbose info to stderr.')
+    parser.add_argument('--debug', action="store_true", default=False, help='Print full tracebacks on error.')
+    parser.add_argument('--trace', action="store_true", default=False, help='Print HTTP request/response details to stderr.')
+    parser.add_argument('--wrap', type=int, default=0, metavar='N', help='Wrap text/raw output at N columns (0 = no wrap).')
+    parser.add_argument('--pager', '-P', action="store_true", default=False, help='Pipe output through $PAGER when stdout is a tty.')
+    parser.add_argument('--output', '-o', default=None, metavar='FILE', help="Write output to FILE ('-' for stdout).")
+    parser.add_argument('--timeout', type=float, default=None, metavar='SECS', help='Per-request timeout (default 30s).')
+    parser.add_argument('--retries', type=int, default=None, metavar='N', help='Retry count for transient failures (default 0).')
+    parser.add_argument('--retry-backoff', type=float, default=None, metavar='SECS', help='Base delay between retries (default 0.5s).')
+    parser.add_argument('--no-verify', action="store_true", default=False, help='Disable TLS certificate verification.')
+    parser.add_argument('--ca-bundle', default=None, metavar='PATH', help='Custom CA bundle for TLS verification.')
+    parser.add_argument('--user-agent', default=None, metavar='UA', help='Override the HTTP User-Agent header.')
+    parser.add_argument('--proxy', default=None, metavar='URL', help='HTTP(S) proxy to use for requests.')
+    parser.add_argument('--dry-run', action="store_true", default=False, help='Print effective URLs (API key redacted) and exit.')
+    parser.add_argument('--cache-dir', type=Path, default=None, help='Cache directory (default: XDG cache).')
+    parser.add_argument('--no-cache', action="store_true", default=False, help='Disable response caching.')
+    parser.add_argument('--cache-ttl', type=int, default=None, metavar='SECS', help='Cache time-to-live (default 0 = off).')
+    parser.add_argument('--reconcile', type=Path, default=None, metavar='PATH', help='Compare results against a saved JSON file and report changes on stderr.')
+    parser.add_argument('--shell-completion', choices=['bash', 'zsh', 'fish'], default=None, help='Print shell completion script and exit.')
+    parser.add_argument('--manpage', action="store_true", default=False, help='Print a manpage and exit.')
+    return parser
 
 
 def main() -> int:
@@ -1190,468 +1212,5 @@ def main() -> int:
 
     return 1 if any(r.error for r in results) else 0
 
-
-def _run() -> None:
-    raise SystemExit(main())
-
-
-app = typer.Typer(
-    add_completion=False,
-    context_settings={"help_option_names": ["-h", "--help"]},
-    pretty_exceptions_show_locals=False,
-)
-
-
-@app.command(
-    help="Command-line utility to query domains in the WhoisXML API WHOIS service similarly to the whois command."
-)
-def cli(
-    domainName: Annotated[
-        str | None,
-        typer.Argument(help="The domain to be queried (or @FILE, or - for stdin). Unicode/IDN accepted."),
-    ] = None,
-    version: Annotated[
-        bool,
-        typer.Option(
-            "--version",
-            callback=_version_callback,
-            is_eager=True,
-            help="show program's version number and exit",
-        ),
-    ] = False,
-    version_full: Annotated[
-        bool,
-        typer.Option(
-            "--version-full",
-            help="Print version, Python version, and platform, then exit.",
-        ),
-    ] = False,
-    changelog: Annotated[bool, typer.Option("--changelog", help="Print changelog and exit.")] = False,
-    rcfile: Annotated[
-        Path | None,
-        typer.Option(
-            "--rcfile",
-            help="Use this rc file (plain text API key). Overrides default rc locations.",
-        ),
-    ] = None,
-    config: Annotated[Path | None, typer.Option("--config", help="Use this TOML config file.")] = None,
-    profile: Annotated[
-        str | None,
-        typer.Option("--profile", help="Named section in the TOML config to use."),
-    ] = None,
-    dotenv: Annotated[
-        Path | None,
-        typer.Option("--dotenv", help="Load environment from this .env file."),
-    ] = None,
-    apikey: Annotated[
-        str | None,
-        typer.Option("--apikey", help="Directly specify the API key. Overrides any other source."),
-    ] = None,
-    print_key_source: Annotated[
-        bool,
-        typer.Option("--print-key-source", help="Print which source the API key came from."),
-    ] = False,
-    print_config: Annotated[
-        bool,
-        typer.Option("--print-config", help="Print resolved configuration and exit."),
-    ] = False,
-    check_key: Annotated[
-        bool,
-        typer.Option("--check-key", help="Check API key and print account balance, then exit."),
-    ] = False,
-    balance: Annotated[bool, typer.Option("--balance", help="Alias for --check-key.")] = False,
-    file: Annotated[
-        Path | None,
-        typer.Option(
-            "--file",
-            help="Read domains from file (one per line, '#' comments allowed).",
-        ),
-    ] = None,
-    stdin: Annotated[bool, typer.Option("--stdin", help="Read domains from standard input.")] = False,
-    batch: Annotated[
-        bool,
-        typer.Option(
-            "--batch",
-            help="Emit one NDJSON object per domain (default for multi-domain inputs).",
-        ),
-    ] = False,
-    parallel: Annotated[
-        int | None,
-        typer.Option(
-            "--parallel",
-            help="Process N domains concurrently (default 1).",
-            metavar="N",
-        ),
-    ] = None,
-    rate_limit: Annotated[
-        float | None,
-        typer.Option("--rate-limit", help="Global requests-per-second limit.", metavar="N"),
-    ] = None,
-    stop_on_error: Annotated[
-        bool,
-        typer.Option("--stop-on-error", help="Stop processing on the first error."),
-    ] = False,
-    skip_empty: Annotated[
-        bool,
-        typer.Option("--skip-empty", help="Skip records that resolve to empty results."),
-    ] = False,
-    ip: Annotated[
-        str | None,
-        typer.Option("--ip", help="Query an IP address instead of a domain.", metavar="ADDRESS"),
-    ] = None,
-    dns: Annotated[bool, typer.Option("--dns", help="Query the DNS API instead of WHOIS.")] = False,
-    reverse: Annotated[
-        str | None,
-        typer.Option(
-            "--reverse",
-            help='Reverse WHOIS lookup, e.g. email:user@example.com or org:"Example Inc".',
-            metavar="TYPE:VALUE",
-        ),
-    ] = None,
-    history: Annotated[
-        bool,
-        typer.Option(
-            "--history",
-            help="Get historic records from the history API. Implied by date filters.",
-        ),
-    ] = False,
-    since_date: Annotated[
-        str | None,
-        typer.Option(
-            "--since-date",
-            help="(history) Search activities discovered since this date.",
-            metavar="YYYY-MM-DD",
-            parser=valid_date,
-        ),
-    ] = None,
-    created_date_from: Annotated[
-        str | None,
-        typer.Option(
-            "--created-date-from",
-            help="(history) Domains created after this date.",
-            metavar="YYYY-MM-DD",
-            parser=valid_date,
-        ),
-    ] = None,
-    created_date_to: Annotated[
-        str | None,
-        typer.Option(
-            "--created-date-to",
-            help="(history) Domains created before this date.",
-            metavar="YYYY-MM-DD",
-            parser=valid_date,
-        ),
-    ] = None,
-    updated_date_from: Annotated[
-        str | None,
-        typer.Option(
-            "--updated-date-from",
-            help="(history) Domains updated after this date.",
-            metavar="YYYY-MM-DD",
-            parser=valid_date,
-        ),
-    ] = None,
-    updated_date_to: Annotated[
-        str | None,
-        typer.Option(
-            "--updated-date-to",
-            help="(history) Domains updated before this date.",
-            metavar="YYYY-MM-DD",
-            parser=valid_date,
-        ),
-    ] = None,
-    expired_date_from: Annotated[
-        str | None,
-        typer.Option(
-            "--expired-date-from",
-            help="(history) Domains expired after this date.",
-            metavar="YYYY-MM-DD",
-            parser=valid_date,
-        ),
-    ] = None,
-    expired_date_to: Annotated[
-        str | None,
-        typer.Option(
-            "--expired-date-to",
-            help="(history) Domains expired before this date.",
-            metavar="YYYY-MM-DD",
-            parser=valid_date,
-        ),
-    ] = None,
-    history_limit: Annotated[
-        int | None,
-        typer.Option(
-            "--history-limit",
-            help="(history) Maximum number of records to return.",
-            metavar="N",
-        ),
-    ] = None,
-    history_offset: Annotated[
-        int | None,
-        typer.Option("--history-offset", help="(history) Pagination offset.", metavar="N"),
-    ] = None,
-    history_sort: Annotated[
-        str | None,
-        typer.Option(
-            "--history-sort",
-            help="(history) Sort field if supported by the API.",
-            metavar="FIELD",
-        ),
-    ] = None,
-    rawtext: Annotated[
-        Rawtext | None,
-        typer.Option(
-            "--rawtext",
-            help="Raw-text handling: none (default), stripped (first 64 chars), full.",
-        ),
-    ] = None,
-    fullrawtext: Annotated[bool, typer.Option("--fullrawtext", hidden=True)] = False,
-    strippedrawtext: Annotated[bool, typer.Option("--strippedrawtext", hidden=True)] = False,
-    keep_empty: Annotated[
-        bool,
-        typer.Option("--keep-empty", help="Keep and display fields with empty and null values."),
-    ] = False,
-    keep_null: Annotated[
-        bool,
-        typer.Option(
-            "--keep-null",
-            help="Keep null fields while still removing empty strings/collections.",
-        ),
-    ] = False,
-    no_purge_nested: Annotated[
-        bool,
-        typer.Option(
-            "--no-purge-nested",
-            help="Only purge empty fields at the top level; do not recurse.",
-        ),
-    ] = False,
-    text: Annotated[bool, typer.Option("--text", help="Print a textual output instead of JSON.")] = False,
-    json: Annotated[
-        bool,
-        typer.Option("--json", help="Force machine-readable JSON (disables coloring)."),
-    ] = False,
-    yaml: Annotated[bool, typer.Option("--yaml", help="Print YAML instead of JSON.")] = False,
-    csv: Annotated[bool, typer.Option("--csv", help="Print CSV (flattened records, one row each).")] = False,
-    raw_whois: Annotated[bool, typer.Option("--raw-whois", help="Print only the raw WHOIS text.")] = False,
-    jsonpath: Annotated[
-        str | None,
-        typer.Option(
-            "--jsonpath",
-            help="Select a subset of the record using a JSONPath expression.",
-            metavar="EXPR",
-        ),
-    ] = None,
-    fields: Annotated[
-        str | None,
-        typer.Option(
-            "--fields",
-            help="Only output the given dotted-path fields.",
-            metavar="A,B.C,...",
-        ),
-    ] = None,
-    exclude_fields: Annotated[
-        str | None,
-        typer.Option(
-            "--exclude-fields",
-            help="Drop the given dotted-path fields.",
-            metavar="A,B.C,...",
-        ),
-    ] = None,
-    compact: Annotated[bool, typer.Option("--compact", help="Compact JSON output.")] = False,
-    indent: Annotated[
-        int | None,
-        typer.Option("--indent", help="JSON indent (default 1).", metavar="N"),
-    ] = None,
-    sort_keys: Annotated[bool, typer.Option("--sort-keys", help="Sort JSON keys.")] = False,
-    theme: Annotated[
-        str | None,
-        typer.Option(
-            "--theme",
-            help="Pygments style name (e.g. monokai, dracula).",
-            metavar="NAME",
-        ),
-    ] = None,
-    nocolor: Annotated[bool, typer.Option("--nocolor", hidden=True)] = False,
-    color: Annotated[Color, typer.Option("--color", help="Colorize output.")] = Color.auto,
-    no_header: Annotated[bool, typer.Option("--no-header", help="Suppress the historic-record header.")] = False,
-    quiet: Annotated[bool, typer.Option("--quiet", "-q", help="Suppress informational output.")] = False,
-    verbose: Annotated[bool, typer.Option("--verbose", "-v", help="Print verbose info to stderr.")] = False,
-    debug: Annotated[bool, typer.Option("--debug", help="Print full tracebacks on error.")] = False,
-    trace: Annotated[
-        bool,
-        typer.Option("--trace", help="Print HTTP request/response details to stderr."),
-    ] = False,
-    wrap: Annotated[
-        int,
-        typer.Option(
-            "--wrap",
-            help="Wrap text/raw output at N columns (0 = no wrap).",
-            metavar="N",
-        ),
-    ] = 0,
-    pager: Annotated[
-        bool,
-        typer.Option("--pager", "-P", help="Pipe output through $PAGER when stdout is a tty."),
-    ] = False,
-    output: Annotated[
-        str | None,
-        typer.Option(
-            "--output",
-            "-o",
-            help="Write output to FILE ('-' for stdout).",
-            metavar="FILE",
-        ),
-    ] = None,
-    timeout: Annotated[
-        float | None,
-        typer.Option("--timeout", help="Per-request timeout (default 30s).", metavar="SECS"),
-    ] = None,
-    retries: Annotated[
-        int | None,
-        typer.Option(
-            "--retries",
-            help="Retry count for transient failures (default 0).",
-            metavar="N",
-        ),
-    ] = None,
-    retry_backoff: Annotated[
-        float | None,
-        typer.Option(
-            "--retry-backoff",
-            help="Base delay between retries (default 0.5s).",
-            metavar="SECS",
-        ),
-    ] = None,
-    no_verify: Annotated[bool, typer.Option("--no-verify", help="Disable TLS certificate verification.")] = False,
-    ca_bundle: Annotated[
-        str | None,
-        typer.Option("--ca-bundle", help="Custom CA bundle for TLS verification.", metavar="PATH"),
-    ] = None,
-    user_agent: Annotated[
-        str | None,
-        typer.Option("--user-agent", help="Override the HTTP User-Agent header.", metavar="UA"),
-    ] = None,
-    proxy: Annotated[
-        str | None,
-        typer.Option("--proxy", help="HTTP(S) proxy to use for requests.", metavar="URL"),
-    ] = None,
-    dry_run: Annotated[
-        bool,
-        typer.Option("--dry-run", help="Print effective URLs (API key redacted) and exit."),
-    ] = False,
-    cache_dir: Annotated[
-        Path | None,
-        typer.Option("--cache-dir", help="Cache directory (default: XDG cache)."),
-    ] = None,
-    no_cache: Annotated[bool, typer.Option("--no-cache", help="Disable response caching.")] = False,
-    cache_ttl: Annotated[
-        int | None,
-        typer.Option("--cache-ttl", help="Cache time-to-live (default 0 = off).", metavar="SECS"),
-    ] = None,
-    reconcile: Annotated[
-        Path | None,
-        typer.Option(
-            "--reconcile",
-            help="Compare results against a saved JSON file and report changes on stderr.",
-            metavar="PATH",
-        ),
-    ] = None,
-    shell_completion: Annotated[
-        Shell_completion | None,
-        typer.Option("--shell-completion", help="Print shell completion script and exit."),
-    ] = None,
-    manpage: Annotated[bool, typer.Option("--manpage", help="Print a manpage and exit.")] = False,
-) -> None:
-    """Run the command-line interface."""
-    if (
-        sum((
-            rawtext is not None,
-            bool(fullrawtext),
-            bool(strippedrawtext),
-        ))
-        > 1
-    ):
-        msg = "--rawtext, --fullrawtext, --strippedrawtext are mutually exclusive"
-        raise typer.BadParameter(msg)
-    _STATE.update(
-        domainName=domainName,
-        version_full=version_full,
-        changelog=changelog,
-        rcfile=rcfile,
-        config=config,
-        profile=profile,
-        dotenv=dotenv,
-        apikey=apikey,
-        print_key_source=print_key_source,
-        print_config=print_config,
-        check_key=check_key,
-        balance=balance,
-        file=file,
-        stdin=stdin,
-        batch=batch,
-        parallel=parallel,
-        rate_limit=rate_limit,
-        stop_on_error=stop_on_error,
-        skip_empty=skip_empty,
-        ip=ip,
-        dns=dns,
-        reverse=reverse,
-        history=history,
-        since_date=since_date,
-        created_date_from=created_date_from,
-        created_date_to=created_date_to,
-        updated_date_from=updated_date_from,
-        updated_date_to=updated_date_to,
-        expired_date_from=expired_date_from,
-        expired_date_to=expired_date_to,
-        history_limit=history_limit,
-        history_offset=history_offset,
-        history_sort=history_sort,
-        rawtext=rawtext,
-        fullrawtext=fullrawtext,
-        strippedrawtext=strippedrawtext,
-        keep_empty=keep_empty,
-        keep_null=keep_null,
-        no_purge_nested=no_purge_nested,
-        text=text,
-        json=json,
-        yaml=yaml,
-        csv=csv,
-        raw_whois=raw_whois,
-        jsonpath=jsonpath,
-        fields=fields,
-        exclude_fields=exclude_fields,
-        compact=compact,
-        indent=indent,
-        sort_keys=sort_keys,
-        theme=theme,
-        nocolor=nocolor,
-        color=color,
-        no_header=no_header,
-        quiet=quiet,
-        verbose=verbose,
-        debug=debug,
-        trace=trace,
-        wrap=wrap,
-        pager=pager,
-        output=output,
-        timeout=timeout,
-        retries=retries,
-        retry_backoff=retry_backoff,
-        no_verify=no_verify,
-        ca_bundle=ca_bundle,
-        user_agent=user_agent,
-        proxy=proxy,
-        dry_run=dry_run,
-        cache_dir=cache_dir,
-        no_cache=no_cache,
-        cache_ttl=cache_ttl,
-        reconcile=reconcile,
-        shell_completion=shell_completion,
-        manpage=manpage,
-    )
-    _run()
-
-
 if __name__ == "__main__":
-    app()
+    raise SystemExit(main())

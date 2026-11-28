@@ -11,56 +11,18 @@ import json
 from pathlib import Path
 import sys
 from types import SimpleNamespace
-from typing import Annotated, Any, NoReturn, TextIO
+from typing import IO, Annotated, Any, NoReturn, TextIO
 
-import click
 from dh import atomic_write
-import typer
+import os
+from loguru import logger
 
-
-class Format(StrEnum):
-    "Enumerate the supported Format values."
-
-    table = "table"
-    list = "list"
-
-
-class Array_mode(StrEnum):
-    "Enumerate the supported Array mode values."
-
-    json = "json"
-    join = "join"
-    expand = "expand"
-
-
-_STATE: dict[str, object] = {}
-
-
-class _Args(SimpleNamespace):
-    """argparse.Namespace look-alike: unknown attributes read as None."""
-
-    def __getattr__(self, name: str) -> None:
-        if name.startswith("__"):
-            raise AttributeError(name)
-
-
-class _ParserShim:
-    """Stand-in for the removed argparse parser; hands back what Typer parsed."""
-
-    def parse_args(self, args: list[Any] | None = None, namespace: Any = None) -> _Args:
-        "Parse args."
-        return _Args(**_STATE)
-
-    def error(self, message: str) -> NoReturn:
-        raise typer.BadParameter(message)
-
-    def print_help(self, file: Path | None = None) -> None:
-        "Print help."
-        typer.echo(click.get_current_context().get_help(), file=file)
-
-    def print_usage(self, file: Path | None = None) -> None:
-        "Print usage."
-        typer.echo(click.get_current_context().get_usage(), file=file)
+logger.remove()
+logger.add(
+    sys.stderr,
+    level=os.environ.get("LOGURU_LEVEL", "INFO"),
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+)
 
 
 def parse_header(value: str) -> tuple[str, str]:
@@ -240,7 +202,17 @@ def render_list(
 
 def build_parser() -> argparse.ArgumentParser:
     """Create the command-line argument parser."""
-    parser = _ParserShim()
+    parser = argparse.ArgumentParser(description='Convert JSON from a file or stdin into a Markdown table or list.')
+    parser.add_argument('input', nargs="?", default='-', help='JSON input file; defaults to stdin')
+    parser.add_argument('-o', '--output', default=None, help='write Markdown to this file instead of stdout')
+    parser.add_argument('-f', '--format', choices=['table', 'list'], default='table', help='output format (default: table)')
+    parser.add_argument('--array-mode', choices=['json', 'join', 'expand'], default='json', help='how to display or handle arrays: compact JSON, join scalar values, or expand array items into rows (default: json)')
+    parser.add_argument('--separator', default='.', help='separator used in flattened column paths (default: .)')
+    parser.add_argument('--header', action="append", type=parse_header, default=[], metavar='PATH=LABEL', help='rename a flattened column; may be supplied more than once')
+    parser.add_argument('--exclude', action="append", default=[], metavar='GLOB', help='exclude columns matching a glob pattern; may be supplied more than once')
+    parser.add_argument('--sort-columns', action="store_true", default=False, help='sort columns alphabetically by their displayed header')
+    parser.add_argument('--no-header', action="store_true", default=False, help='omit the header and separator rows (table format only)')
+    parser.add_argument('--null-text', default='—', help='text to use for JSON null values (default: —)')
     return parser
 
 
@@ -297,89 +269,5 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 1
     return 0
 
-
-def _run() -> None:
-    raise SystemExit(main())
-
-
-app = typer.Typer(
-    add_completion=False,
-    context_settings={"help_option_names": ["-h", "--help"]},
-    pretty_exceptions_show_locals=False,
-)
-
-
-@app.command(help="Convert JSON from a file or stdin into a Markdown table or list.")
-def cli(
-    input: Annotated[str, typer.Argument(help="JSON input file; defaults to stdin")] = "-",
-    output: Annotated[
-        str | None,
-        typer.Option("-o", "--output", help="write Markdown to this file instead of stdout"),
-    ] = None,
-    format: Annotated[Format, typer.Option("-f", "--format", help="output format (default: table)")] = Format.table,
-    array_mode: Annotated[
-        Array_mode,
-        typer.Option(
-            "--array-mode",
-            help="how to display or handle arrays: compact JSON, join scalar values, or expand array items into rows (default: json)",
-        ),
-    ] = Array_mode.json,
-    separator: Annotated[
-        str,
-        typer.Option("--separator", help="separator used in flattened column paths (default: .)"),
-    ] = ".",
-    header: Annotated[
-        list[str] | None,
-        typer.Option(
-            "--header",
-            help="rename a flattened column; may be supplied more than once",
-            metavar="PATH=LABEL",
-            parser=parse_header,
-        ),
-    ] = None,
-    exclude: Annotated[
-        list[str] | None,
-        typer.Option(
-            "--exclude",
-            help="exclude columns matching a glob pattern; may be supplied more than once",
-            metavar="GLOB",
-        ),
-    ] = None,
-    sort_columns: Annotated[
-        bool,
-        typer.Option(
-            "--sort-columns",
-            help="sort columns alphabetically by their displayed header",
-        ),
-    ] = False,
-    no_header: Annotated[
-        bool,
-        typer.Option("--no-header", help="omit the header and separator rows (table format only)"),
-    ] = False,
-    null_text: Annotated[
-        str,
-        typer.Option("--null-text", help="text to use for JSON null values (default: —)"),
-    ] = "—",
-) -> None:
-    """Run the command-line interface."""
-    if exclude is None:
-        exclude = []
-    if header is None:
-        header = []
-    _STATE.update(
-        input=input,
-        output=output,
-        format=format,
-        array_mode=array_mode,
-        separator=separator,
-        header=header,
-        exclude=exclude,
-        sort_columns=sort_columns,
-        no_header=no_header,
-        null_text=null_text,
-    )
-    _run()
-
-
 if __name__ == "__main__":
-    app()
+    raise SystemExit(main())

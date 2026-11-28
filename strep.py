@@ -18,6 +18,16 @@ import subprocess
 
 from rich.console import Console
 from rich.text import Text
+import os
+import sys
+from loguru import logger
+
+logger.remove()
+logger.add(
+    sys.stderr,
+    level=os.environ.get("LOGURU_LEVEL", "INFO"),
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+)
 
 
 SO_PATTERN = re.compile(r"\.so(\.\d+)*$")
@@ -58,14 +68,15 @@ def fmt_bytes(n: int) -> str:
     if n == 0:
         return "0 B"
     sign = "-" if n < 0 else ""
-    n = abs(n)
-    if n < 1024:
-        return f"{sign}{n} B"
+    size = abs(n)
+    if size < 1024:
+        return f"{sign}{size} B"
+    value = float(size)
     for unit in ("KiB", "MiB", "GiB", "TiB", "PiB"):
-        n /= 1024
-        if n < 1024:
-            return f"{sign}{n:.2f} {unit}"
-    return f"{sign}{n:.2f} EiB"
+        value /= 1024
+        if value < 1024:
+            return f"{sign}{value:.2f} {unit}"
+    return f"{sign}{value:.2f} EiB"
 
 
 def main() -> None:

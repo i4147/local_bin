@@ -18,48 +18,10 @@ import sys
 import time
 import tokenize
 from types import SimpleNamespace
-from typing import Annotated, Any, NoReturn
+from typing import IO, Annotated, Any, NoReturn
 import zipfile
 
-import click
 from loguru import logger
-import typer
-
-
-def _version_callback(value: bool) -> None:
-    if value:
-        typer.echo(f"consolidator {__version__}")
-        raise typer.Exit
-
-
-_STATE: dict[str, object] = {}
-
-
-class _Args(SimpleNamespace):
-    """argparse.Namespace look-alike: unknown attributes read as None."""
-
-    def __getattr__(self, name: str) -> None:
-        if name.startswith("__"):
-            raise AttributeError(name)
-
-
-class _ParserShim:
-    """Stand-in for the removed argparse parser; hands back what Typer parsed."""
-
-    def parse_args(self, args: list[Any] | None = None, namespace: Any = None) -> _Args:
-        "Parse args."
-        return _Args(**_STATE)
-
-    def error(self, message: str) -> NoReturn:
-        raise typer.BadParameter(message)
-
-    def print_help(self, file: Path | None = None) -> None:
-        "Print help."
-        typer.echo(click.get_current_context().get_help(), file=file)
-
-    def print_usage(self, file: Path | None = None) -> None:
-        "Print usage."
-        typer.echo(click.get_current_context().get_usage(), file=file)
 
 
 __version__: str = "1.4.7"
@@ -581,7 +543,7 @@ def _has_main_function(init_path: Path) -> bool:
 def _synthesize_main(pkg_name: str, pkg_dir: Path, override: str | None) -> tuple[str, list[str]]:
     if override is not None:
         parts = override.split(".")
-        module_file = pkg_dir / "/".join(parts) + ".py"
+        module_file = pkg_dir / ("/".join(parts) + ".py")
         package_init = pkg_dir / "/".join(parts) / "__init__.py"
         if not module_file.is_file() and not package_init.is_file():
             msg = (
@@ -668,7 +630,7 @@ def analyze(
     synthetic_files: dict[str, bytes] = {}
     scanned: set[str] = set()
     scan_queue: deque[str] = deque()
-    thirdparty = _resolve_thirdparty(include_packages, site_paths)
+    thirdparty = _resolve_thirdparty(include_packages, [Path(p) for p in site_paths])
     embedded_thirdparty: set[str] = set()
 
     def warn(kind: str, message: str) -> None:
@@ -1265,7 +1227,7 @@ _RENDER_KEYS: frozenset[str] = frozenset({"python", "compression", "runtime_debu
 def consolidate(
     entry: str | Path,
     output: str | Path | None = None,
-    **options: object,
+    **options: Any,
 ) -> Path | None:
     unknown = set(options) - _ANALYZE_KEYS - _RENDER_KEYS
     if unknown:
@@ -1273,10 +1235,10 @@ def consolidate(
         raise TypeError(msg)
     analyze_options = {k: v for k, v in options.items() if k in _ANALYZE_KEYS}
     render_options = {k: v for k, v in options.items() if k in _RENDER_KEYS}
-    plan = analyze(entry, **analyze_options)  # type: ignore[arg-type]
+    plan = analyze(entry, **analyze_options)
     for warning in plan.warnings:
         log.warning("%s", warning)
-    text = render(plan, **render_options)  # type: ignore[arg-type]
+    text = render(plan, **render_options)
     path = write_output(text, output)
     if path is not None:
         stem = path.stem
@@ -1305,11 +1267,11 @@ class _PackageDataAction(argparse.Action):
         self,
         parser: argparse.ArgumentParser,
         namespace: argparse.Namespace,
-        values: object,
+        values: Any,
         option_string: str | None = None,
     ) -> None:
         "Invoke the behavior represented by this object."
-        names = list(values) if values else ["*"]  # type: ignore[arg-type]
+        names = list(values) if values else ["*"]
         current = list(getattr(namespace, self.dest, None) or [])
         current.extend(names)
         setattr(namespace, self.dest, current)
@@ -1327,8 +1289,29 @@ def _default_output_name(entry: str) -> str:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    "Build parser."
-    parser = _ParserShim()
+    """Build parser."""
+    parser = argparse.ArgumentParser(description='Consolidate a pure-Python package or script into a single self-contained file.')
+    parser.add_argument('entry', help='entry script, package directory, or module name (with -m)')
+    parser.add_argument('-o', '--output', default=None, help="output file ('-' for stdout); default: ./output/<name>_standalone.py")
+    parser.add_argument('-m', '--module', action="store_true", default=False, help='treat ENTRY as a module name, emulating `python -m ENTRY`')
+    parser.add_argument('-p', '--add-python-path', action="append", default=[], metavar='DIR', help="extra directories to search for local packages (repeatable; ':'-separated lists allowed)")
+    parser.add_argument('--include-package', action="append", default=[], metavar='PKG', help='pure-Python third-party packages to bundle (name or path)')
+    parser.add_argument('--site-path', action="append", default=[], metavar='DIR', help='extra directories searched for --include-package names')
+    parser.add_argument('--exclude-module', action="append", default=[], metavar='PAT', help='exclude modules/packages (fnmatch on dotted names; a bare name excludes its whole subtree)')
+    parser.add_argument('--include-data', action="append", default=[], metavar='SPEC', help="embed data files: 'PKG:GLOB', 'GLOB' (relative to the entry directory and --add-python-path roots), or an existing directory/file path")
+    parser.add_argument('--exclude-data', action="append", default=[], metavar='GLOB', help='exclude data files (glob matched against bundle-relative paths)')
+    parser.add_argument('--main-module', default=None, metavar='MOD', help='module inside the entry package to run as its __main__ (dotted, relative to the package; auto-detected if omitted)')
+    parser.add_argument('--no-whole-package', dest='whole_package', action="store_false", default=True, help='embed only statically reachable modules instead of whole packages')
+    parser.add_argument('--python', default=None, metavar='INTERP', help='shebang interpreter (default: the python running consolidator)')
+    parser.add_argument('--compression', choices=sorted(_COMPRESSIONS), default='deflate', help='payload compression (default: deflate)')
+    parser.add_argument('--keep-tmpdir', action="store_true", default=False, help='the generated bundle keeps its extraction directory')
+    parser.add_argument('--runtime-debug', action="store_true", default=False, help='the generated bundle prints its extraction directory to stderr')
+    parser.add_argument('--strict', action="store_true", default=False, help='fail the build on unresolved imports')
+    parser.add_argument('--no-deterministic', dest='deterministic', action="store_false", default=True, help='embed the build date instead of a fixed timestamp')
+    parser.add_argument('--dry-run', action="store_true", default=False, help='print the consolidation plan and exit without writing')
+    parser.add_argument('-q', '--quiet', action="store_true", default=False, help='only report errors')
+    parser.add_argument('-v', '--verbose', action="store_true", default=False, help='log more detail while building')
+    parser.add_argument('--version', action="version", version=f'consolidator {__version__}', help="show program's version number and exit")
     return parser
 
 
@@ -1388,194 +1371,5 @@ def main(argv: Sequence[str] | None = None) -> int:
     except KeyboardInterrupt:
         return 130
 
-
-def _run() -> None:
-    raise SystemExit(main())
-
-
-app = typer.Typer(
-    add_completion=False,
-    context_settings={"help_option_names": ["-h", "--help"]},
-    pretty_exceptions_show_locals=False,
-)
-
-
-@app.command(
-    help="Consolidate a pure-Python package or script into a single self-contained file.",
-    epilog="examples:\n  bundle the package in the current directory (saved under ./output/):\n    python consolidator.py .\n\n  bundle a script with its sibling modules:\n    python consolidator.py cli.py -o standalone.py\n\n  bundle a package and embed its data files:\n    python consolidator.py demo_app --include-package-data\n\n  auto-generate __main__.py for a package that has none:\n    python consolidator.py my_pkg/\n    python consolidator.py my_pkg/ --main-module cli\n\n  search extra source directories and embed matching data files:\n    python consolidator.py app/main.py -p src --include-data 'assets/*.json'\n\n  include a pure-Python third-party dependency:\n    python consolidator.py cli.py --include-package rich --site-path vendor\n\n  preview what would be bundled:\n    python consolidator.py demo_app --dry-run\n",
-)
-def cli(
-    entry: Annotated[
-        str,
-        typer.Argument(help="entry script, package directory, or module name (with -m)"),
-    ],
-    output: Annotated[
-        str | None,
-        typer.Option(
-            "-o",
-            "--output",
-            help="output file ('-' for stdout); default: ./output/<name>_standalone.py",
-        ),
-    ] = None,
-    module: Annotated[
-        bool,
-        typer.Option(
-            "-m",
-            "--module",
-            help="treat ENTRY as a module name, emulating `python -m ENTRY`",
-        ),
-    ] = False,
-    add_python_path: Annotated[
-        list[str] | None,
-        typer.Option(
-            "-p",
-            "--add-python-path",
-            help="extra directories to search for local packages (repeatable; ':'-separated lists allowed)",
-            metavar="DIR",
-        ),
-    ] = None,
-    include_package: Annotated[
-        list[str] | None,
-        typer.Option(
-            "--include-package",
-            help="pure-Python third-party packages to bundle (name or path)",
-            metavar="PKG",
-        ),
-    ] = None,
-    site_path: Annotated[
-        list[str] | None,
-        typer.Option(
-            "--site-path",
-            help="extra directories searched for --include-package names",
-            metavar="DIR",
-        ),
-    ] = None,
-    exclude_module: Annotated[
-        list[str] | None,
-        typer.Option(
-            "--exclude-module",
-            help="exclude modules/packages (fnmatch on dotted names; a bare name excludes its whole subtree)",
-            metavar="PAT",
-        ),
-    ] = None,
-    include_data: Annotated[
-        list[str] | None,
-        typer.Option(
-            "--include-data",
-            help="embed data files: 'PKG:GLOB', 'GLOB' (relative to the entry directory and --add-python-path roots), or an existing directory/file path",
-            metavar="SPEC",
-        ),
-    ] = None,
-    exclude_data: Annotated[
-        list[str] | None,
-        typer.Option(
-            "--exclude-data",
-            help="exclude data files (glob matched against bundle-relative paths)",
-            metavar="GLOB",
-        ),
-    ] = None,
-    main_module: Annotated[
-        str | None,
-        typer.Option(
-            "--main-module",
-            help="module inside the entry package to run as its __main__ (dotted, relative to the package; auto-detected if omitted)",
-            metavar="MOD",
-        ),
-    ] = None,
-    whole_package: Annotated[
-        bool,
-        typer.Option(
-            "--no-whole-package",
-            help="embed only statically reachable modules instead of whole packages",
-        ),
-    ] = True,
-    python: Annotated[
-        str | None,
-        typer.Option(
-            "--python",
-            help="shebang interpreter (default: the python running consolidator)",
-            metavar="INTERP",
-        ),
-    ] = None,
-    compression: Annotated[
-        str,
-        typer.Option("--compression", help="payload compression (default: deflate)"),
-    ] = "deflate",
-    keep_tmpdir: Annotated[
-        bool,
-        typer.Option("--keep-tmpdir", help="the generated bundle keeps its extraction directory"),
-    ] = False,
-    runtime_debug: Annotated[
-        bool,
-        typer.Option(
-            "--runtime-debug",
-            help="the generated bundle prints its extraction directory to stderr",
-        ),
-    ] = False,
-    strict: Annotated[bool, typer.Option("--strict", help="fail the build on unresolved imports")] = False,
-    deterministic: Annotated[
-        bool,
-        typer.Option(
-            "--no-deterministic",
-            help="embed the build date instead of a fixed timestamp",
-        ),
-    ] = True,
-    dry_run: Annotated[
-        bool,
-        typer.Option("--dry-run", help="print the consolidation plan and exit without writing"),
-    ] = False,
-    quiet: Annotated[bool, typer.Option("-q", "--quiet", help="only report errors")] = False,
-    verbose: Annotated[bool, typer.Option("-v", "--verbose", help="log more detail while building")] = False,
-    version: Annotated[
-        bool,
-        typer.Option(
-            "--version",
-            callback=_version_callback,
-            is_eager=True,
-            help="show program's version number and exit",
-        ),
-    ] = False,
-) -> None:
-    """Run the command-line interface."""
-    if exclude_data is None:
-        exclude_data = []
-    if include_data is None:
-        include_data = []
-    if exclude_module is None:
-        exclude_module = []
-    if site_path is None:
-        site_path = []
-    if include_package is None:
-        include_package = []
-    if add_python_path is None:
-        add_python_path = []
-    if compression is not None and compression not in sorted(_COMPRESSIONS):
-        msg = f"invalid choice: {compression!r} (choose from {sorted(_COMPRESSIONS)})"
-        raise typer.BadParameter(msg)
-    _STATE.update(
-        entry=entry,
-        output=output,
-        module=module,
-        add_python_path=add_python_path,
-        include_package=include_package,
-        site_path=site_path,
-        exclude_module=exclude_module,
-        include_data=include_data,
-        exclude_data=exclude_data,
-        main_module=main_module,
-        whole_package=whole_package,
-        python=python,
-        compression=compression,
-        keep_tmpdir=keep_tmpdir,
-        runtime_debug=runtime_debug,
-        strict=strict,
-        deterministic=deterministic,
-        dry_run=dry_run,
-        quiet=quiet,
-        verbose=verbose,
-    )
-    _run()
-
-
 if __name__ == "__main__":
-    app()
+    raise SystemExit(main())

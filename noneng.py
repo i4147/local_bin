@@ -8,19 +8,29 @@ other detectors are optional and provide install hints when selected.
 """
 
 from __future__ import annotations
+import argparse
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
+import importlib
 import json
 import os
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal, cast
 
 from dh import SKIP_DIRS, atomic_write
 from rich.console import Console, Group
 from rich.live import Live
 from rich.table import Table
 from rich.text import Text
-import typer
+import sys
+from loguru import logger
+
+logger.remove()
+logger.add(
+    sys.stderr,
+    level=os.environ.get("LOGURU_LEVEL", "INFO"),
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+)
 
 
 Backend = Literal["langdetect", "lingua", "pycld2", "gcld3", "py3langid", "langid"]
@@ -53,7 +63,7 @@ class LanguageDetector:
     def __init__(self, backend: Backend) -> None:
         """Initialize the selected backend, raising an install hint if absent."""
         self.backend = backend
-        self._detector: object
+        self._detector: Any
         if backend == "langdetect":
             try:
                 from langdetect import DetectorFactory, detect_langs
@@ -71,14 +81,14 @@ class LanguageDetector:
             self._detector = LanguageDetectorBuilder.from_all_languages().build()
         elif backend == "pycld2":
             try:
-                import pycld2
+                pycld2 = importlib.import_module("pycld2")
             except ImportError as exc:
                 msg = "Install this backend with: python -m pip install pycld2"
                 raise RuntimeError(msg) from exc
             self._detector = pycld2
         elif backend == "gcld3":
             try:
-                import gcld3
+                gcld3 = importlib.import_module("gcld3")
             except ImportError as exc:
                 msg = "Install this backend with: python -m pip install gcld3"
                 raise RuntimeError(msg) from exc
@@ -110,13 +120,13 @@ class LanguageDetector:
         """Classify text and return its language code and confidence if available."""
         try:
             if self.backend == "langdetect":
-                candidates = self._detector(text)  # type: ignore[operator]
+                candidates = self._detector(text)
                 if not candidates:
                     return None
                 result = candidates[0]
                 return self._result(result.lang, float(result.prob))
             if self.backend == "lingua":
-                values = self._detector.compute_language_confidence_values(text)  # type: ignore[attr-defined]
+                values = self._detector.compute_language_confidence_values(text)
                 if not values:
                     return None
                 result = values[0]
@@ -124,20 +134,20 @@ class LanguageDetector:
                 language = code.name.lower() if code is not None else result.language.iso_code_639_3.name.lower()
                 return self._result(language, float(result.value))
             if self.backend == "pycld2":
-                _reliable, _bytes_found, details = self._detector.detect(text, bestEffort=True)  # type: ignore[attr-defined]
+                _reliable, _bytes_found, details = self._detector.detect(text, bestEffort=True)
                 if not details:
                     return None
                 _name, code, percent, _score = details[0]
                 return self._result(str(code), float(percent) / 100.0)
             if self.backend == "gcld3":
-                result = self._detector.FindLanguage(text)  # type: ignore[attr-defined]
+                result = self._detector.FindLanguage(text)
                 if not result.language:
                     return None
                 return self._result(result.language, float(result.probability))
             if self.backend == "py3langid":
-                language, _score = self._detector.classify(text)  # type: ignore[attr-defined]
+                language, _score = self._detector.classify(text)
                 return self._result(str(language), None)
-            language, _score = self._detector.classify(text)  # type: ignore[attr-defined]
+            language, _score = self._detector.classify(text)
             return self._result(str(language), None)
         except Exception:
             # Optional classifiers can reject short or malformed snippets; keep scanning.
@@ -314,38 +324,75 @@ def save_report(
     )
 
 
-app = typer.Typer(add_completion=False, no_args_is_help=False)
+def _confidence_float(value: str) -> float:
+    num = float(value)
+    if not 0.0 <= num <= 1.0:
+        msg = "must be between 0.0 and 1.0"
+        raise argparse.ArgumentTypeError(msg)
+    return num
 
 
-@app.command()
-def main(
-    paths: list[Path] = typer.Argument(
-        None,
+def _positive_int(value: str) -> int:
+    num = int(value)
+    if num < 1:
+        msg = "must be >= 1"
+        raise argparse.ArgumentTypeError(msg)
+    return num
+
+
+def build_parser() -> argparse.ArgumentParser:
+    """Build the command-line argument parser."""
+    parser = argparse.ArgumentParser(description="Detect non-English lines under the given paths and save a JSON report.")
+    parser.add_argument(
+        "paths",
+        nargs="*",
+        type=Path,
         help="Files/directories to scan; defaults to the current directory recursively.",
-    ),
-    backend: Backend = typer.Option(
-        "langdetect",
+    )
+    parser.add_argument(
         "-b",
         "--backend",
-        case_sensitive=False,
+        type=str.lower,
+        choices=("langdetect", "lingua", "pycld2", "gcld3", "py3langid", "langid"),
+        default="langdetect",
         help="Language detector: langdetect, lingua, pycld2, gcld3, py3langid, or langid.",
-    ),
-    report: Path = typer.Option(Path("noneng-report.json"), "-o", "--report", help="JSON report destination."),
-    min_confidence: float = typer.Option(
-        0.80,
+    )
+    parser.add_argument(
+        "-o",
+        "--report",
+        type=Path,
+        default=Path("noneng-report.json"),
+        help="JSON report destination.",
+    )
+    parser.add_argument(
         "--min-confidence",
-        min=0.0,
-        max=1.0,
+        type=_confidence_float,
+        default=0.80,
         help="Minimum backend confidence when available.",
-    ),
-    min_letters: int = typer.Option(4, "--min-letters", min=1, help="Ignore lines with fewer alphabetic characters."),
-) -> None:
+    )
+    parser.add_argument(
+        "--min-letters",
+        type=_positive_int,
+        default=4,
+        help="Ignore lines with fewer alphabetic characters.",
+    )
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
     """Detect non-English lines under the given paths and save a JSON report."""
+    args = build_parser().parse_args(argv)
+    paths: list[Path] = args.paths
+    backend: Backend = cast(Backend, args.backend)
+    report: Path = args.report
+    min_confidence: float = args.min_confidence
+    min_letters: int = args.min_letters
+    err_console = Console(stderr=True)
     try:
         detector = LanguageDetector(backend)
     except RuntimeError as exc:
-        typer.secho(str(exc), fg=typer.colors.RED, err=True)
-        raise typer.Exit(code=2) from exc
+        err_console.print(str(exc), style="red")
+        return 2
 
     working_directory = Path.cwd().resolve()
     roots = paths or [working_directory]
@@ -353,7 +400,7 @@ def main(
     files, errors = iter_text_files(roots, report_path)
     console = Console()
     for error in errors:
-        console.print(Text(error, style="yellow"), stderr=True)
+        err_console.print(Text(error, style="yellow"))
 
     findings, line_count, unreadable, file_count = scan_files(
         files,
@@ -368,11 +415,12 @@ def main(
     try:
         save_report(report_path, backend, findings, file_count, line_count, unreadable)
     except OSError as exc:
-        console.print(f"Could not save JSON report: {exc}", style="red", stderr=True)
-        raise typer.Exit(code=1) from exc
+        err_console.print(f"Could not save JSON report: {exc}", style="red")
+        return 1
 
     console.print(f"Found {len(findings)} non-English lines in {file_count} files; report saved to {report_path.name}.")
+    return 0
 
 
 if __name__ == "__main__":
-    app()
+    raise SystemExit(main())

@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import argparse
 import ast
-from collections.abc import Callable, Iterable, Iterator
+from collections.abc import Callable, Iterable, Iterator, Sequence
 import concurrent.futures as cf
 from contextlib import nullcontext, suppress
 import dataclasses
@@ -200,12 +200,6 @@ class Stripper(cst.CSTTransformer):
 
     def visit_FunctionDef(self, node: cst.FunctionDef) -> bool | None:
         """Visit FunctionDef nodes."""
-        if self._mode.docstrings:
-            self._doc_suites.add(id(node.body))
-        return True
-
-    def visit_AsyncFunctionDef(self, node: cst.AsyncFunctionDef) -> bool | None:
-        """Visit AsyncFunctionDef nodes."""
         if self._mode.docstrings:
             self._doc_suites.add(id(node.body))
         return True

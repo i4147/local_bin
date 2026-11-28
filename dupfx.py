@@ -29,15 +29,24 @@ Command-line script: run ``python dupfx.py`` or the ``dupfx`` command. The modul
 
 from __future__ import annotations
 
+import argparse
 from collections import defaultdict
 from enum import StrEnum
 from multiprocessing import Pool
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Any
 
 from loguru import logger
-import typer
 from xxhash import xxh64
+import os
+import sys
+
+logger.remove()
+logger.add(
+    sys.stderr,
+    level=os.environ.get("LOGURU_LEVEL", "INFO"),
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+)
 
 
 class Keep(StrEnum):
@@ -53,7 +62,7 @@ CHUNK_SIZE: int = 65536
 POOL_WORKERS: int = 8
 
 
-def file_stat_key(p: Any) -> None:
+def file_stat_key(p: Path) -> tuple[int, int] | None:
     try:
         st = p.stat()
         return (st.st_ino, st.st_dev)
@@ -136,43 +145,58 @@ def choose_keep(files: list[Path], policy: str = "oldest"):
         return min(files, key=str)
 
 
-app = typer.Typer(
-    add_completion=False,
-    context_settings={"help_option_names": ["-h", "--help"]},
-    pretty_exceptions_show_locals=False,
-)
+def build_parser() -> argparse.ArgumentParser:
+    """Build the command-line argument parser."""
+    parser = argparse.ArgumentParser(description="Find and delete duplicate files by content.")
+    parser.add_argument(
+        "--recursive",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Search directories recursively (default: True).",
+    )
+    parser.add_argument(
+        "-r",
+        "--remove",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Actually delete duplicate files. Without this flag, only report them.",
+    )
+    parser.add_argument(
+        "-a",
+        "--all",
+        action="store_true",
+        help="Include .git directories in the search (symlinks are still skipped).",
+    )
+    parser.add_argument(
+        "-n",
+        "--dry-run",
+        action="store_true",
+        help="Don't delete; just show what would be done.",
+    )
+    parser.add_argument(
+        "--follow-symlinks",
+        action="store_true",
+        help="Follow symlinks to files.",
+    )
+    parser.add_argument(
+        "-k",
+        "--keep",
+        choices=[k.value for k in Keep],
+        default=Keep.oldest.value,
+        help="Which file to keep within duplicates.",
+    )
+    return parser
 
 
-@app.command(help="Find and delete duplicate files by content.")
-def main(
-    recursive: Annotated[
-        bool,
-        typer.Option("--recursive", help="Search directories recursively (default: True)."),
-    ] = True,
-    remove: Annotated[
-        bool,
-        typer.Option(
-            "-r",
-            "--remove",
-            help="Actually delete duplicate files. Without this flag, only report them.",
-        ),
-    ] = True,
-    all: Annotated[
-        bool,
-        typer.Option(
-            "-a",
-            "--all",
-            help="Include .git directories in the search (symlinks are still skipped).",
-        ),
-    ] = False,
-    dry_run: Annotated[
-        bool,
-        typer.Option("-n", "--dry-run", help="Don't delete; just show what would be done."),
-    ] = False,
-    follow_symlinks: Annotated[bool, typer.Option("--follow-symlinks", help="Follow symlinks to files.")] = False,
-    keep: Annotated[Keep, typer.Option("-k", "--keep", help="Which file to keep within duplicates.")] = Keep.oldest,
-) -> None:
+def main(argv: list[str] | None = None) -> None:
     "Run the command-line interface."
+    args = build_parser().parse_args(argv)
+    recursive: bool = args.recursive
+    remove: bool = args.remove
+    all: bool = args.all
+    dry_run: bool = args.dry_run
+    follow_symlinks: bool = args.follow_symlinks
+    keep: Keep = Keep(args.keep)
     cwd = Path.cwd()
     root = Path.cwd()
     print("Phase 1: Scanning files and grouping by size...")
@@ -217,7 +241,7 @@ def main(
     full_candidates = sum(len(g) for g in need_full)
     print(f"Phase 2 complete: {full_candidates} files in {len(need_full)} groups need full hash.")
     print("Phase 3: Full hash comparison...")
-    full_groups = defaultdict(list)
+    full_groups: defaultdict[str, list[tuple[Path, tuple[int, int] | None]]] = defaultdict(list)
     with Pool(processes=POOL_WORKERS) as pool:
         futures2 = []
         for group in need_full:
@@ -232,11 +256,11 @@ def main(
             except Exception as e:
                 logger.warning(f"Skipping {fpath}: {e}")
     print("Phase 4: Processing results...")
-    to_delete = []
+    to_delete: list[Path] = []
     for entries in full_groups.values():
         if len(entries) < 2:
             continue
-        inode_map = defaultdict(list)
+        inode_map: defaultdict[tuple[int, int] | None, list[Path]] = defaultdict(list)
         for p_path, stk in entries:
             inode_map[stk].append(p_path)
         group_reps = [min(ps, key=str) for ps in inode_map.values()]
@@ -295,4 +319,4 @@ def main(
 
 
 if __name__ == "__main__":
-    app()
+    main()

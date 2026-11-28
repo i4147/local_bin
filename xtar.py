@@ -2,7 +2,8 @@
 "Extract supported archives; originals are removed after successful extraction."
 
 from __future__ import annotations
-from collections.abc import Iterator
+import argparse
+from collections.abc import Generator, Iterator
 from contextlib import contextmanager
 import gzip
 import io
@@ -13,49 +14,26 @@ import shutil
 import sys
 import tarfile
 from types import SimpleNamespace
-from typing import TYPE_CHECKING, Annotated, Any, BinaryIO, NoReturn
+from typing import IO, TYPE_CHECKING, Annotated, Any, BinaryIO, Literal, NoReturn
 import zipfile
 
-import click
 import lz4.block
 import lz4.frame
 import py7zr
-import typer
 import zstandard
+import os
+from loguru import logger
+
+logger.remove()
+logger.add(
+    sys.stderr,
+    level=os.environ.get("LOGURU_LEVEL", "INFO"),
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+)
 
 
 if TYPE_CHECKING:
     import argparse
-
-
-_STATE: dict[str, object] = {}
-
-
-class _Args(SimpleNamespace):
-    """argparse.Namespace look-alike: unknown attributes read as None."""
-
-    def __getattr__(self, name: str) -> None:
-        if name.startswith("__"):
-            raise AttributeError(name)
-
-
-class _ParserShim:
-    """Stand-in for the removed argparse parser; hands back what Typer parsed."""
-
-    def parse_args(self, args: list[Any] | None = None, namespace: Any = None) -> _Args:
-        "Parse args."
-        return _Args(**_STATE)
-
-    def error(self, message: str) -> NoReturn:
-        raise typer.BadParameter(message)
-
-    def print_help(self, file: Path | None = None) -> None:
-        "Print help."
-        typer.echo(click.get_current_context().get_help(), file=file)
-
-    def print_usage(self, file: Path | None = None) -> None:
-        "Print usage."
-        typer.echo(click.get_current_context().get_usage(), file=file)
 
 
 try:
@@ -84,7 +62,7 @@ SUFFIX_TYPES: tuple[tuple[str, str], ...] = (
     (".7z", "7z"),
 )
 SUPPORTED_EXTENSIONS: set[str] = {suffix for suffix, _ in SUFFIX_TYPES}
-TARFILE_MODES: dict[str, str] = {
+TARFILE_MODES: dict[str, Literal["r:", "r:gz", "r:xz", "r:bz2"]] = {
     "tar": "r:",
     "gz": "r:gz",
     "xz": "r:xz",
@@ -177,7 +155,7 @@ def zstd_reader(source: BinaryIO) -> BinaryIO:
 
 
 @contextmanager
-def decompression_stream(path: Path, compression_type: str) -> Iterator[BinaryIO]:
+def decompression_stream(path: Path, compression_type: str) -> Generator[Any]:
     """Yield decompression stream from the supplied input."""
     backend: str | None = STREAM_BACKENDS.get(compression_type)
     if backend is None:
@@ -189,10 +167,7 @@ def decompression_stream(path: Path, compression_type: str) -> Iterator[BinaryIO
         return
     source: BinaryIO = open(path, "rb")
     try:
-        if backend == "zstd":
-            reader: BinaryIO = zstd_reader(source)
-        else:
-            reader = BrotliStreamReader(source)
+        reader: Any = zstd_reader(source) if backend == "zstd" else BrotliStreamReader(source)
         try:
             yield reader
         finally:
@@ -202,9 +177,9 @@ def decompression_stream(path: Path, compression_type: str) -> Iterator[BinaryIO
 
 
 @contextmanager
-def open_tar(path: Path, compression_type: str) -> Iterator[tarfile.TarFile]:
+def open_tar(path: Path, compression_type: str) -> Generator[tarfile.TarFile]:
     "Open tar."
-    mode: str | None = TARFILE_MODES.get(compression_type)
+    mode = TARFILE_MODES.get(compression_type)
     if mode is not None:
         with tarfile.open(path, mode) as tar:
             yield tar
@@ -305,7 +280,7 @@ def extract_archive(archive_path: Path) -> bool:
         else:
             with open_tar(archive_path, compression_type) as tar:
                 tar.extractall(path=extract_dir, filter="data")
-                names = [member.name for member in tar.members if member.isfile()]
+                names = [member.name for member in tar.getmembers() if member.isfile()]
         archive_path.unlink(missing_ok=True)
         print(f"Successfully extracted and removed: {archive_path.name}")
     except ARCHIVE_ERRORS as e:
@@ -321,9 +296,15 @@ def find_archives(directory: str = ".") -> list[Path]:
     return scan_archives(Path(directory))
 
 
+def _build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description='Extract supported archives; originals are removed after successful extraction.')
+    parser.add_argument('archives', nargs="*", type=Path, help='archive files to extract; defaults to a recursive scan of the current directory')
+    return parser
+
+
 def main() -> None:
     "Run the command-line interface."
-    parser = _ParserShim()
+    parser = _build_parser()
     args: argparse.Namespace = parser.parse_args()
     archives: list[Path]
     if args.archives:
@@ -345,30 +326,5 @@ def main() -> None:
     print("-" * 40)
     print(f"Summary: {successful} successful, {failed} failed/skipped")
 
-
-def _run() -> None:
-    raise SystemExit(main())
-
-
-app = typer.Typer(
-    add_completion=False,
-    context_settings={"help_option_names": ["-h", "--help"]},
-    pretty_exceptions_show_locals=False,
-)
-
-
-@app.command(help="Extract supported archives; originals are removed after successful extraction.")
-def cli(
-    archives: Annotated[
-        list[Path] | None,
-        typer.Argument(help="archive files to extract; defaults to a recursive scan of the current directory"),
-    ] = None,
-) -> None:
-    """Run the command-line interface."""
-    archives = archives or []
-    _STATE.update(archives=archives)
-    _run()
-
-
 if __name__ == "__main__":
-    app()
+    raise SystemExit(main())

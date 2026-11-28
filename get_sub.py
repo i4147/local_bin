@@ -17,50 +17,27 @@ import sys
 import tempfile
 from traceback import format_exc
 from types import SimpleNamespace
-from typing import TYPE_CHECKING, Annotated, Any, NoReturn
-from urllib.parse import urljoin
+from typing import IO, TYPE_CHECKING, Annotated, Any, NoReturn
+from urllib.parse import quote, urljoin
 import zipfile
 
-from bs4 import BeautifulSoup
-import click
+from bs4 import BeautifulSoup, Tag
 from guessit import guessit
 import rarfile
 import requests
 from requests import exceptions
-from requests.utils import quote
-import typer
 
 
-if TYPE_CHECKING:
-    import argparse
-_STATE: dict[str, object] = {}
+import argparse
+from loguru import logger
 
+logger.remove()
+logger.add(
+    sys.stderr,
+    level=os.environ.get("LOGURU_LEVEL", "INFO"),
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+)
 
-class _Args(SimpleNamespace):
-    """argparse.Namespace look-alike: unknown attributes read as None."""
-
-    def __getattr__(self, name: str) -> None:
-        if name.startswith("__"):
-            raise AttributeError(name)
-
-
-class _ParserShim:
-    """Stand-in for the removed argparse parser; hands back what Typer parsed."""
-
-    def parse_args(self, args: list[Any] | None = None, namespace: Any = None) -> _Args:
-        "Parse args."
-        return _Args(**_STATE)
-
-    def error(self, message: str) -> NoReturn:
-        raise typer.BadParameter(message)
-
-    def print_help(self, file: Path | None = None) -> None:
-        "Print help."
-        typer.echo(click.get_current_context().get_help(), file=file)
-
-    def print_usage(self, file: Path | None = None) -> None:
-        "Print usage."
-        typer.echo(click.get_current_context().get_usage(), file=file)
 
 
 __version__: str = "0.0.0"
@@ -114,6 +91,7 @@ class ProgressBar:
         self.title: str = title
         self.total: int = total
         self.prefix_info: str = prefix_info
+        self._wait_dots: int = 0
 
     def refresh(self, cur_len: int) -> None:
         terminal_width: int = get_terminal_size().columns
@@ -123,6 +101,12 @@ class ProgressBar:
             info = f"{self.prefix_info} '{self.title}'...  {cur_len / self.total * 100:.2f}%"
         end_str: str = "\r" if cur_len < self.total else "\n"
         print(info, end=end_str)
+
+    def point_wait(self, end: bool = False) -> None:
+        self._wait_dots = (self._wait_dots % 3) + 1
+        dots = "." * self._wait_dots
+        end_str = "\n" if end else "\r"
+        print(f"{self.prefix_info} '{self.title}'{dots}", end=end_str)
 
 
 def num_to_cn(number: str) -> str:
@@ -360,7 +344,7 @@ class P7ZIP:
 
     def namelist(self) -> list[str]:
         with tempfile.TemporaryDirectory() as tmp_dir:
-            file_path: str = Path(tmp_dir).joinpath("archive.7z")
+            file_path: str = str(Path(tmp_dir).joinpath("archive.7z"))
             with open(file_path, "wb") as f:
                 f.write(self.data)
             cmd: str = "7z l " + file_path
@@ -372,7 +356,7 @@ class P7ZIP:
 
     def read(self, name: str) -> bytes:
         with tempfile.TemporaryDirectory() as tmp_dir:
-            file_path: str = Path(tmp_dir).joinpath("archive.7z")
+            file_path: str = str(Path(tmp_dir).joinpath("archive.7z"))
             with open(file_path, "wb") as f:
                 f.write(self.data)
             cmd_lists: list[str] = ["7z", "e", file_path, "-o" + tmp_dir, name]
@@ -380,7 +364,7 @@ class P7ZIP:
             _output, err, status = run_command(cmd)
             if status != 0:
                 raise ValueError(err)
-            sub_file_path: str = Path(tmp_dir).joinpath(Path(name).name)
+            sub_file_path: str = str(Path(tmp_dir).joinpath(Path(name).name))
             with open(sub_file_path, "rb") as f:
                 sub_data: bytes = f.read()
         return sub_data
@@ -393,7 +377,7 @@ class Video:
         sub_types: list[str] = [identifier + sub_type for sub_type in SUB_FORMATS]
         return any(Path(Path(store_path).joinpath(video_name + sub_type)).exists() for sub_type in sub_types)
 
-    def __init__(self, video_path: str, sub_store_path: str = "", identifier: str = "") -> None:
+    def __init__(self, video_path: str | Path, sub_store_path: str = "", identifier: str = "") -> None:
         "Initialize the instance state from the supplied arguments."
         self.name: str
         self.type: str
@@ -401,8 +385,8 @@ class Video:
             str(Path(Path(video_path).name).with_suffix("")),
             Path(Path(video_path).name).suffix,
         )
-        self.path: str = Path(Path(video_path).parent).absolute()
-        self.sub_store_path: str = Path(sub_store_path).absolute() if sub_store_path else self.path
+        self.path: str = str(Path(Path(video_path).parent).absolute())
+        self.sub_store_path: str = str(Path(sub_store_path).absolute()) if sub_store_path else self.path
         self.sub_identifier: str = identifier
         self.has_subtitle: bool = Video.sub_exists(self.name, self.sub_store_path, self.sub_identifier)
         self.extracted_name: str = extract_name(self.name)
@@ -414,12 +398,14 @@ class Video:
             return
         for one_sub_type in SUB_FORMATS:
             delete_name: str = self.name + self.sub_identifier + one_sub_type
-            delete_file: str = Path(self.sub_store_path).joinpath(delete_name)
+            delete_file: str = str(Path(self.sub_store_path).joinpath(delete_name))
             if Path(delete_file).exists():
                 os.remove(delete_file)
 
 
 class Downloader:
+    name: str = ""
+    choice_prefix: str = ""
     header: dict[str, str] = {
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_5) AppleWebKit 537.36 (KHTML, like Gecko) Chrome",
         "Accept-Language": "zh-CN,zh;q=0.8",
@@ -495,17 +481,24 @@ class ZimukuDownloader(Downloader):
         def _get_archive_dowload_link(sub_page_link: str) -> str:
             r = session.get(sub_page_link)
             bs_obj = BeautifulSoup(r.text, "html.parser")
-            down_page_link: str = bs_obj.find("a", {"id": "down1"}).attrs["href"]
+            down_tag = bs_obj.find("a", {"id": "down1"})
+            assert isinstance(down_tag, Tag)
+            down_page_link: str = str(down_tag.attrs["href"])
             down_page_link = urljoin(ZimukuDownloader.site_url, down_page_link)
             r = session.get(down_page_link)
             bs_obj = BeautifulSoup(r.text, "html.parser")
-            download_link: str = bs_obj.find("a", {"rel": "nofollow"}).attrs["href"]
+            dl_tag = bs_obj.find("a", {"rel": "nofollow"})
+            assert isinstance(dl_tag, Tag)
+            download_link: str = str(dl_tag.attrs["href"])
             download_link = urljoin(ZimukuDownloader.site_url, download_link)
             return download_link
 
         r = session.get(link)
         bs_obj = BeautifulSoup(r.text, "html.parser")
-        subs_body = bs_obj.find("div", class_="subs box clearfix").find("tbody")
+        subs_div = bs_obj.find("div", class_="subs box clearfix")
+        assert isinstance(subs_div, Tag)
+        subs_body = subs_div.find("tbody")
+        assert isinstance(subs_body, Tag)
         subs: dict[str, Any] = {}
         for sub in subs_body.find_all("tr"):
             a = sub.find("a")
@@ -539,7 +532,10 @@ class ZimukuDownloader(Downloader):
         sub: dict[str, Any] = {}
         r = session.get(link)
         bs_obj = BeautifulSoup(r.text, "html.parser")
-        lang_box = bs_obj.find("ul", {"class": "subinfo"}).find("li")
+        subinfo = bs_obj.find("ul", {"class": "subinfo"})
+        assert isinstance(subinfo, Tag)
+        lang_box = subinfo.find("li")
+        assert isinstance(lang_box, Tag)
         type_score: int = 0
         text: str = lang_box.text
         if "英" in text:
@@ -550,7 +546,9 @@ class ZimukuDownloader(Downloader):
             type_score += 4
         elif "双语" in text:
             type_score += 8
-        download_link: str = bs_obj.find("a", {"id": "down1"}).attrs["href"]
+        down1 = bs_obj.find("a", {"id": "down1"})
+        assert isinstance(down1, Tag)
+        download_link: str = str(down1.attrs["href"])
         backup_session: requests.Session = copy.deepcopy(session)
         backup_session.headers["Referer"] = link
         sub[ZimukuDownloader.choice_prefix + title] = {
@@ -589,7 +587,10 @@ class ZimukuDownloader(Downloader):
                     if info_dict["type"] == "episode":
                         title: str = title_a.text
                         try:
-                            season_cn1: str = re.search("第(.*)季", title).group(1).strip()
+                            m_season = re.search("第(.*)季", title)
+                            if m_season is None:
+                                raise AttributeError
+                            season_cn1: str = m_season.group(1).strip()
                         except AttributeError:
                             sample_title: str = item.find("td", class_="first").find("a").get("title")
                             sample_dict: dict[str, Any] = guessit(extract_name(sample_title, en=True))
@@ -625,14 +626,14 @@ class ZimukuDownloader(Downloader):
     def download_file(
         self,
         file_name: str,
-        download_link: str,
+        sub_url: str,
         session: requests.Session | None = None,
     ) -> tuple[str | None, bytes | None, str]:
         "Download file."
         try:
             if not session:
                 session = requests.session()
-            with closing(session.get(download_link, stream=True)) as response:
+            with closing(session.get(sub_url, stream=True)) as response:
                 filename: str = response.headers["Content-Disposition"]
                 chunk_size: int = 1024
                 content_size: int = int(response.headers["content-length"])
@@ -679,7 +680,9 @@ class ZimuzuDownloader(Downloader):
                 timeout=10,
             )
             bs_obj = BeautifulSoup(r.text, "html.parser")
-            tab_text: str = bs_obj.find("div", {"class": "article-tab"}).text
+            tab = bs_obj.find("div", {"class": "article-tab"})
+            assert isinstance(tab, Tag)
+            tab_text: str = tab.text
             if "字幕(0)" not in tab_text:
                 for one_box in bs_obj.find_all("div", {"class": "search-item"}):
                     sub_name: str = (
@@ -723,8 +726,11 @@ class ZimuzuDownloader(Downloader):
         header: dict[str, str] = Downloader.header.copy()
         r = s.get(sub_url, headers=Downloader.header)
         bs_obj = BeautifulSoup(r.text, "html.parser")
-        a = bs_obj.find("div", {"class": "subtitle-links"}).a
-        download_link: str = a.attrs["href"]
+        links_div = bs_obj.find("div", {"class": "subtitle-links"})
+        assert isinstance(links_div, Tag)
+        a = links_div.a
+        assert isinstance(a, Tag)
+        download_link: str = str(a.attrs["href"])
         header["Referer"] = download_link
         ajax_url: str = "http://got002.com/api/v1/static/subtitle/detail?"
         ajax_url += download_link.rsplit("?", maxsplit=1)[-1]
@@ -938,7 +944,7 @@ class GetSubtitles:
         video.delete_existed_subtitles()
         for one_sub, one_sub_type in extract_subs:
             sub_new_name: str = video.name + video.sub_identifier + one_sub_type
-            extract_path: str = Path(video.sub_store_path).joinpath(sub_new_name)
+            extract_path: str = str(Path(video.sub_store_path).joinpath(sub_new_name))
             with open(extract_path, "wb") as sub:
                 file_handler = sub_lists_dict[one_sub]
                 sub.write(file_handler.read(one_sub))
@@ -948,7 +954,7 @@ class GetSubtitles:
         "Process subtitle."
         video.delete_existed_subtitles()
         sub_name: str = video.name + video.sub_identifier + datatype
-        extract_path: str = Path(video.sub_store_path).joinpath(sub_name)
+        extract_path: str = str(Path(video.sub_store_path).joinpath(sub_name))
         with open(extract_path, "wb") as sub:
             sub.write(sub_data)
         extract_subs: list[list[str]] = [[sub_name, datatype]]
@@ -991,7 +997,7 @@ class GetSubtitles:
             except UnicodeDecodeError:
                 print("\nExtracted:".encode("gbk"), extract_sub_name.encode("gbk"))
         if self.more and datatype in ARCHIVE_TYPES:
-            archive_path: str = Path(video.sub_store_path).joinpath(chosen_sub + datatype)
+            archive_path: str = str(Path(video.sub_store_path).joinpath(chosen_sub + datatype))
             with open(archive_path, "wb") as f:
                 assert data is not None
                 f.write(data)
@@ -1083,10 +1089,26 @@ class GetSubtitles:
         }
 
 
+def _build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description='download subtitles easily')
+    parser.add_argument('name', help="the video's name or full path or a dir with videos")
+    parser.add_argument('-p', '--directory', default='', help='set specified subtitle download path')
+    parser.add_argument('-q', '--query', action="store_true", default=False, help='show search results and choose one to download')
+    parser.add_argument('-s', '--single', action="store_true", default=False, help='show subtitles in the compacted file and choose one to download')
+    parser.add_argument('-o', '--over', action="store_true", default=False, help='replace the subtitle already exists')
+    parser.add_argument('-m', '--more', action="store_true", default=False, help='save original download file.')
+    parser.add_argument('-n', '--number', default=None, help='set max number of subtitles to be choosen when in query mode')
+    parser.add_argument('-b', '--both', action="store_true", default=False, help='save .srt and .ass subtitles at the same time if two types exist in the same archive')
+    parser.add_argument('-d', '--downloader', default=None, help='choose downloader from ' + ', '.join(DownloaderManager.downloader_names))
+    parser.add_argument('--debug', action="store_true", default=False, help='show more info of the error')
+    parser.add_argument('--plex', action="store_true", default=False, help="add .zh to the subtitle's name for plex to recognize")
+    return parser
+
+
 def main() -> None:
     "Run the command-line interface."
-    arg_parser = _ParserShim()
-    args: argparse.Namespace = arg_parser.parse_args()
+    arg_parser = _build_parser()
+    args = arg_parser.parse_args()
     if args.over:
         print("\nThe script will replace the old subtitles if exist...\n")
     GetSubtitles(
@@ -1103,85 +1125,5 @@ def main() -> None:
         sub_path=args.directory,
     ).start()
 
-
-def _run() -> None:
-    raise SystemExit(main())
-
-
-app = typer.Typer(
-    add_completion=False,
-    context_settings={"help_option_names": ["-h", "--help"]},
-    pretty_exceptions_show_locals=False,
-)
-
-
-@app.command(help="download subtitles easily")
-def cli(
-    name: Annotated[str, typer.Argument(help="the video's name or full path or a dir with videos")],
-    directory: Annotated[
-        str,
-        typer.Option("-p", "--directory", help="set specified subtitle download path"),
-    ] = "",
-    query: Annotated[
-        bool,
-        typer.Option("-q", "--query", help="show search results and choose one to download"),
-    ] = False,
-    single: Annotated[
-        bool,
-        typer.Option(
-            "-s",
-            "--single",
-            help="show subtitles in the compacted file and choose one to download",
-        ),
-    ] = False,
-    over: Annotated[bool, typer.Option("-o", "--over", help="replace the subtitle already exists")] = False,
-    more: Annotated[bool, typer.Option("-m", "--more", help="save original download file.")] = False,
-    number: Annotated[
-        str | None,
-        typer.Option(
-            "-n",
-            "--number",
-            help="set max number of subtitles to be choosen when in query mode",
-        ),
-    ] = None,
-    both: Annotated[
-        bool,
-        typer.Option(
-            "-b",
-            "--both",
-            help="save .srt and .ass subtitles at the same time if two types exist in the same archive",
-        ),
-    ] = False,
-    downloader: Annotated[
-        str | None,
-        typer.Option(
-            "-d",
-            "--downloader",
-            help="choose downloader from " + ", ".join(DownloaderManager.downloader_names),
-        ),
-    ] = None,
-    debug: Annotated[bool, typer.Option("--debug", help="show more info of the error")] = False,
-    plex: Annotated[
-        bool,
-        typer.Option("--plex", help="add .zh to the subtitle's name for plex to recognize"),
-    ] = False,
-) -> None:
-    """Run the command-line interface."""
-    _STATE.update(
-        name=name,
-        directory=directory,
-        query=query,
-        single=single,
-        over=over,
-        more=more,
-        number=number,
-        both=both,
-        downloader=downloader,
-        debug=debug,
-        plex=plex,
-    )
-    _run()
-
-
 if __name__ == "__main__":
-    app()
+    raise SystemExit(main())

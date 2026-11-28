@@ -49,7 +49,7 @@ CLI examples (state defaults to ~/.sortplan):
 
 from __future__ import annotations
 import argparse
-from collections.abc import Callable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Generator, Iterator, Mapping, Sequence
 import contextlib
 import datetime as dt
 from enum import StrEnum
@@ -67,49 +67,18 @@ import tempfile
 import time
 import tomllib
 from types import SimpleNamespace
-from typing import Annotated, Any, NoReturn
+from typing import IO, Annotated, Any, NoReturn
 import uuid
 import xml.etree.ElementTree as ET
 import zipfile
+from loguru import logger
 
-import click
-import typer
-
-
-class By(StrEnum):
-    "Enumerate the supported By values."
-
-    content = "content"
-
-
-_STATE: dict[str, object] = {}
-
-
-class _Args(SimpleNamespace):
-    """argparse.Namespace look-alike: unknown attributes read as None."""
-
-    def __getattr__(self, name: str) -> None:
-        if name.startswith("__"):
-            raise AttributeError(name)
-
-
-class _ParserShim:
-    """Stand-in for the removed argparse parser; hands back what Typer parsed."""
-
-    def parse_args(self, args: list[Any] | None = None, namespace: Any = None) -> _Args:
-        "Parse args."
-        return _Args(**_STATE)
-
-    def error(self, message: str) -> NoReturn:
-        raise typer.BadParameter(message)
-
-    def print_help(self, file: Path | None = None) -> None:
-        "Print help."
-        typer.echo(click.get_current_context().get_help(), file=file)
-
-    def print_usage(self, file: Path | None = None) -> None:
-        "Print usage."
-        typer.echo(click.get_current_context().get_usage(), file=file)
+logger.remove()
+logger.add(
+    sys.stderr,
+    level=os.environ.get("LOGURU_LEVEL", "INFO"),
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+)
 
 
 VERSION: int = 1
@@ -1120,7 +1089,7 @@ def _undo_plan_unlocked(plan_id: str, *, state: str | Path = DEFAULT_STATE) -> d
 
 
 @contextlib.contextmanager
-def operation_lock(state: Path, plan_id: str) -> Iterator[None]:
+def operation_lock(state: Path, plan_id: str) -> Generator[None]:
     """Prevent simultaneous apply/undo of one plan on POSIX/Termux."""
     import fcntl
 
@@ -1196,7 +1165,7 @@ def print_plan(plan: Mapping[str, Any]) -> None:
 
 def make_parser() -> argparse.ArgumentParser:
     """Construct the CLI parser."""
-    parser = _ParserShim()
+    parser = argparse.ArgumentParser()
 
     def state_arg(p: argparse.ArgumentParser) -> None:
         p.add_argument(
@@ -1206,7 +1175,6 @@ def make_parser() -> argparse.ArgumentParser:
         )
 
     def scan_args(p: argparse.ArgumentParser) -> None:
-        "Scan args."
         p.add_argument("--config", help="TOML config")
         p.add_argument(
             "--recursive",
@@ -1228,9 +1196,27 @@ def make_parser() -> argparse.ArgumentParser:
         p.add_argument("--json", action="store_true", help="print machine-readable result")
         state_arg(p)
 
-    scan_args(p)
-    scan_args(p)
-    state_arg(p)
+    subparsers = parser.add_subparsers(dest="command")
+    sub_0 = subparsers.add_parser("plan", help="create a persistent dry-run plan")
+    sub_0.add_argument("root", nargs="?", default=None, help="scan root; overrides general.root")
+    scan_args(sub_0)
+    sub_1 = subparsers.add_parser("dedupe", help="plan duplicate quarantine (does not move anything)")
+    sub_1.add_argument("root", nargs="?", default=None, help="scan root; overrides general.root")
+    sub_1.add_argument("--by", choices=["content"], default="content")
+    scan_args(sub_1)
+    sub_2 = subparsers.add_parser("apply", help="execute a plan with a durable undo journal")
+    sub_2.add_argument("--plan", required=True)
+    sub_2.add_argument("--yes", action="store_true", default=False, help="required confirmation")
+    sub_3 = subparsers.add_parser("undo", help="undo a journal")
+    sub_3.add_argument("--last", action="store_true", default=False)
+    sub_3.add_argument("--plan-id", default=None)
+    sub_3.add_argument("--json", action="store_true", default=False)
+    state_arg(sub_3)
+    sub_4 = subparsers.add_parser("explain", help="explain a rule match for an existing file")
+    sub_4.add_argument("file")
+    sub_4.add_argument("--config", required=True)
+    sub_4.add_argument("--max-inspect-ms", type=int, default=200)
+    sub_4.add_argument("--json", action="store_true", default=False)
     return parser
 
 
@@ -1284,90 +1270,5 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 2
     return 2
 
-
-def _run() -> None:
-    raise SystemExit(main())
-
-
-app = typer.Typer(
-    add_completion=False,
-    context_settings={"help_option_names": ["-h", "--help"]},
-    pretty_exceptions_show_locals=False,
-)
-
-
-@app.command("plan", help="create a persistent dry-run plan")
-def cmd_plan(
-    root: Annotated[str | None, typer.Argument(help="scan root; overrides general.root")] = None,
-) -> None:
-    """Run the plan subcommand."""
-    _STATE.update(root=root, command="plan")
-    _run()
-
-
-@app.command("dedupe", help="plan duplicate quarantine (does not move anything)")
-def cmd_dedupe(
-    root: Annotated[str | None, typer.Argument(help="scan root; overrides general.root")] = None,
-    by: Annotated[By, typer.Option("--by")] = By.content,
-) -> None:
-    """Run the dedupe subcommand."""
-    _STATE.update(root=root, by=by, command="dedupe")
-    _run()
-
-
-@app.command("apply", help="execute a plan with a durable undo journal")
-def cmd_apply(
-    plan: Annotated[str, typer.Option("--plan")],
-    yes: Annotated[bool, typer.Option("--yes", help="required confirmation")] = False,
-) -> None:
-    """Run the apply subcommand."""
-    _STATE.update(plan=plan, yes=yes, command="apply")
-    _run()
-
-
-@app.command("undo", help="undo a journal")
-def cmd_undo(
-    last: Annotated[bool, typer.Option("--last")] = False,
-    plan_id: Annotated[str | None, typer.Option("--plan-id")] = None,
-    json: Annotated[bool, typer.Option("--json")] = False,
-) -> None:
-    """Run the undo subcommand."""
-    if (
-        sum((
-            bool(last),
-            plan_id is not None,
-        ))
-        > 1
-    ):
-        msg = "--last, --plan-id are mutually exclusive"
-        raise typer.BadParameter(msg)
-    if not any((
-        bool(last),
-        plan_id is not None,
-    )):
-        msg = "one of --last, --plan-id is required"
-        raise typer.BadParameter(msg)
-    _STATE.update(last=last, plan_id=plan_id, json=json, command="undo")
-    _run()
-
-
-@app.command("explain", help="explain a rule match for an existing file")
-def cmd_explain(
-    file: Annotated[str, typer.Argument()],
-    config: Annotated[str, typer.Option("--config")],
-    max_inspect_ms: Annotated[int, typer.Option("--max-inspect-ms")] = 200,
-    json: Annotated[bool, typer.Option("--json")] = False,
-) -> None:
-    """Run the explain subcommand."""
-    _STATE.update(
-        file=file,
-        config=config,
-        max_inspect_ms=max_inspect_ms,
-        json=json,
-        command="explain",
-    )
-    _run()
-
-
 if __name__ == "__main__":
-    app()
+    raise SystemExit(main())

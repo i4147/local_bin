@@ -5,6 +5,7 @@ CLI entry point; runs the three tools over files or directories using a thread
 pool."""
 
 from __future__ import annotations
+import argparse
 
 from collections.abc import Iterable
 import contextlib
@@ -20,7 +21,7 @@ from subprocess import run
 import sys
 import tempfile
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from autoflake import fix_code
 from black import DEFAULT_LINE_LENGTH, FileMode, NothingChanged, format_file_contents
@@ -36,9 +37,6 @@ from rich.progress import (
     TextColumn,
 )
 from rich.table import Table
-import typer
-
-
 try:
     from black import TargetVersion
 
@@ -57,15 +55,21 @@ try:
     import pathspec as _pathspec
 except ImportError:
     _pathspec = None
-try:
+if TYPE_CHECKING:
     from watchdog.events import FileSystemEventHandler
     from watchdog.observers import Observer
 
-    _HAS_WATCHDOG = True
-except ImportError:
-    Observer = None
-    FileSystemEventHandler = object
-    _HAS_WATCHDOG = False
+    _HAS_WATCHDOG: bool = True
+else:
+    try:
+        from watchdog.events import FileSystemEventHandler
+        from watchdog.observers import Observer
+
+        _HAS_WATCHDOG = True
+    except ImportError:
+        Observer = None
+        FileSystemEventHandler = object
+        _HAS_WATCHDOG = False
 TARGET_VERSIONS: dict[str, Any] = {}
 if _HAS_TARGET_VERSION:
     for _name in (
@@ -83,7 +87,7 @@ if _HAS_TARGET_VERSION:
     ):
         if hasattr(TargetVersion, _name):
             TARGET_VERSIONS[_name.lower()] = getattr(TargetVersion, _name)
-PROFILES: dict[str, dict[str, bool]] = {
+PROFILES: dict[str, dict[str, Any]] = {
     "default": {},
     "strict": {
         "line_length": 88,
@@ -187,18 +191,15 @@ def _has_fmt_off(source: str) -> bool:
     return "# fmt: off" in source or "# yapf: disable" in source
 
 
-def _build_file_mode(config: dict[str, Any]):
-    kwargs = {
-        "line_length": config.line_length,
-        "is_pyi": False,
-        "string_normalization": config.string_normalization,
-        "magic_trailing_comma": config.magic_trailing_comma,
-    }
-    if config.target_version:
-        tv = TARGET_VERSIONS.get(config.target_version)
-        if tv is not None:
-            kwargs["target_versions"] = {tv}
-    return FileMode(**kwargs)
+def _build_file_mode(config: Config):
+    tv = TARGET_VERSIONS.get(config.target_version) if config.target_version else None
+    return FileMode(
+        line_length=config.line_length,
+        is_pyi=False,
+        string_normalization=config.string_normalization,
+        magic_trailing_comma=config.magic_trailing_comma,
+        target_versions={tv} if tv is not None else set(),
+    )
 
 
 def remove_duplicate_cells(cells: Iterable[Any]):
@@ -239,7 +240,7 @@ def remove_magics(source: str) -> str:
     return "\n".join(lines)
 
 
-def clean_python_code(source: str, config: dict[str, Any], is_notebook_cell: bool = False) -> str:
+def clean_python_code(source: str, config: Config, is_notebook_cell: bool = False) -> str:
     """Clean python code."""
     if config.respect_fmt_off and _has_fmt_off(source):
         return source
@@ -283,7 +284,7 @@ def _print_diff(path: Path, old: str, new: str) -> None:
         console.print(line.rstrip("\n"), highlight=False, markup=False)
 
 
-def _split_header(source: str, config: dict[str, Any]):
+def _split_header(source: str, config: Config):
     if not config.skip_header:
         return "", source
     if source.startswith("#!"):
@@ -297,7 +298,7 @@ def _split_header(source: str, config: dict[str, Any]):
     return "", source
 
 
-def _finalize_newlines(source: str, config: dict[str, Any]) -> str:
+def _finalize_newlines(source: str, config: Config) -> str:
     if config.remove_trailing_newline:
         return source.rstrip("\n")
     if config.add_trailing_newline and source:
@@ -305,7 +306,7 @@ def _finalize_newlines(source: str, config: dict[str, Any]) -> str:
     return source
 
 
-def create_file(file_path: Path, contents: Any, config: dict[str, Any]) -> bool:
+def create_file(file_path: Path, contents: Any, config: Config) -> bool:
     """Create file."""
     try:
         existing = file_path.read_text(encoding="utf-8")
@@ -325,7 +326,7 @@ def create_file(file_path: Path, contents: Any, config: dict[str, Any]) -> bool:
     return True
 
 
-def clean_py(py_file_path: Path, config: dict[str, Any]):
+def clean_py(py_file_path: Path, config: Config):
     """Clean py."""
     source = py_file_path.read_text(encoding="utf-8")
     header, body = _split_header(source, config)
@@ -348,7 +349,7 @@ def clear_ipynb_output(ipynb_file_path: Path) -> None:
     )
 
 
-def clean_ipynb_cell(cell_dict: dict[str, Any], config: dict[str, Any]):
+def clean_ipynb_cell(cell_dict: dict[str, Any], config: Config):
     """Clean ipynb cell."""
     if cell_dict.get("cell_type") != "code":
         return cell_dict
@@ -376,7 +377,7 @@ def clean_ipynb_cell(cell_dict: dict[str, Any], config: dict[str, Any]):
         return cell_dict
 
 
-def clean_ipynb(ipynb_file_path: Path, config: dict[str, Any]):
+def clean_ipynb(ipynb_file_path: Path, config: Config):
     """Clean ipynb."""
     if config.clear_output:
         try:
@@ -426,7 +427,7 @@ def _load_gitignore(root: Path):
     return _pathspec.PathSpec.from_lines("gitwildmatch", lines)
 
 
-def discover_files(paths: list[Path], config: dict[str, Any]):
+def discover_files(paths: list[Path], config: Config) -> list[Path]:
     """Discover files."""
     result = []
     for root in paths:
@@ -469,7 +470,7 @@ def _load_cache(cache_file: Path):
         return set()
 
 
-def _save_cache(cache_file: Path, keys: list[Any]) -> None:
+def _save_cache(cache_file: Path, keys: Iterable[str]) -> None:
     try:
         atomic_write(cache_file, json.dumps(sorted(keys)), encoding="utf-8")
     except Exception as e:
@@ -496,7 +497,7 @@ def load_config_file(path: Path):
     return data if isinstance(data, dict) else {}
 
 
-def find_config_file(start: int):
+def find_config_file(start: Path) -> Path | None:
     """Find config file."""
     for name in ("pyproject.toml", ".clean-py.toml", "clean-py.toml"):
         for parent in [start] + list(start.parents):
@@ -560,18 +561,18 @@ def run_linters(paths: list[Path], linters: Iterable[Any]) -> int:
     return rc
 
 
-def clean_stdin(config: dict[str, Any]) -> None:
+def clean_stdin(config: Config) -> None:
     """Clean stdin."""
     source = sys.stdin.read()
     result = clean_python_code(source, config)
     sys.stdout.write(result)
 
 
-def run_watch(paths: list[Path], runner: Any, config: dict[str, Any]) -> None:
+def run_watch(paths: list[Path], runner: Any, config: Config) -> None:
     """Run watch."""
     if not _HAS_WATCHDOG:
         console.print("[red]watchdog is required for --watch[/red]")
-        raise typer.Exit(1)
+        raise SystemExit(1)
 
     class _Handler(FileSystemEventHandler):
         def on_any_event(self, event: Any) -> None:
@@ -598,74 +599,127 @@ def run_watch(paths: list[Path], runner: Any, config: dict[str, Any]) -> None:
     observer.join()
 
 
-app = typer.Typer(
-    name="clean-py",
-    help="Auto-lint .py and .ipynb files with autoflake, isort and black",
-    add_completion=False,
-)
+def build_parser() -> argparse.ArgumentParser:
+    """Build the command-line argument parser."""
+    parser = argparse.ArgumentParser(prog='clean-py', description='Auto-lint .py and .ipynb files with autoflake, isort and black')
+    parser.add_argument('path', nargs="*", type=Path, default=None, help='File or directory to clean')
+    parser.add_argument('--stdin', dest='stdin', action="store_true", default=False, help='Read source from stdin, write to stdout')
+    parser.add_argument('--py', dest='py', action=argparse.BooleanOptionalAction, default=True, help='Apply to .py source')
+    parser.add_argument('--ipynb', dest='ipynb', action=argparse.BooleanOptionalAction, default=True, help='Apply to .ipynb source')
+    parser.add_argument('--autoflake', dest='autoflake', action=argparse.BooleanOptionalAction, default=True, help='Apply autoflake to source')
+    parser.add_argument('--isort', dest='isort', action=argparse.BooleanOptionalAction, default=True, help='Apply isort to source')
+    parser.add_argument('--black', dest='black', action=argparse.BooleanOptionalAction, default=True, help='Apply black to source')
+    parser.add_argument('--verbose', dest='verbose', action="store_true", default=False, help='Enable verbose output')
+    parser.add_argument('-q', '--quiet', dest='quiet', action="store_true", default=False, help='Suppress info output')
+    parser.add_argument('--no-color', dest='no_color', action="store_true", default=False, help='Disable color output')
+    parser.add_argument('--line-length', dest='line_length', default=DEFAULT_LINE_LENGTH, type=int, help='Line length')
+    parser.add_argument('--skip-string-normalization', dest='skip_string_normalization', action="store_true", default=False)
+    parser.add_argument('--skip-magic-trailing-comma', dest='skip_magic_trailing_comma', action="store_true", default=False)
+    parser.add_argument('--target-version', dest='target_version', default=None)
+    parser.add_argument('--isort-profile', dest='isort_profile', default='black')
+    parser.add_argument('--autoflake-remove-unused-variables', dest='autoflake_remove_unused_variables', action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument('--autoflake-ignore-init-module-imports', dest='autoflake_ignore_init_module_imports', action="store_true", default=False)
+    parser.add_argument('--check', dest='check', action="store_true", default=False, help='Do not write; fail if changes needed')
+    parser.add_argument('--diff', dest='diff', action="store_true", default=False, help='Print unified diff')
+    parser.add_argument('--backup', dest='backup', action="store_true", default=False, help='Backup files before writing')
+    parser.add_argument('--backup-suffix', dest='backup_suffix', default='.bak')
+    parser.add_argument('--fail-fast', dest='fail_fast', action="store_true", default=False)
+    parser.add_argument('--clear-output', dest='clear_output', action="store_true", default=True)
+    parser.add_argument('--keep-output', dest='clear_output', action="store_false")
+    parser.add_argument('--strip-magics', dest='strip_magics', action="store_true", default=True)
+    parser.add_argument('--keep-magics', dest='strip_magics', action="store_false")
+    parser.add_argument('--dedupe-cells', dest='dedupe_cells', action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument('--drop-empty-cells', dest='drop_empty_cells', action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument('--strip-metadata', dest='strip_metadata', action="store_true", default=False)
+    parser.add_argument('--normalize-outputs', dest='normalize_outputs', action="store_true", default=False)
+    parser.add_argument('--strict-cell-errors', dest='strict_cell_errors', action="store_true", default=False)
+    parser.add_argument('--skip-header', dest='skip_header', action="store_true", default=False)
+    parser.add_argument('--add-trailing-newline', dest='add_trailing_newline', action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument('--remove-trailing-newline', dest='remove_trailing_newline', action="store_true", default=False)
+    parser.add_argument('--respect-fmt-off', dest='respect_fmt_off', action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument('-j', '--jobs', dest='jobs', default=cpu_count(), type=int)
+    parser.add_argument('--no-parallel', dest='no_parallel', action="store_true", default=False)
+    parser.add_argument('--cache', dest='cache', action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument('--include', dest='include', default=None)
+    parser.add_argument('--exclude', dest='exclude', action="append", default=[])
+    parser.add_argument('--respect-gitignore', dest='respect_gitignore', action="store_true", default=False)
+    parser.add_argument('--follow-symlinks', dest='follow_symlinks', action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument('--max-depth', dest='max_depth', default=None, type=int)
+    parser.add_argument('--extensions', dest='extensions', default='.py,.pyi,.ipynb')
+    parser.add_argument('--notebook-version', dest='notebook_version', default=None, type=int)
+    parser.add_argument('--config', dest='config_path', default=None, type=Path)
+    parser.add_argument('--profile', dest='profile', default='default')
+    parser.add_argument('--stats', dest='show_stats', action="store_true", default=False)
+    parser.add_argument('--json-report', dest='json_report', default=None)
+    parser.add_argument('--progress', dest='progress', action="store_true", default=False)
+    parser.add_argument('--list-files', dest='list_files', action="store_true", default=False)
+    parser.add_argument('--show-unchanged', dest='show_unchanged', action="store_true", default=False)
+    parser.add_argument('--error-format', dest='error_format', default='plain')
+    parser.add_argument('--require-changes', dest='require_changes', action="store_true", default=False)
+    parser.add_argument('--since', dest='since', default=None)
+    parser.add_argument('--watch', dest='watch', action="store_true", default=False)
+    parser.add_argument('--linters', dest='linters', action="append", default=[])
+    parser.add_argument('--doctor', dest='doctor', action="store_true", default=False)
+    return parser
 
 
-@app.command()
 def main(
-    path: Path = typer.Argument(None, help="File or directory to clean"),
-    stdin: Any = typer.Option(False, "--stdin", help="Read source from stdin, write to stdout"),
-    py: Any = typer.Option(True, help="Apply to .py source"),
-    ipynb: Any = typer.Option(True, help="Apply to .ipynb source"),
-    autoflake: Any = typer.Option(True, help="Apply autoflake to source"),
-    isort: Any = typer.Option(True, help="Apply isort to source"),
-    black: Any = typer.Option(True, help="Apply black to source"),
-    verbose: bool = typer.Option(False, help="Enable verbose output"),
-    quiet: bool = typer.Option(False, "--quiet", "-q", help="Suppress info output"),
-    no_color: Any = typer.Option(False, "--no-color", help="Disable color output"),
-    line_length: Any = typer.Option(DEFAULT_LINE_LENGTH, "--line-length", help="Line length"),
-    skip_string_normalization: Any = typer.Option(False, "--skip-string-normalization"),
-    skip_magic_trailing_comma: Any = typer.Option(False, "--skip-magic-trailing-comma"),
-    target_version: str = typer.Option(None, "--target-version"),
-    isort_profile: Any = typer.Option("black", "--isort-profile"),
-    autoflake_remove_unused_variables: Any = typer.Option(
-        True,
-        "--autoflake-remove-unused-variables/--no-autoflake-remove-unused-variables",
-    ),
-    autoflake_ignore_init_module_imports: Any = typer.Option(False, "--autoflake-ignore-init-module-imports"),
-    check: bool = typer.Option(False, "--check", help="Do not write; fail if changes needed"),
-    diff: Any = typer.Option(False, "--diff", help="Print unified diff"),
-    backup: Any = typer.Option(False, "--backup", help="Backup files before writing"),
-    backup_suffix: str = typer.Option(".bak", "--backup-suffix"),
-    fail_fast: Any = typer.Option(False, "--fail-fast"),
-    clear_output: Any = typer.Option(True, "--clear-output/--keep-output"),
-    strip_magics: Any = typer.Option(True, "--strip-magics/--keep-magics"),
-    dedupe_cells: Any = typer.Option(False, "--dedupe-cells/--no-dedupe-cells"),
-    drop_empty_cells: Any = typer.Option(False, "--drop-empty-cells/--no-drop-empty-cells"),
-    strip_metadata: Any = typer.Option(False, "--strip-metadata"),
-    normalize_outputs: Any = typer.Option(False, "--normalize-outputs"),
-    strict_cell_errors: Any = typer.Option(False, "--strict-cell-errors"),
-    skip_header: Any = typer.Option(False, "--skip-header"),
-    add_trailing_newline: Any = typer.Option(True, "--add-trailing-newline/--no-add-trailing-newline"),
-    remove_trailing_newline: Any = typer.Option(False, "--remove-trailing-newline"),
-    respect_fmt_off: Any = typer.Option(True, "--respect-fmt-off/--no-respect-fmt-off"),
-    jobs: Any = typer.Option(cpu_count(), "--jobs", "-j"),
-    no_parallel: Any = typer.Option(False, "--no-parallel"),
-    cache: dict[str, Any] = typer.Option(False, "--cache/--no-cache"),
-    include: Any = typer.Option(None, "--include"),
-    exclude: Iterable[Any] = typer.Option([], "--exclude"),
-    respect_gitignore: Any = typer.Option(False, "--respect-gitignore"),
-    follow_symlinks: Any = typer.Option(False, "--follow-symlinks/--no-follow-symlinks"),
-    max_depth: int = typer.Option(None, "--max-depth"),
-    extensions: str = typer.Option(".py,.pyi,.ipynb", "--extensions"),
-    notebook_version: str = typer.Option(None, "--notebook-version"),
-    config_path: Path = typer.Option(None, "--config"),
-    profile: Any = typer.Option("default", "--profile"),
-    show_stats: Any = typer.Option(False, "--stats"),
-    json_report: Any = typer.Option(None, "--json-report"),
-    progress: Any = typer.Option(False, "--progress"),
-    list_files: list[Any] = typer.Option(False, "--list-files"),
-    show_unchanged: Any = typer.Option(False, "--show-unchanged"),
-    error_format: str = typer.Option("plain", "--error-format"),
-    require_changes: Any = typer.Option(False, "--require-changes"),
-    since: Any = typer.Option(None, "--since"),
-    watch: Any = typer.Option(False, "--watch"),
-    linters: Any = typer.Option([], "--linters"),
-    doctor: Any = typer.Option(False, "--doctor"),
+    path: list[Path] | None = None,
+    stdin: Any = False,
+    py: Any = True,
+    ipynb: Any = True,
+    autoflake: Any = True,
+    isort: Any = True,
+    black: Any = True,
+    verbose: bool = False,
+    quiet: bool = False,
+    no_color: Any = False,
+    line_length: Any = DEFAULT_LINE_LENGTH,
+    skip_string_normalization: Any = False,
+    skip_magic_trailing_comma: Any = False,
+    target_version: str | None = None,
+    isort_profile: Any = 'black',
+    autoflake_remove_unused_variables: Any = True,
+    autoflake_ignore_init_module_imports: Any = False,
+    check: bool = False,
+    diff: Any = False,
+    backup: Any = False,
+    backup_suffix: str = '.bak',
+    fail_fast: Any = False,
+    clear_output: Any = True,
+    strip_magics: Any = True,
+    dedupe_cells: Any = False,
+    drop_empty_cells: Any = False,
+    strip_metadata: Any = False,
+    normalize_outputs: Any = False,
+    strict_cell_errors: Any = False,
+    skip_header: Any = False,
+    add_trailing_newline: Any = True,
+    remove_trailing_newline: Any = False,
+    respect_fmt_off: Any = True,
+    jobs: Any = cpu_count(),
+    no_parallel: Any = False,
+    cache: bool = False,
+    include: Any = None,
+    exclude: list[str] = [],
+    respect_gitignore: Any = False,
+    follow_symlinks: Any = False,
+    max_depth: int | None = None,
+    extensions: str = '.py,.pyi,.ipynb',
+    notebook_version: int | None = None,
+    config_path: Path | None = None,
+    profile: Any = 'default',
+    show_stats: Any = False,
+    json_report: Any = None,
+    progress: Any = False,
+    list_files: bool = False,
+    show_unchanged: Any = False,
+    error_format: str = 'plain',
+    require_changes: Any = False,
+    since: Any = None,
+    watch: Any = False,
+    linters: Any = [],
+    doctor: Any = False,
 ) -> None:
     """Run the command-line interface."""
     setup_logging(verbose, quiet, no_color)
@@ -675,7 +729,7 @@ def main(
     paths = list(path or [])
     if not paths and not stdin:
         console.print("[red]Error: No paths provided[/red]")
-        raise typer.Exit(1)
+        raise SystemExit(1)
     cfg = Config(
         py=py,
         ipynb=ipynb,
@@ -736,7 +790,7 @@ def main(
     for p in paths:
         if not p.exists():
             console.print(f"[red]Error: Path '{p}' does not exist[/red]")
-            raise typer.Exit(1)
+            raise SystemExit(1)
     exts = list(cfg.extensions)
     if not cfg.py:
         exts = [e for e in exts if e not in (".py", ".pyi")]
@@ -760,7 +814,7 @@ def main(
     new_keys = set()
     stats = Stats()
 
-    def process_file(f: str) -> None:
+    def process_file(f: Path) -> None:
         stats.scanned += 1
         key = _cache_key(f)
         if cfg.cache and key in cached_keys:
@@ -837,7 +891,7 @@ def main(
         console.print(f"[red]Error: {e}[/red]")
         if verbose:
             log.exception("Detailed error:")
-        raise typer.Exit(1)
+        raise SystemExit(1)
     if cfg.cache:
         _save_cache(cache_file, new_keys)
     linter_rc = 0
@@ -871,16 +925,25 @@ def main(
         )
     if check and stats.changed > 0:
         console.print(f"[red]{stats.changed} file(s) need formatting[/red]")
-        raise typer.Exit(1)
+        raise SystemExit(1)
     if require_changes and stats.changed == 0:
         console.print("[red]No changes made[/red]")
-        raise typer.Exit(1)
+        raise SystemExit(1)
     if stats.errors > 0 or linter_rc != 0:
         console.print("[yellow]Cleaning completed with some warnings.[/yellow]")
-        raise typer.Exit(2)
+        raise SystemExit(2)
     if not cfg.quiet:
         console.print("[green]Cleaning completed successfully![/green]")
 
 
+def cli(argv: list[str] | None = None) -> int:
+    """CLI entry point."""
+    parser = build_parser()
+    raw = sys.argv[1:] if argv is None else list(argv)
+    ns = parser.parse_args(raw)
+    main(**vars(ns))
+    return 0
+
+
 if __name__ == "__main__":
-    app()
+    raise SystemExit(cli())

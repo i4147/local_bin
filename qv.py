@@ -24,7 +24,7 @@ separate files/scripts rather than bloating the main CLI.
 from __future__ import annotations
 import argparse
 import base64
-from collections.abc import Iterator, Sequence
+from collections.abc import Generator, Iterator, Sequence
 from contextlib import contextmanager, nullcontext, suppress
 from dataclasses import dataclass
 from datetime import datetime
@@ -41,41 +41,49 @@ import subprocess
 import sys
 import time
 from typing import Any, ContextManager
+from loguru import logger
+
+logger.remove()
+logger.add(
+    sys.stderr,
+    level=os.environ.get("LOGURU_LEVEL", "INFO"),
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+)
 
 
 try:  # optional: TOML for config files
     import tomllib  # py3.11+
 except ImportError:  # pragma: no cover
     try:
-        import tomli as tomllib  # type: ignore
+        import tomli as tomllib
     except ImportError:  # pragma: no cover
-        tomllib = None  # type: ignore
+        tomllib = None
 
 try:  # optional: rich backend
-    from rich.console import Console  # type: ignore
-    from rich.panel import Panel  # type: ignore
-    from rich.syntax import Syntax  # type: ignore
-    from rich.text import Text  # type: ignore
+    from rich.console import Console
+    from rich.panel import Panel
+    from rich.syntax import Syntax
+    from rich.text import Text
 
     RICH_AVAILABLE = True
 except ImportError:  # pragma: no cover
-    Console = Panel = Syntax = Text = None  # type: ignore
+    Console = Panel = Syntax = Text = None
     RICH_AVAILABLE = False
 
 try:  # optional: clipboard
-    import pyperclip  # type: ignore
+    import pyperclip
 
     PYPERCLIP_AVAILABLE = True
 except ImportError:  # pragma: no cover
-    pyperclip = None  # type: ignore
+    pyperclip = None
     PYPERCLIP_AVAILABLE = False
 
 try:  # optional: encoding detection
-    import chardet  # type: ignore
+    import chardet
 
     CHARDET_AVAILABLE = True
 except ImportError:  # pragma: no cover
-    chardet = None  # type: ignore
+    chardet = None
     CHARDET_AVAILABLE = False
 
 
@@ -88,7 +96,7 @@ DEFAULT_BACKEND: str = "rich"
 DEFAULT_TAB_WIDTH: int = 4
 DEFAULT_BINARY_BYTES: int = 512
 
-CONFIG_PATHS: tuple[Path,] = (
+CONFIG_PATHS: tuple[Path, ...] = (
     Path.home() / ".config" / "fileview" / "config.toml",
     Path.home() / ".fileviewrc.toml",
     Path(".fileviewrc.toml"),
@@ -226,7 +234,7 @@ def normalize_exts(specs: Sequence[str]) -> list[str]:
 
 
 @contextmanager
-def io_timeout(seconds: float | None) -> Iterator[None]:
+def io_timeout(seconds: float | None) -> Generator[None]:
     if seconds is None or seconds <= 0 or not hasattr(signal, "SIGALRM"):
         yield
         return
@@ -364,7 +372,7 @@ def collect_files(root: Path, args: argparse.Namespace, gitignore_pats: list[str
     """Apply all selection filters to produce the final candidate set."""
     inc_ext = normalize_exts(args.ext)
     exc_ext = normalize_exts(args.exclude_ext)
-    name_re = re.compile(args.name) if args.name else None
+    name_re = re.compile(str(args.name)) if args.name else None
     seen: set[str] = set()
     result: list[Path] = []
 
@@ -526,7 +534,7 @@ def _decode(raw: bytes, encoding: str, detect: bool) -> tuple[str, str | None]:
         return raw.decode(encoding), None
     except (UnicodeDecodeError, LookupError):
         pass
-    if detect and CHARDET_AVAILABLE:
+    if detect and CHARDET_AVAILABLE and chardet is not None:
         guess = chardet.detect(raw).get("encoding")
         if guess:
             try:
@@ -777,7 +785,7 @@ def render_rich(views: Sequence[LoadedFile], args: argparse.Namespace) -> int:
         force_terminal=(args.color == "always") or None,
         no_color=(args.color == "never") or None,
     )
-    ctx: ContextManager[None] = nullcontext() if args.no_pager else console.pager(styles=True)
+    ctx: ContextManager[Any] = nullcontext() if args.no_pager else console.pager(styles=True)
     total_shown = 0
     with ctx:
         for view in views:
@@ -838,7 +846,7 @@ def render_rich(views: Sequence[LoadedFile], args: argparse.Namespace) -> int:
                         theme=args.theme,
                     )
                 except Exception:  # noqa: BLE001
-                    content_renderable = Text(body)
+                    content_renderable = Text(body) if Text is not None else body
 
             if args.panel and Panel is not None:
                 console.print(Panel(content_renderable, title=str(view.relative), border_style="dim"))
@@ -923,7 +931,7 @@ def open_in_editor(path: Path) -> None:
 
 
 def copy_paths(paths: Sequence[str]) -> bool:
-    if not PYPERCLIP_AVAILABLE:
+    if not PYPERCLIP_AVAILABLE or pyperclip is None:
         print("warning: --copy-path requires pyperclip", file=sys.stderr)
         return False
     try:

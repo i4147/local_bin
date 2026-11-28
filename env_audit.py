@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import argparse
+
 import ast
 from dataclasses import dataclass, field
 import os
@@ -12,41 +14,17 @@ import re
 import subprocess
 import sys
 from types import SimpleNamespace
-from typing import Annotated, Any, NoReturn
+from typing import IO, Annotated, Any, NoReturn
 
-import click
 from dh import atomic_write
-import typer
+from loguru import logger
 
-
-_STATE: dict[str, object] = {}
-
-
-class _Args(SimpleNamespace):
-    """argparse.Namespace look-alike: unknown attributes read as None."""
-
-    def __getattr__(self, name: str) -> None:
-        if name.startswith("__"):
-            raise AttributeError(name)
-
-
-class _ParserShim:
-    """Stand-in for the removed argparse parser; hands back what Typer parsed."""
-
-    def parse_args(self, args: list[Any] | None = None, namespace: Any = None) -> _Args:
-        "Parse args."
-        return _Args(**_STATE)
-
-    def error(self, message: str) -> NoReturn:
-        raise typer.BadParameter(message)
-
-    def print_help(self, file: Path | None = None) -> None:
-        "Print help."
-        typer.echo(click.get_current_context().get_help(), file=file)
-
-    def print_usage(self, file: Path | None = None) -> None:
-        "Print usage."
-        typer.echo(click.get_current_context().get_usage(), file=file)
+logger.remove()
+logger.add(
+    sys.stderr,
+    level=os.environ.get("LOGURU_LEVEL", "INFO"),
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+)
 
 
 DEFAULT_IGNORE: set[str] = {
@@ -410,7 +388,7 @@ def reconcile(
     for k1 in all_known:
         for k2 in all_known:
             if k1 != k2 and k1.replace("_", "").lower() == k2.replace("_", "").lower():
-                pair = tuple(sorted([k1, k2]))
+                pair = (k1, k2) if k1 <= k2 else (k2, k1)
                 if pair not in seen:
                     seen.add(pair)
                     sev = severity_map.get("E007", "warning")
@@ -425,9 +403,24 @@ def reconcile(
     return findings
 
 
+def _build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description='env-audit: Reconcile .env, .env.example, CI, and Python code.')
+    subparsers = parser.add_subparsers(dest='command')
+    sub_0 = subparsers.add_parser('check', help='Auto-discover and check environment configuration')
+    sub_0.add_argument('--example', default='.env.example')
+    sub_0.add_argument('--env', default='.env')
+    sub_0.add_argument('--strict', action="store_true", default=False)
+    sub_1 = subparsers.add_parser('scan', help='Generate usage table from source code alone')
+    sub_1.add_argument('--source', default='.')
+    sub_1.add_argument('--redact', action="store_true", default=False)
+    sub_2 = subparsers.add_parser('init', help='Propose a .env.example from code + current .env')
+    sub_2.add_argument('--output', default='.env.example')
+    return parser
+
+
 def main() -> None:
     "Run the command-line interface."
-    parser = _ParserShim()
+    parser = _build_parser()
     args = parser.parse_args()
     root = pathlib.Path()
     if args.command == "scan":
@@ -497,48 +490,5 @@ def main() -> None:
             sys.exit(1)
         sys.exit(0)
 
-
-def _run() -> None:
-    raise SystemExit(main())
-
-
-app = typer.Typer(
-    help="env-audit: Reconcile .env, .env.example, CI, and Python code.",
-    add_completion=False,
-    context_settings={"help_option_names": ["-h", "--help"]},
-    pretty_exceptions_show_locals=False,
-)
-
-
-@app.command("check", help="Auto-discover and check environment configuration")
-def cmd_check(
-    example: Annotated[str, typer.Option("--example")] = ".env.example",
-    env: Annotated[str, typer.Option("--env")] = ".env",
-    strict: Annotated[bool, typer.Option("--strict")] = False,
-) -> None:
-    """Run the check subcommand."""
-    _STATE.update(example=example, env=env, strict=strict, command="check")
-    _run()
-
-
-@app.command("scan", help="Generate usage table from source code alone")
-def cmd_scan(
-    source: Annotated[str, typer.Option("--source")] = ".",
-    redact: Annotated[bool, typer.Option("--redact")] = False,
-) -> None:
-    """Run the scan subcommand."""
-    _STATE.update(source=source, redact=redact, command="scan")
-    _run()
-
-
-@app.command("init", help="Propose a .env.example from code + current .env")
-def cmd_init(
-    output: Annotated[str, typer.Option("--output")] = ".env.example",
-) -> None:
-    """Run the init subcommand."""
-    _STATE.update(output=output, command="init")
-    _run()
-
-
 if __name__ == "__main__":
-    app()
+    raise SystemExit(main())

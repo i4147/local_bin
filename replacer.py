@@ -78,6 +78,14 @@ import tempfile
 import threading
 import time
 from typing import Any, NoReturn, TypeAlias, TypedDict
+from loguru import logger
+
+logger.remove()
+logger.add(
+    sys.stderr,
+    level=os.environ.get("LOGURU_LEVEL", "INFO"),
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+)
 
 
 # Optional third-party helpers ---------------------------------------------
@@ -1154,7 +1162,11 @@ def _build_rules(opts: Options) -> list[Rule]:
         except OSError as exc:
             _fail(f"cannot read --replace-from: {exc}", EXIT_USAGE)
     if opts.env_expand:
-        replacement = os.path.expandvars(replacement)
+        replacement = re.sub(
+            r"\$(?:(\w+)|\{([^}]+)\})",
+            lambda m: os.environ.get(m.group(1) or m.group(2), m.group(0)),
+            replacement,
+        )
     try:
         pattern = _build_pattern(opts.search, opts)
     except re.error as exc:

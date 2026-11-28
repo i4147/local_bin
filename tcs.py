@@ -17,13 +17,30 @@ from pathlib import Path
 import string
 import subprocess
 import sys
-from typing import Any
+from typing import TYPE_CHECKING, Any, NoReturn, TypeVar
+import os
+from loguru import logger
+
+logger.remove()
+logger.add(
+    sys.stderr,
+    level=os.environ.get("LOGURU_LEVEL", "INFO"),
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+)
 
 
-try:
+if TYPE_CHECKING:
     import libcst as cst
-except ImportError:
-    cst = None
+
+    HAS_LIBCST: bool = True
+else:
+    try:
+        import libcst as cst
+
+        HAS_LIBCST = True
+    except ImportError:
+        cst = None
+        HAS_LIBCST = False
 
 TEXT1: str = "Add any recommended features & flags, final code must pass ty (typechecker) and mypy without error, Return full refactored & type-annotated code in one markdown block"
 USAGE: str = """\
@@ -39,10 +56,10 @@ Usage: {prog} <path> [start [end]] [-m|--mangle | -x]
              Requires libcst; only applies to Python files.
 Without -m/-x, content is copied as-is."""
 RESERVED = set(dir(builtins)) | set(keyword.kwlist)
-SCOPE_NODES: tuple[Any, ...] = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
+SCOPE_NODES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
 
 
-def die(msg: str, code: int = 1) -> None:
+def die(msg: str, code: int = 1) -> NoReturn:
     print(msg, file=sys.stderr)
     sys.exit(code)
 
@@ -131,7 +148,10 @@ def _name_stats(tree: ast.AST) -> tuple[set[str], Counter]:
         elif isinstance(node, ast.arg):
             freq[node.arg] += 1
             defined.add(node.arg)
-        elif isinstance(node, SCOPE_NODES) or isinstance(node, ast.ExceptHandler) and node.name:
+        elif isinstance(node, SCOPE_NODES):
+            freq[node.name] += 1
+            defined.add(node.name)
+        elif isinstance(node, ast.ExceptHandler) and node.name:
             freq[node.name] += 1
             defined.add(node.name)
     return defined, freq
@@ -155,7 +175,9 @@ def _build_rename_mapping(tree: ast.AST) -> dict[str, str]:
     return {old: next(gen) for old in targets}
 
 
-if cst is not None:
+_BodyNodeT = TypeVar("_BodyNodeT", "cst.FunctionDef", "cst.ClassDef")
+
+if HAS_LIBCST:
 
     class CompressTransformer(cst.CSTTransformer):
         def __init__(self, mapping: dict[str, str]) -> None:
@@ -176,7 +198,7 @@ if cst is not None:
                 and self._is_docstring_expr(stmt.body[0])
             )
 
-        def _strip_body(self, node: cst.CSTNode):
+        def _strip_body(self, node: _BodyNodeT) -> _BodyNodeT:
             body = node.body
             if isinstance(body, cst.IndentedBlock):
                 stmts = list(body.body)
@@ -200,19 +222,12 @@ if cst is not None:
                 body = body[1:]
             return updated_node.with_changes(body=body)
 
-        def _strip_funcdef(self, node: cst.CSTNode):
+        def _strip_funcdef(self, node: cst.FunctionDef) -> cst.FunctionDef:
             if node.returns is not None:
                 node = node.with_changes(returns=None)
             return self._strip_body(node)
 
         def leave_FunctionDef(self, original_node: cst.FunctionDef, updated_node: cst.FunctionDef) -> cst.FunctionDef:
-            return self._strip_funcdef(updated_node)
-
-        def leave_AsyncFunctionDef(
-            self,
-            original_node: cst.AsyncFunctionDef,
-            updated_node: cst.AsyncFunctionDef,
-        ) -> cst.AsyncFunctionDef:
             return self._strip_funcdef(updated_node)
 
         def leave_ClassDef(self, original_node: cst.ClassDef, updated_node: cst.ClassDef) -> cst.ClassDef:
@@ -295,7 +310,7 @@ def _shrink_indent(code: str) -> str:
 
 def compress_source(source: str) -> str | None:
     """Compress source."""
-    if CompressTransformer is None:
+    if not HAS_LIBCST or CompressTransformer is None:
         return None
     try:
         tree = ast.parse(source)
@@ -333,7 +348,7 @@ def is_python_file(path: Path, source: str) -> bool:
 
 def strip_x(source: str) -> str | None:
     "Strip x."
-    if cst is None:
+    if not HAS_LIBCST:
         return None
 
     def is_string_expr(expr: cst.Expr) -> bool:
@@ -381,39 +396,36 @@ def strip_x(source: str) -> str | None:
 
     class XStripper(cst.CSTTransformer):
         def leave_TrailingWhitespace(
-            self, orig: cst.TrailingWhitespace, updated: cst.TrailingWhitespace
+            self, original_node: cst.TrailingWhitespace, updated_node: cst.TrailingWhitespace
         ) -> cst.TrailingWhitespace:
-            if updated.comment is not None:
-                return updated.with_changes(
+            if updated_node.comment is not None:
+                return updated_node.with_changes(
                     comment=None,
                     whitespace=cst.SimpleWhitespace(""),
                 )
-            return updated
+            return updated_node
 
-        def leave_EmptyLine(self, orig: cst.EmptyLine, updated: cst.EmptyLine) -> cst.RemovalSentinel:
+        def leave_EmptyLine(
+            self, original_node: cst.EmptyLine, updated_node: cst.EmptyLine
+        ) -> cst.RemovalSentinel:
             return cst.RemoveFromParent()
 
-        def leave_Module(self, orig: cst.Module, updated: cst.Module) -> cst.Module:
-            body = list(updated.body)
+        def leave_Module(self, original_node: cst.Module, updated_node: cst.Module) -> cst.Module:
+            body = list(updated_node.body)
             if body and is_docstring_stmt(body[0]):
                 body = body[1:]
             body = [s for s in body if not is_future_import_line(s)]
-            return updated.with_changes(
+            return updated_node.with_changes(
                 body=body,
                 header=[],
                 footer=[],
             )
 
-        def leave_ClassDef(self, orig: cst.ClassDef, updated: cst.ClassDef) -> cst.ClassDef:
-            return updated.with_changes(body=strip_suite(updated.body))
+        def leave_ClassDef(self, original_node: cst.ClassDef, updated_node: cst.ClassDef) -> cst.ClassDef:
+            return updated_node.with_changes(body=strip_suite(updated_node.body))
 
-        def leave_FunctionDef(self, orig: cst.FunctionDef, updated: cst.FunctionDef) -> cst.FunctionDef:
-            return updated.with_changes(body=strip_suite(updated.body))
-
-        def leave_AsyncFunctionDef(
-            self, orig: cst.AsyncFunctionDef, updated: cst.AsyncFunctionDef
-        ) -> cst.AsyncFunctionDef:
-            return updated.with_changes(body=strip_suite(updated.body))
+        def leave_FunctionDef(self, original_node: cst.FunctionDef, updated_node: cst.FunctionDef) -> cst.FunctionDef:
+            return updated_node.with_changes(body=strip_suite(updated_node.body))
 
     try:
         module = cst.parse_module(source)
@@ -445,7 +457,7 @@ def build_payload(
     if not mangle:
         return source
     if ranged or is_python_file(path, source):
-        if cst is None:
+        if not HAS_LIBCST:
             print(
                 "Warning: libcst required for -m/--mangle; copied as-is. Install with: pip install libcst",
                 file=sys.stderr,

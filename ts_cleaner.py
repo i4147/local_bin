@@ -27,12 +27,23 @@ import re
 from typing import Annotated, Final
 
 from dh import atomic_write
+import argparse
 from rich.console import Console
 from rich.live import Live
 from rich.table import Table
 from rich.text import Text
 from tree_sitter import Language, Node, Parser
-import typer
+import os
+import sys
+from loguru import logger
+
+logger.remove()
+logger.add(
+    sys.stderr,
+    level=os.environ.get("LOGURU_LEVEL", "INFO"),
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+)
+
 
 
 _EXTENSION_TO_LANGUAGE: Final[dict[str, str]] = {
@@ -156,7 +167,8 @@ def _make_parser(language_key: str) -> Parser:
         msg = f"Unsupported language: {language_key}"
         raise ValueError(msg) from exc
     grammar_module = importlib.import_module(module_name)
-    language = Language(getattr(grammar_module, factory_name)())
+    language_ptr: object = getattr(grammar_module, factory_name)()
+    language = Language(language_ptr)
     try:
         return Parser(language)
     except TypeError:
@@ -617,27 +629,24 @@ def build_table(results: list[ProcessResult], total: int, width: int) -> Table:
     return table
 
 
-app = typer.Typer(
-    add_completion=False,
-    context_settings={"help_option_names": ["-h", "--help"]},
-    pretty_exceptions_show_locals=False,
-)
+def build_parser() -> argparse.ArgumentParser:
+    """Build the command-line argument parser."""
+    parser = argparse.ArgumentParser(description="Strip comments from source files using tree-sitter.")
+    parser.add_argument("--check", action="store_true", help="report potential savings without writing")
+    parser.add_argument("paths", nargs="*", type=Path, help="files/directories (default: current directory)")
+    return parser
 
 
-@app.command()
-def main(
-    check: Annotated[bool, typer.Option("--check", help="report potential savings without writing")] = False,
-    paths: Annotated[
-        list[Path] | None,
-        typer.Argument(help="files/directories (default: current directory)"),
-    ] = None,
-) -> None:
+def main(argv: list[str] | None = None) -> int:
     """Run the command line and exit non-zero when any file failed."""
+    args = build_parser().parse_args(argv)
+    check: bool = args.check
+    paths: list[Path] = args.paths
     files = find_files(paths or [Path.cwd()])
     console = Console()
     if not files:
         console.print("[yellow]No supported files found.[/]")
-        raise typer.Exit(code=0)
+        return 0
     results: list[ProcessResult] = []
     total_freed = 0
     with Live(
@@ -655,9 +664,8 @@ def main(
     errors = [result for result in results if result.status in {"invalid", "error"}]
     for result in errors:
         console.print(f"[red]{result.path}: {result.detail}[/]")
-    # typer/click ignore a function's return value, so the exit code must be raised.
-    raise typer.Exit(code=1 if errors else 0)
+    return 1 if errors else 0
 
 
 if __name__ == "__main__":
-    app()
+    raise SystemExit(main())

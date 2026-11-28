@@ -15,54 +15,23 @@ import subprocess
 import sys
 import time
 from types import SimpleNamespace
-from typing import TYPE_CHECKING, Annotated, Any, Literal, NoReturn
+from typing import IO, TYPE_CHECKING, Annotated, Any, Literal, NoReturn
 
-import click
 from dh import atomic_write
-import typer
 
+
+import argparse
+from loguru import logger
+
+logger.remove()
+logger.add(
+    sys.stderr,
+    level=os.environ.get("LOGURU_LEVEL", "INFO"),
+    format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+)
 
 if TYPE_CHECKING:
-    import argparse
     from collections.abc import Sequence
-
-
-class Scope2(StrEnum):
-    "Enumerate the supported Scope2 values."
-
-    local = "local"
-    remote = "remote"
-    both = "both"
-
-
-_STATE: dict[str, object] = {}
-
-
-class _Args(SimpleNamespace):
-    """argparse.Namespace look-alike: unknown attributes read as None."""
-
-    def __getattr__(self, name: str) -> None:
-        if name.startswith("__"):
-            raise AttributeError(name)
-
-
-class _ParserShim:
-    """Stand-in for the removed argparse parser; hands back what Typer parsed."""
-
-    def parse_args(self, args: list[Any] | None = None, namespace: Any = None) -> _Args:
-        "Parse args."
-        return _Args(**_STATE)
-
-    def error(self, message: str) -> NoReturn:
-        raise typer.BadParameter(message)
-
-    def print_help(self, file: Path | None = None) -> None:
-        "Print help."
-        typer.echo(click.get_current_context().get_help(), file=file)
-
-    def print_usage(self, file: Path | None = None) -> None:
-        "Print usage."
-        typer.echo(click.get_current_context().get_usage(), file=file)
 
 
 Scope = Literal["local", "remote"]
@@ -530,8 +499,28 @@ def run(opts: Options) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    "Build parser."
-    parser = _ParserShim()
+    """Build parser."""
+    parser = argparse.ArgumentParser(description='List and bulk-delete branches that are already merged into the base branch.')
+    parser.add_argument('patterns', nargs="*", metavar='PATTERN', help='only consider branches matching these globs')
+    parser.add_argument('-C', '--repo', type=Path, default=Path(), help='repository path (default: current directory)')
+    parser.add_argument('-b', '--base', default=None, help='base ref to compare against (default: remote HEAD, main or master)')
+    parser.add_argument('-s', '--scope', choices=['local', 'remote', 'both'], default='local', help='which branches to consider')
+    parser.add_argument('--remote', default='origin', help='remote name (default: origin)')
+    parser.add_argument('-x', '--exclude', action="append", default=[], metavar='GLOB', help='skip branches matching this glob (repeatable)')
+    parser.add_argument('-e', '--regex', default=None, help='only consider branch names matching this regular expression')
+    parser.add_argument('--older-than', type=int, default=None, metavar='DAYS', help='only branches whose last commit is older than DAYS')
+    parser.add_argument('--author', default=None, help='only branches whose last commit author contains this text')
+    parser.add_argument('-p', '--protect', action="append", default=[], metavar='GLOB', help='extra protected branch globs (repeatable)')
+    parser.add_argument('--no-default-protect', action="store_true", default=False, help=f"do not protect {', '.join(DEFAULT_PROTECTED)}")
+    parser.add_argument('--squash', action="store_true", default=False, help='also detect squash/rebase-merged branches (git 2.38+)')
+    parser.add_argument('-F', '--fetch', action="store_true", default=False, help="run 'git fetch --prune' on the remote first")
+    parser.add_argument('-d', '--delete', action="store_true", default=False, help='delete the listed branches after confirmation')
+    parser.add_argument('-y', '--yes', action="store_true", default=False, help='skip the confirmation prompt')
+    parser.add_argument('-n', '--dry-run', action="store_true", default=False, help='with --delete, print the commands without running them')
+    parser.add_argument('--show-skipped', action="store_true", default=False, help='list protected and checked-out branches that were kept')
+    parser.add_argument('--json', dest='as_json', action="store_true", default=False, help='print machine-readable output (no deletion)')
+    parser.add_argument('--undo-file', type=Path, default=None, help='write a shell script that restores the deleted branches')
+    parser.add_argument('--no-color', action="store_true", default=False, help='disable colored output')
     return parser
 
 
@@ -542,7 +531,7 @@ def build_options(parser: argparse.ArgumentParser, args: argparse.Namespace) -> 
     if args.older_than is not None and args.older_than < 0:
         parser.error("--older-than must be zero or greater")
     try:
-        pattern = re.compile(args.regex) if args.regex else None
+        pattern = re.compile(str(args.regex)) if args.regex else None
     except re.error as exc:
         parser.error(f"invalid --regex: {exc}")
     scopes: dict[str, tuple[Scope, ...]] = {
@@ -595,151 +584,5 @@ def main(argv: Sequence[str] | None = None) -> int:
         print("\naborted", file=sys.stderr)
         return 130
 
-
-def _run() -> None:
-    raise SystemExit(main())
-
-
-app = typer.Typer(
-    add_completion=False,
-    context_settings={"help_option_names": ["-h", "--help"]},
-    pretty_exceptions_show_locals=False,
-)
-
-
-@app.command(help="List and bulk-delete branches that are already merged into the base branch.")
-def cli(
-    patterns: Annotated[
-        list[str] | None,
-        typer.Argument(help="only consider branches matching these globs", metavar="PATTERN"),
-    ] = None,
-    repo: Annotated[
-        Path,
-        typer.Option("-C", "--repo", help="repository path (default: current directory)"),
-    ] = Path(),
-    base: Annotated[
-        str | None,
-        typer.Option(
-            "-b",
-            "--base",
-            help="base ref to compare against (default: remote HEAD, main or master)",
-        ),
-    ] = None,
-    scope: Annotated[Scope2, typer.Option("-s", "--scope", help="which branches to consider")] = Scope2.local,
-    remote: Annotated[str, typer.Option("--remote", help="remote name (default: origin)")] = "origin",
-    exclude: Annotated[
-        list[str] | None,
-        typer.Option(
-            "-x",
-            "--exclude",
-            help="skip branches matching this glob (repeatable)",
-            metavar="GLOB",
-        ),
-    ] = None,
-    regex: Annotated[
-        str | None,
-        typer.Option(
-            "-e",
-            "--regex",
-            help="only consider branch names matching this regular expression",
-        ),
-    ] = None,
-    older_than: Annotated[
-        int | None,
-        typer.Option(
-            "--older-than",
-            help="only branches whose last commit is older than DAYS",
-            metavar="DAYS",
-        ),
-    ] = None,
-    author: Annotated[
-        str | None,
-        typer.Option("--author", help="only branches whose last commit author contains this text"),
-    ] = None,
-    protect: Annotated[
-        list[str] | None,
-        typer.Option(
-            "-p",
-            "--protect",
-            help="extra protected branch globs (repeatable)",
-            metavar="GLOB",
-        ),
-    ] = None,
-    no_default_protect: Annotated[
-        bool,
-        typer.Option(
-            "--no-default-protect",
-            help=f"do not protect {', '.join(DEFAULT_PROTECTED)}",
-        ),
-    ] = False,
-    squash: Annotated[
-        bool,
-        typer.Option("--squash", help="also detect squash/rebase-merged branches (git 2.38+)"),
-    ] = False,
-    fetch: Annotated[
-        bool,
-        typer.Option("-F", "--fetch", help="run 'git fetch --prune' on the remote first"),
-    ] = False,
-    delete: Annotated[
-        bool,
-        typer.Option("-d", "--delete", help="delete the listed branches after confirmation"),
-    ] = False,
-    yes: Annotated[bool, typer.Option("-y", "--yes", help="skip the confirmation prompt")] = False,
-    dry_run: Annotated[
-        bool,
-        typer.Option(
-            "-n",
-            "--dry-run",
-            help="with --delete, print the commands without running them",
-        ),
-    ] = False,
-    show_skipped: Annotated[
-        bool,
-        typer.Option(
-            "--show-skipped",
-            help="list protected and checked-out branches that were kept",
-        ),
-    ] = False,
-    as_json: Annotated[bool, typer.Option("--json", help="print machine-readable output (no deletion)")] = False,
-    undo_file: Annotated[
-        Path | None,
-        typer.Option(
-            "--undo-file",
-            help="write a shell script that restores the deleted branches",
-        ),
-    ] = None,
-    no_color: Annotated[bool, typer.Option("--no-color", help="disable colored output")] = False,
-) -> None:
-    """Run the command-line interface."""
-    if protect is None:
-        protect = []
-    if exclude is None:
-        exclude = []
-    patterns = patterns or []
-    _STATE.update(
-        patterns=patterns,
-        repo=repo,
-        base=base,
-        scope=scope,
-        remote=remote,
-        exclude=exclude,
-        regex=regex,
-        older_than=older_than,
-        author=author,
-        protect=protect,
-        no_default_protect=no_default_protect,
-        squash=squash,
-        fetch=fetch,
-        delete=delete,
-        yes=yes,
-        dry_run=dry_run,
-        show_skipped=show_skipped,
-        as_json=as_json,
-        undo_file=undo_file,
-        no_color=no_color,
-    )
-    _run()
-
-
 if __name__ == "__main__":
-    app()
+    raise SystemExit(main())

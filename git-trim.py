@@ -69,7 +69,8 @@ names are always passed to git as argv entries - never through a shell.
 """
 
 from __future__ import annotations
-from collections.abc import Iterable, Iterator, Sequence
+import argparse
+from collections.abc import Generator, Iterable, Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -89,7 +90,6 @@ from loguru import logger
 from rich.console import Console
 from rich.table import Table
 from rich.text import Text
-import typer
 
 
 __all__: list[str] = [
@@ -544,7 +544,15 @@ def superproject_pins(repo: Path) -> tuple[str, list[str]] | None:
     top = run_git(repo, ["rev-parse", "--show-toplevel"], check=False).stdout.strip()
     if not top:
         return None
-    relative = Path(os.path.relpath(top, superproject)).as_posix()
+    top_parts = Path(top).resolve().parts
+    sup_parts = Path(superproject).resolve().parts
+    common = 0
+    for a, b in zip(top_parts, sup_parts):
+        if a != b:
+            break
+        common += 1
+    rel_parts = ("..",) * (len(sup_parts) - common) + top_parts[common:]
+    relative = Path(*rel_parts).as_posix() if rel_parts else "."
     pins: list[str] = []
     for spec in (f"HEAD:{relative}", f":{relative}"):
         found = run_git(Path(superproject), ["rev-parse", "--verify", "--quiet", spec], check=False)
@@ -1809,65 +1817,67 @@ def render_delete_plan(candidates: Sequence[BranchReport], kept: int, console: C
 
 
 # ---------------------------------------------------------------------------
-# CLI (typer)
+# CLI (argparse)
 # ---------------------------------------------------------------------------
 
-app = typer.Typer(
-    name=APP_NAME,
-    help="Bulk-safe branch cleanup: finds squash/rebase merges, refuses unsafe deletions.",
-    no_args_is_help=True,
-    add_completion=False,
-)
 
-RepoOption = Annotated[
-    Path,
-    typer.Option(
-        "--repo",
+def _non_negative_int(value: str) -> int:
+    num = int(value)
+    if num < 0:
+        msg = "must be >= 0"
+        raise argparse.ArgumentTypeError(msg)
+    return num
+
+
+def _add_repo_option(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
         "-C",
-        help="Repository to work on (any directory inside it).",
-        show_default="current directory",
-    ),
-]
-MainOption = Annotated[
-    str | None,
-    typer.Option(
+        "--repo",
+        type=Path,
+        default=Path(),
+        help="Repository to work on (any directory inside it). (default: current directory)",
+    )
+
+
+def _add_scan_options(parser: argparse.ArgumentParser) -> None:
+    _add_repo_option(parser)
+    parser.add_argument(
         "--main",
-        help="Mainline branch or ref to compare against.",
-        show_default="origin/HEAD's branch, else main, else master",
-    ),
-]
-StaleOption = Annotated[
-    int,
-    typer.Option(
+        dest="mainline",
+        default=None,
+        help="Mainline branch or ref to compare against. (default: origin/HEAD's branch, else main, else master)",
+    )
+    parser.add_argument(
         "--stale",
-        min=0,
+        type=_non_negative_int,
+        default=DEFAULT_STALE_DAYS,
         help="Unmerged branches with a commit in the last N days are never deleted.",
-    ),
-]
-KeepOption = Annotated[
-    str,
-    typer.Option(
+    )
+    parser.add_argument(
         "--keep",
+        default=DEFAULT_KEEP_OPTION,
         help="Comma-separated branch names or globs that are never deleted (case-insensitive).",
-    ),
-]
-PatternOption = Annotated[
-    str | None,
-    typer.Option("--pattern", help="Only consider branches matching this glob, e.g. 'feat/*'."),
-]
-JsonOption = Annotated[bool, typer.Option("--json", help="Print machine-readable JSON instead of text.")]
-YesOption = Annotated[
-    bool,
-    typer.Option("--yes", "-y", help="Really do it. Without this flag nothing is changed."),
-]
-DryRunOption = Annotated[
-    bool,
-    typer.Option(
-        "--dry-run",
+    )
+    parser.add_argument(
+        "--pattern",
+        default=None,
+        help="Only consider branches matching this glob, e.g. 'feat/*'.",
+    )
+
+
+def _add_act_options(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "-y",
+        "--yes",
+        action="store_true",
+        help="Really do it. Without this flag nothing is changed.",
+    )
+    parser.add_argument(
         "-n",
+        "--dry-run",
+        action="store_true",
         help="Only show what would happen (the default; wins over --yes).",
-    ),
-]
+    )
 
 
 def _stderr_sink(message: str) -> None:
@@ -1900,74 +1910,30 @@ def configure_logging(verbosity: int) -> None:
     logger.enable(__name__)
 
 
-def _version_callback(value: bool) -> None:
-    """Print the version and exit when ``--version`` is given.
-
-    Args:
-        value: True when the flag is present.
-
-    Raises:
-        typer.Exit: Always, when *value* is true.
-    """
-    if value:
-        typer.echo(f"{APP_NAME} {__version__}")
-        raise typer.Exit(EXIT_OK)
-
-
 @contextmanager
-def _cli_errors() -> Iterator[None]:
+def _cli_errors() -> Generator[None]:
     """Turn :class:`GitError` into an error message and exit code 1.
 
     Yields:
         Nothing; wrap the body of a command with it.
 
     Raises:
-        typer.Exit: With :data:`EXIT_ERROR` when a :class:`GitError` occurs.
+        SystemExit: With :data:`EXIT_ERROR` when a :class:`GitError` occurs.
     """
     try:
         yield
     except GitError as exc:
         _say(Console(stderr=True), f"error: {exc}", "bold red")
-        raise typer.Exit(EXIT_ERROR) from exc
+        raise SystemExit(EXIT_ERROR) from exc
 
 
-@app.callback()
-def _root(
-    verbose: Annotated[
-        int,
-        typer.Option(
-            "--verbose",
-            "-v",
-            count=True,
-            help="More logging on stderr (-v info, -vv debug).",
-        ),
-    ] = 0,
-    version: Annotated[
-        bool,
-        typer.Option(
-            "--version",
-            callback=_version_callback,
-            is_eager=True,
-            help="Show the version and exit.",
-        ),
-    ] = False,
-) -> None:
-    """Bulk-safe branch cleanup for git repositories.
-
-    Exit codes: 0 nothing to do / success, 10 candidates found, 1 error.
-    """
-    del version  # handled by the eager callback
-    configure_logging(verbose)
-
-
-@app.command("scan")
 def cmd_scan(
-    repo: RepoOption = Path(),
-    mainline: MainOption = None,
-    stale: StaleOption = DEFAULT_STALE_DAYS,
-    keep: KeepOption = DEFAULT_KEEP_OPTION,
-    pattern: PatternOption = None,
-    json_output: JsonOption = False,
+    repo: Path = Path(),
+    mainline: str | None = None,
+    stale: int = DEFAULT_STALE_DAYS,
+    keep: str = DEFAULT_KEEP_OPTION,
+    pattern: str | None = None,
+    json_output: bool = False,
 ) -> None:
     """Show every branch with its merge status and whether it is safe to delete.
 
@@ -1982,22 +1948,21 @@ def cmd_scan(
             pattern=pattern,
         )
     if json_output:
-        typer.echo(json.dumps(result.to_dict(), indent=2))
+        print(json.dumps(result.to_dict(), indent=2))
     else:
         render_scan_table(result, Console())
-    raise typer.Exit(EXIT_CANDIDATES if result.candidates else EXIT_OK)
+    raise SystemExit(EXIT_CANDIDATES if result.candidates else EXIT_OK)
 
 
-@app.command("delete")
 def cmd_delete(
-    repo: RepoOption = Path(),
-    mainline: MainOption = None,
-    stale: StaleOption = DEFAULT_STALE_DAYS,
-    keep: KeepOption = DEFAULT_KEEP_OPTION,
-    pattern: PatternOption = None,
-    yes: YesOption = False,
-    dry_run: DryRunOption = False,
-    json_output: JsonOption = False,
+    repo: Path = Path(),
+    mainline: str | None = None,
+    stale: int = DEFAULT_STALE_DAYS,
+    keep: str = DEFAULT_KEEP_OPTION,
+    pattern: str | None = None,
+    yes: bool = False,
+    dry_run: bool = False,
+    json_output: bool = False,
 ) -> None:
     """Delete the branches that are safe to delete (dry run unless --yes).
 
@@ -2028,7 +1993,7 @@ def cmd_delete(
             "failed": [{"branch": report.branch.name, "error": error} for report, error in outcome.failed],
             "undo_log": str(outcome.log_path) if outcome.log_path else None,
         }
-        typer.echo(json.dumps(payload, indent=2))
+        print(json.dumps(payload, indent=2))
     elif not candidates:
         _say(console, "Nothing safe to delete.")
     elif not act:
@@ -2048,19 +2013,15 @@ def cmd_delete(
         )
 
     if not candidates:
-        raise typer.Exit(EXIT_OK)
+        raise SystemExit(EXIT_OK)
     if not act:
-        raise typer.Exit(EXIT_CANDIDATES)
-    raise typer.Exit(EXIT_ERROR if outcome.failed else EXIT_OK)
+        raise SystemExit(EXIT_CANDIDATES)
+    raise SystemExit(EXIT_ERROR if outcome.failed else EXIT_OK)
 
 
-@app.command("undo")
 def cmd_undo(
-    repo: RepoOption = Path(),
-    all_runs: Annotated[
-        bool,
-        typer.Option("--all", help="Restore every logged branch, not just the last delete."),
-    ] = False,
+    repo: Path = Path(),
+    all_runs: bool = False,
 ) -> None:
     """Recreate deleted branches from .git/trim-log.jsonl (last delete by default)."""
     console = Console()
@@ -2068,22 +2029,21 @@ def cmd_undo(
         outcome = undo_deletions(repo, all_runs=all_runs)
     if outcome.empty:
         _say(console, "Nothing to undo.")
-        raise typer.Exit(EXIT_OK)
+        raise SystemExit(EXIT_OK)
     for name, sha in outcome.restored:
         _say(console, f"restored {name} at {sha[:8]}", "green")
     for name in outcome.skipped:
         _say(console, f"skipped  {name}: already exists at the logged commit", "dim")
     for name, reason in outcome.failed:
         _say(console, f"FAILED   {name}: {reason}", "bold red")
-    raise typer.Exit(EXIT_ERROR if outcome.failed else EXIT_OK)
+    raise SystemExit(EXIT_ERROR if outcome.failed else EXIT_OK)
 
 
-@app.command("prune-remote")
 def cmd_prune_remote(
-    repo: RepoOption = Path(),
-    remote: Annotated[str, typer.Option("--remote", help="Remote to refresh.")] = "origin",
-    yes: YesOption = False,
-    dry_run: DryRunOption = False,
+    repo: Path = Path(),
+    remote: str = "origin",
+    yes: bool = False,
+    dry_run: bool = False,
 ) -> None:
     """Refresh remote-tracking branches with `git fetch --prune` (dry run unless --yes).
 
@@ -2108,9 +2068,115 @@ def cmd_prune_remote(
         _say(console, f"{intro}: {', '.join(outcome.orphaned)}")
 
 
-def main() -> None:
+def build_parser() -> argparse.ArgumentParser:
+    """Build the command-line argument parser."""
+    parser = argparse.ArgumentParser(
+        prog=APP_NAME,
+        description=(
+            "Bulk-safe branch cleanup: finds squash/rebase merges, refuses unsafe deletions. "
+            "Exit codes: 0 nothing to do / success, 10 candidates found, 1 error."
+        ),
+    )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="count",
+        default=0,
+        help="More logging on stderr (-v info, -vv debug).",
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"{APP_NAME} {__version__}",
+        help="Show the version and exit.",
+    )
+    sub = parser.add_subparsers(dest="command")
+
+    p_scan = sub.add_parser(
+        "scan",
+        help="Show every branch with its merge status and whether it is safe to delete.",
+    )
+    _add_scan_options(p_scan)
+    p_scan.add_argument(
+        "--json",
+        dest="json_output",
+        action="store_true",
+        help="Print machine-readable JSON instead of text.",
+    )
+
+    p_del = sub.add_parser(
+        "delete",
+        help="Delete the branches that are safe to delete (dry run unless --yes).",
+    )
+    _add_scan_options(p_del)
+    _add_act_options(p_del)
+    p_del.add_argument(
+        "--json",
+        dest="json_output",
+        action="store_true",
+        help="Print machine-readable JSON instead of text.",
+    )
+
+    p_undo = sub.add_parser(
+        "undo",
+        help="Recreate deleted branches from .git/trim-log.jsonl (last delete by default).",
+    )
+    _add_repo_option(p_undo)
+    p_undo.add_argument(
+        "--all",
+        dest="all_runs",
+        action="store_true",
+        help="Restore every logged branch, not just the last delete.",
+    )
+
+    p_prune = sub.add_parser(
+        "prune-remote",
+        help="Refresh remote-tracking branches with `git fetch --prune` (dry run unless --yes).",
+    )
+    _add_repo_option(p_prune)
+    p_prune.add_argument("--remote", default="origin", help="Remote to refresh.")
+    _add_act_options(p_prune)
+
+    return parser
+
+
+def main(argv: list[str] | None = None) -> None:
     """Entry point of the ``git-trim`` command."""
-    app()
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    configure_logging(args.verbose)
+    if args.command == "scan":
+        cmd_scan(
+            repo=args.repo,
+            mainline=args.mainline,
+            stale=args.stale,
+            keep=args.keep,
+            pattern=args.pattern,
+            json_output=args.json_output,
+        )
+    elif args.command == "delete":
+        cmd_delete(
+            repo=args.repo,
+            mainline=args.mainline,
+            stale=args.stale,
+            keep=args.keep,
+            pattern=args.pattern,
+            yes=args.yes,
+            dry_run=args.dry_run,
+            json_output=args.json_output,
+        )
+    elif args.command == "undo":
+        cmd_undo(repo=args.repo, all_runs=args.all_runs)
+    elif args.command == "prune-remote":
+        cmd_prune_remote(
+            repo=args.repo,
+            remote=args.remote,
+            yes=args.yes,
+            dry_run=args.dry_run,
+        )
+    else:
+        parser.print_help()
+        raise SystemExit(0)
 
 
 if __name__ == "__main__":
