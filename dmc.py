@@ -22,6 +22,7 @@ Keys:
     F8 / x         Delete (asks confirmation)
     F10 / q        Quit
 """
+
 from __future__ import annotations
 
 from collections.abc import Sequence

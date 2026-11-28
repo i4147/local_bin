@@ -6,6 +6,7 @@ extracting, repacking, recompressing, and verifying archive/compressed files.
 
 Direct use of ``click`` has been removed. Typer remains the CLI framework.
 """
+
 from __future__ import annotations
 
 import bz2

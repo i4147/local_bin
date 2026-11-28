@@ -17,6 +17,7 @@ Usage::
 Install the grammar wheels in ``requirements.txt`` to enable all published
 bindings. A missing language binding affects only files of that language.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass

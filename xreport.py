@@ -1,5 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/env python
 "Unified archive scanner and uncompressed-size reporter (merges xreport.py, xreport2.py, zreport.py)."
+
 from __future__ import annotations
 
 import argparse

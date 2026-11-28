@@ -3,6 +3,7 @@
 
 CLI entry point; creates tar backups, can upload them to Google Drive, and
 installs its dependencies on demand."""
+
 from __future__ import annotations
 
 import argparse

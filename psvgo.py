@@ -5,6 +5,7 @@ Mirrors the upstream svgo CLI, including its options, plugin set and config-file
 handling.
 
 """
+
 from __future__ import annotations
 
 import base64

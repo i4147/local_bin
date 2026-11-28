@@ -3,6 +3,7 @@
 
 CLI entry point; reads mounted filesystems via os.statvfs and renders a coloured
 table."""
+
 from __future__ import annotations
 
 from math import log

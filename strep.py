@@ -7,6 +7,7 @@ Requires:
     - binutils `strip` on PATH
     - rich   (pip install rich)
 """
+
 from __future__ import annotations
 
 from collections.abc import Iterator

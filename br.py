@@ -1,5 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/env python
 "📦 Recursively compress/decompress files using Brotli with parallel processing (deletes originals by default)"
+
 from __future__ import annotations
 
 import argparse

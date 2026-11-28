@@ -1,5 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/env python
 "Unified compression / decompression CLI."
+
 from __future__ import annotations
 
 import argparse

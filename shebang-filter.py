@@ -8,6 +8,7 @@ smudge (checkout):#!/usr/bin/env [-S] interp [args] -> #!$PREFIX/bin/interp [arg
 
 Non-shebang files are streamed through unchanged.
 """
+
 from __future__ import annotations
 
 import os

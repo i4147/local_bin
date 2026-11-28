@@ -1,5 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/env python
 "Find duplicated Python definitions and optionally strip them."
+
 from __future__ import annotations
 
 import argparse

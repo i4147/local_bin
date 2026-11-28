@@ -1,5 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/env python
 "Consolidate a multi-file Python package into one module."
+
 from __future__ import annotations
 
 import ast

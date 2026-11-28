@@ -3,6 +3,7 @@
 
 CLI entry point; scans trees with a thread pool and can re-verify a saved JSON
 report before deleting anything."""
+
 from __future__ import annotations
 
 import argparse

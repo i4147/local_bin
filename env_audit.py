@@ -1,5 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/env python
 """env-audit: Reconcile .env, .env.example, CI, and Python code via static AST analysis."""
+
 from __future__ import annotations
 
 import ast

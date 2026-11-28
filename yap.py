@@ -3,6 +3,7 @@
 
 CLI entry point; runs the three tools over files or directories using a thread
 pool."""
+
 from __future__ import annotations
 
 from collections.abc import Iterable

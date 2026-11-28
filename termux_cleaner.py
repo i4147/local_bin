@@ -1,5 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/env python
 "Utilities for termux cleaner."
+
 from __future__ import annotations
 
 from collections.abc import Iterator

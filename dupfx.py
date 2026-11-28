@@ -26,6 +26,7 @@ Examples:
 
 Command-line script: run ``python dupfx.py`` or the ``dupfx`` command. The module is importable as well.
 """
+
 from __future__ import annotations
 
 from collections import defaultdict

@@ -3,6 +3,7 @@
 
 CLI entry point; writes Markdown and SVG reports to the output directory unless
 disabled."""
+
 from __future__ import annotations
 
 import ast

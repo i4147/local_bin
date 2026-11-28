@@ -1,6 +1,7 @@
 #!/data/data/com.termux/files/usr/bin/env python
 
 "Utilities for pycleaner."
+
 from __future__ import annotations
 
 import argparse

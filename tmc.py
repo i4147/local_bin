@@ -1,6 +1,7 @@
 #!/data/data/com.termux/files/usr/bin/env python
 
 "Strip comments and docstrings from Python files safely. Shebangs, module docstrings, tool directives, and commented-out code are always preserved."
+
 from __future__ import annotations
 
 import argparse

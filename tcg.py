@@ -1,5 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/env python
 """Create a script from clipboard content, with Termux shebang injection."""
+
 from __future__ import annotations
 
 import argparse

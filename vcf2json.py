@@ -3,6 +3,7 @@
 
 CLI entry point; unescapes vCard property values and splits unquoted separators
 before writing the chosen format."""
+
 from __future__ import annotations
 
 import argparse
