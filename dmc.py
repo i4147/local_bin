@@ -574,6 +574,7 @@ class FileManager:
 
         def F(n: int) -> int:
             return curses.KEY_F0 + n
+
         if key == F(10) or key == ord("q"):
             return False
         if key in (F(1), ord("?")):

@@ -46,6 +46,7 @@ DIRS_TO_DELETE: list[str] = [
     "$HOME/.cache/*",
 ]
 
+
 def _expand_env(value: str) -> str:
     return re.sub(
         r"\$(?:(\w+)|\{([^}]+)\})",

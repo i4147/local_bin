@@ -341,19 +341,33 @@ def _color(text: str, code: str, enabled: bool) -> str:
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description='Strip comments (and optionally docstrings/blank lines) from Python sources.')
-    parser.add_argument('paths', nargs="+", type=Path, help='Files or directories to process')
-    parser.add_argument('--remove-all', '-a', action="store_true", default=False, help='Also strip docstrings')
-    parser.add_argument('--collapse-blanks', '-b', action="store_true", default=False, help='Collapse runs of blank lines to a single blank line')
-    parser.add_argument('--dry-run', '-n', action="store_true", default=False, help='Report changes without writing files')
-    parser.add_argument('--no-backup', action="store_true", default=False, help='Do not write .pystripbak backup files')
-    parser.add_argument('--no-color', action="store_true", default=False, help='Disable colorized output')
-    parser.add_argument('-v', '--verbose', action="count", default=0, help='Increase verbosity (repeatable)')
-    parser.add_argument('-q', '--quiet', action="store_true", default=False, help='Suppress per-file output, only show summary')
-    parser.add_argument('--version', action="version", version=f'{PROG} {__version__}', help="show program's version number and exit")
-    parser.add_argument('-j', '--jobs', type=int, default=8, help='Max worker processes (default: 8)')
-    parser.add_argument('--chunksize', type=int, default=8, help='Chunk size for parallel processing (default: 8)')
-    parser.add_argument('--no-parallel', action="store_true", default=False, help='Disable parallel processing')
+    parser = argparse.ArgumentParser(
+        description="Strip comments (and optionally docstrings/blank lines) from Python sources."
+    )
+    parser.add_argument("paths", nargs="+", type=Path, help="Files or directories to process")
+    parser.add_argument("--remove-all", "-a", action="store_true", default=False, help="Also strip docstrings")
+    parser.add_argument(
+        "--collapse-blanks",
+        "-b",
+        action="store_true",
+        default=False,
+        help="Collapse runs of blank lines to a single blank line",
+    )
+    parser.add_argument(
+        "--dry-run", "-n", action="store_true", default=False, help="Report changes without writing files"
+    )
+    parser.add_argument("--no-backup", action="store_true", default=False, help="Do not write .pystripbak backup files")
+    parser.add_argument("--no-color", action="store_true", default=False, help="Disable colorized output")
+    parser.add_argument("-v", "--verbose", action="count", default=0, help="Increase verbosity (repeatable)")
+    parser.add_argument(
+        "-q", "--quiet", action="store_true", default=False, help="Suppress per-file output, only show summary"
+    )
+    parser.add_argument(
+        "--version", action="version", version=f"{PROG} {__version__}", help="show program's version number and exit"
+    )
+    parser.add_argument("-j", "--jobs", type=int, default=8, help="Max worker processes (default: 8)")
+    parser.add_argument("--chunksize", type=int, default=8, help="Chunk size for parallel processing (default: 8)")
+    parser.add_argument("--no-parallel", action="store_true", default=False, help="Disable parallel processing")
     return parser
 
 
@@ -455,6 +469,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(_color("(dry-run: no files were written)", "yellow", color))
 
     return 1 if counts["error"] else 0
+
 
 if __name__ == "__main__":
     raise SystemExit(main())

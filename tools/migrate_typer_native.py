@@ -267,9 +267,7 @@ def _emit_parser_code(
                 if sp.help_src:
                     kw_pos.append(f"help={sp.help_src}")
                 add_lines.append(f"    parser.add_argument({pos_args}, {', '.join(kw_pos)})")
-                add_lines.append(
-                    f"    parser.add_argument({neg_long!r}, dest={sp.name!r}, action=\"store_false\")"
-                )
+                add_lines.append(f'    parser.add_argument({neg_long!r}, dest={sp.name!r}, action="store_false")')
             continue
 
         # Determine flags if none explicitly passed
@@ -485,11 +483,7 @@ def migrate_source(src: str) -> str:
     dispatch_body = (
         f"    parser = build_parser()\n"
         f"    raw = sys.argv[1:] if argv is None else list(argv)\n"
-        + (
-            "    if not raw:\n        parser.print_help()\n        return 0\n"
-            if no_args_is_help
-            else ""
-        )
+        + ("    if not raw:\n        parser.print_help()\n        return 0\n" if no_args_is_help else "")
         + f"    ns = parser.parse_args(raw)\n"
         f"    {fn.name}(**vars(ns))\n"
         f"    return 0\n"
@@ -508,6 +502,7 @@ def migrate_source(src: str) -> str:
         # Handle pyrg.py-style `_app()` inside `main(argv)`
         inline_call = re.compile(rf"^(\s+){re.escape(app_var)}\(\)\s*$", flags=re.MULTILINE)
         if inline_call.search(out):
+
             def _repl(match: re.Match[str]) -> str:
                 ind = match.group(1)
                 lines_d = [

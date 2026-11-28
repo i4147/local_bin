@@ -20,7 +20,6 @@ logger.add(
 )
 
 
-
 RemoveFn = Callable[[Path, Path, int, int], None]
 Backend = tuple[str, RemoveFn]
 

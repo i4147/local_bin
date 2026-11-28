@@ -182,7 +182,7 @@ def resolve_type_presets(types: list[str] | None) -> set[str]:
             if not key:
                 continue
             if key not in TYPE_PRESETS:
-                print(f'unknown type preset {key!r}; known presets: {known}', file=sys.stderr)
+                print(f"unknown type preset {key!r}; known presets: {known}", file=sys.stderr)
                 raise SystemExit(2)
             out |= TYPE_PRESETS[key]
     return out
@@ -198,7 +198,7 @@ def _resolve_type_not(types: list[str] | None) -> set[str]:
             if not key:
                 continue
             if key not in TYPE_PRESETS:
-                print(f'unknown type preset for --type-not: {key!r}', file=sys.stderr)
+                print(f"unknown type preset for --type-not: {key!r}", file=sys.stderr)
                 raise SystemExit(2)
             out |= TYPE_PRESETS[key]
     return out
@@ -206,12 +206,12 @@ def _resolve_type_not(types: list[str] | None) -> set[str]:
 
 def _apply_type_add(spec: str) -> None:
     if ":" not in spec:
-        print(f'invalid --type-add spec {spec!r}; expected NAME:EXT[,EXT...]', file=sys.stderr)
+        print(f"invalid --type-add spec {spec!r}; expected NAME:EXT[,EXT...]", file=sys.stderr)
         raise SystemExit(2)
     name, exts = spec.split(":", 1)
     key = name.strip().lower()
     if not key:
-        print('invalid --type-add: empty name', file=sys.stderr)
+        print("invalid --type-add: empty name", file=sys.stderr)
         raise SystemExit(2)
     extset: set[str] = set()
     for piece in exts.split(","):
@@ -647,7 +647,7 @@ def _collect_files(
         for p in ignore_files:
             fp = Path(p)
             if not fp.is_file():
-                print(f'error: --ignore-file {p!r} not found', file=sys.stderr)
+                print(f"error: --ignore-file {p!r} not found", file=sys.stderr)
                 raise SystemExit(3)
             extra_ignore_paths.append(fp)
     matcher: IgnoreMatcher | None = None
@@ -678,7 +678,7 @@ def _collect_files(
     if require_git:
         tracked = _git_tracked_paths(Path.cwd())
         if tracked is None:
-            print('error: --require-git requires a git repo with git installed', file=sys.stderr)
+            print("error: --require-git requires a git repo with git installed", file=sys.stderr)
             raise SystemExit(3)
         candidates = [f for f in candidates if f.resolve() in tracked]
     return candidates
@@ -696,7 +696,7 @@ def _read_list_source(path_str: str) -> list[str]:
         with open(path_str, "r", encoding="utf-8", errors="replace") as fh:
             return [line.rstrip("\n") for line in fh]
     except OSError as ex:
-        print(f'error: cannot read {path_str!r}: {ex}', file=sys.stderr)
+        print(f"error: cannot read {path_str!r}: {ex}", file=sys.stderr)
         raise SystemExit(3)
 
 
@@ -1751,7 +1751,7 @@ def _backup_file(path: Path, suffix: str, backup_dir: Path | None, cwd: Path) ->
     try:
         data = path.read_bytes()
     except OSError as ex:
-        print(f'backup failed for {path}: {ex}', file=sys.stderr)
+        print(f"backup failed for {path}: {ex}", file=sys.stderr)
         return
     if backup_dir is not None:
         try:
@@ -1764,13 +1764,13 @@ def _backup_file(path: Path, suffix: str, backup_dir: Path | None, cwd: Path) ->
             target.parent.mkdir(parents=True, exist_ok=True)
             atomic_write(target, data)
         except OSError as ex:
-            print(f'backup failed for {path}: {ex}', file=sys.stderr)
+            print(f"backup failed for {path}: {ex}", file=sys.stderr)
     else:
         target = path.with_name(path.name + suffix)
         try:
             atomic_write(target, data)
         except OSError as ex:
-            print(f'backup failed for {path}: {ex}', file=sys.stderr)
+            print(f"backup failed for {path}: {ex}", file=sys.stderr)
 
 
 def _sha256(data: bytes) -> str:
@@ -1807,7 +1807,7 @@ def _append_undo_journal(journal: Path, path: Path, old_bytes: bytes, new_bytes:
 def _undo_from_journal(journal: Path, cwd: Path) -> int:
     jpath, _blob_dir = _undo_journal_paths(journal)
     if not jpath.is_file():
-        print(f'error: undo journal {jpath} not found', file=sys.stderr)
+        print(f"error: undo journal {jpath} not found", file=sys.stderr)
         raise SystemExit(3)
     entries: list[dict[str, Any]] = []
     with open(jpath, "r", encoding="utf-8") as jf:
@@ -1828,19 +1828,19 @@ def _undo_from_journal(journal: Path, cwd: Path) -> int:
         except OSError:
             continue
         if _sha256(current) != entry["new_hash"]:
-            print(f'skip {path}: hash mismatch', file=sys.stderr)
+            print(f"skip {path}: hash mismatch", file=sys.stderr)
             continue
         try:
             data = blob.read_bytes()
         except OSError:
-            print(f'skip {path}: blob missing', file=sys.stderr)
+            print(f"skip {path}: blob missing", file=sys.stderr)
             continue
         try:
             _atomic_write(path, data)
             restored += 1
         except OSError as ex:
-            print(f'undo failed for {path}: {ex}', file=sys.stderr)
-    print(f'Restored {restored} file(s)')
+            print(f"undo failed for {path}: {ex}", file=sys.stderr)
+    print(f"Restored {restored} file(s)")
     return 0
 
 
@@ -1927,7 +1927,7 @@ def _emit_completion(shell: str) -> int:
     }
     script = mapping.get(shell)
     if script is None:
-        print(f'error: unknown shell {shell!r}; expected bash, zsh, fish, powershell', file=sys.stderr)
+        print(f"error: unknown shell {shell!r}; expected bash, zsh, fish, powershell", file=sys.stderr)
         return 2
     sys.stdout.write(script)
     return 0
@@ -2011,123 +2011,498 @@ def _search_quiet(
 # CLI
 # --------------------------------------------------------------------------- #
 
+
 def build_parser() -> argparse.ArgumentParser:
     """Build the command-line argument parser."""
-    parser = argparse.ArgumentParser(prog='pyrg', description='pyrg — a ripgrep-like recursive regex search tool.\n\nSearch files for a regular expression (or fixed string) with support for case folding, inversion, multiline patterns, context lines, only-matching output, in-place replacement, glob/extension/type filtering, gitignore-style ignore files, JSON output, counting, quiet mode, and parallel processing.')
-    parser.add_argument('pattern', nargs="?", default=None, help='Regex pattern (or use -r/--regexp). Required unless --files/--type-list/--generate/--version/--undo.')
-    parser.add_argument('paths', nargs="*", default=None, help='Files or directories to search (default: current directory).')
-    parser.add_argument('-r', '--regexp', dest='regexp', default=None, help='Pattern (alternative to positional PATTERN).')
-    parser.add_argument('-e', dest='e_opt', default=None, help='Alias for -r/--regexp (extension mode under --legacy-flags).')
-    parser.add_argument('-f', '--pattern-file', dest='pattern_file', default=None, help='Read patterns from PATH (one per line).')
-    parser.add_argument('--ext', dest='extensions', action="append", default=None, help='Only search files with given extension(s) (repeatable, comma ok).')
-    parser.add_argument('-t', '--type', dest='types', action="append", default=None, help='Only search files matching a type preset (repeatable).')
-    parser.add_argument('-T', '--type-not', dest='type_not', action="append", default=None, help='Exclude files of a given type preset (repeatable).')
-    parser.add_argument('--type-add', dest='type_add', action="append", default=None, help='Register preset NAME:EXT[,EXT...] (repeatable).')
-    parser.add_argument('--type-clear', dest='type_clear', action="append", default=None, help='Remove preset NAME (repeatable).')
-    parser.add_argument('--type-list', dest='type_list', action="store_true", default=False, help='Print known presets and exit.')
-    parser.add_argument('-i', '--ignore-case', dest='ignore_case', action="store_true", default=False, help='Case-insensitive matching.')
-    parser.add_argument('-S', '--smart-case', dest='smart_case', action="store_true", default=False, help='Case-insensitive unless pattern has uppercase.')
-    parser.add_argument('-s', '--case-sensitive', dest='case_sensitive', action="store_true", default=False, help='Force case-sensitive matching.')
-    parser.add_argument('-F', '--fixed-strings', dest='fixed_strings', action="store_true", default=False, help='Treat PATTERN as a literal string.')
-    parser.add_argument('-w', '--word-regexp', dest='word_regexp', action="store_true", default=False, help='Match whole words only.')
-    parser.add_argument('--line-regexp', dest='line_regexp_x', action="store_true", default=False, help='Match whole lines only.')
-    parser.add_argument('-v', '--invert-match', dest='invert_match', action="store_true", default=False, help='Show non-matching lines.')
-    parser.add_argument('-U', '--multiline', dest='multiline', action="store_true", default=False, help='Allow pattern to span lines (DOTALL).')
-    parser.add_argument('--no-unicode', dest='no_unicode', action="store_true", default=False, help='Disable Unicode (re.ASCII).')
-    parser.add_argument('--crlf', dest='crlf', action="store_true", default=False, help='Strip CR before matching; re-append on write.')
-    parser.add_argument('-P', '--pcre2', dest='pcre2', action="store_true", default=False, help="Use the 'regex' module (alias for --engine regex).")
-    parser.add_argument('--engine', dest='engine', default='re', help="Regex engine: 're' (default) or 'regex'.")
-    parser.add_argument('-o', '--only-matching', dest='only_matching', action="store_true", default=False, help='Print only matched parts.')
-    parser.add_argument('--replace', dest='replace', default=None, help='Replacement template (\\1 backreferences).')
-    parser.add_argument('--literal-replace', dest='literal_replace', action="store_true", default=False, help='Do not expand backreferences in replacement.')
-    parser.add_argument('--replace-from', dest='replace_from', default=None, help='Read replacement template from PATH (-: stdin).')
-    parser.add_argument('-n', '--line-number', dest='line_number_flag', action="store_true", default=True, help='Show line numbers (default on).')
-    parser.add_argument('--no-line-number', dest='no_line_number', action="store_true", default=False, help='Hide line numbers.')
-    parser.add_argument('-l', '--files-with-matches', dest='files_with_matches', action="store_true", default=False, help='Print only paths with matches.')
-    parser.add_argument('-L', '--files-without-match', dest='files_without_match', action="store_true", default=False, help='Print only paths without matches.')
-    parser.add_argument('-c', '--count', dest='count', action="store_true", default=False, help='Print match count per file.')
-    parser.add_argument('-q', '--quiet', dest='quiet', action="store_true", default=False, help='Suppress output; exit status indicates match.')
-    parser.add_argument('--check', dest='check', action="store_true", default=False, help='Exit 0 on match, 1 on none, 2 on error.')
-    parser.add_argument('--exit-code', dest='exit_code', action="store_true", default=False, help='Exit 1 when no matches found.')
-    parser.add_argument('--json', dest='json_out', action="store_true", default=False, help='Emit one JSON object per match.')
-    parser.add_argument('--json-seq', dest='json_seq', action="store_true", default=False, help='Emit one JSON array per match.')
-    parser.add_argument('--heading', dest='heading_flag', action="store_true", default=False, help="Force headings above each file's matches.")
-    parser.add_argument('--no-heading', dest='no_heading', action="store_true", default=False, help='Suppress headings.')
-    parser.add_argument('-H', '--with-filename', dest='with_filename', action="store_true", default=False, help='Force filename in output.')
-    parser.add_argument('--no-filename', dest='no_filename', action="store_true", default=False, help='Suppress filename in output.')
-    parser.add_argument('--column', dest='column', action="store_true", default=False, help='Print 1-based column of first match.')
-    parser.add_argument('-b', '--byte-offset', dest='byte_offset', action="store_true", default=False, help='Print byte offset of match.')
-    parser.add_argument('-0', '--null', dest='null_sep', action="store_true", default=False, help='NUL after paths in -l/-L/-c/--files.')
-    parser.add_argument('--passthru', dest='passthru', action="store_true", default=False, help='Print non-matching lines alongside matches.')
-    parser.add_argument('-p', '--pretty', dest='pretty', action="store_true", default=False, help='Shorthand for --color always --heading --line-number.')
-    parser.add_argument('--max-columns', dest='max_columns', default=0, type=int, help='Truncate printed lines to N characters.')
-    parser.add_argument('--max-columns-preview', dest='max_columns_preview', action="store_true", default=False, help='Show truncation preview.')
-    parser.add_argument('--stats-only', dest='stats_only', action="store_true", default=False, help='Print only stats summary (implies -q).')
-    parser.add_argument('--context-separator', dest='context_separator', default=None, help='Separator between context groups (default: --).')
-    parser.add_argument('--field-match-separator', dest='field_match_separator', default=':', help='Separator between path/line/text for matches.')
-    parser.add_argument('--field-context-separator', dest='field_context_separator', default='-', help='Separator for context lines.')
-    parser.add_argument('-A', '--after-context', dest='after_context', default=0, type=int, help='Show N lines after each match.')
-    parser.add_argument('-B', '--before-context', dest='before_context', default=0, type=int, help='Show N lines before each match.')
-    parser.add_argument('-C', '--context', dest='context', default=None, type=int, help='Shorthand for -A N -B N.')
-    parser.add_argument('--hidden', dest='hidden', action="store_true", default=False, help='Search hidden files/dirs.')
-    parser.add_argument('-u', '--unrestricted', dest='unrestricted', action="count", default=0, help='Reduce filtering: -u no-ignore, -uu +hidden, -uuu +text.')
-    parser.add_argument('-a', '--text', dest='text_flag', action="store_true", default=False, help='Treat binary files as text.')
-    parser.add_argument('--binary', dest='binary_flag', action="store_true", default=False, help='Search binary files, escape NULs.')
-    parser.add_argument('--require-git', dest='require_git', action="store_true", default=False, help='Only search files tracked by git.')
-    parser.add_argument('--require-clean-git', dest='require_clean_git', action="store_true", default=False, help='Refuse if git working tree is dirty.')
-    parser.add_argument('-g', '--glob', dest='glob_patterns', action="append", default=None, help='Only search paths matching GLOB (repeatable).')
-    parser.add_argument('--iglob', dest='iglob', action="append", default=None, help='Case-insensitive include glob (repeatable).')
-    parser.add_argument('--glob-case-insensitive', dest='glob_case_insensitive', action="store_true", default=False, help='Make -g/--iglob/--exclude-dir case-insensitive.')
-    parser.add_argument('--exclude', dest='exclude', action="append", default=None, help='Exclude paths matching GLOB (repeatable).')
-    parser.add_argument('--exclude-dir', dest='exclude_dirs', action="append", default=None, help='Exclude directory NAME (repeatable).')
-    parser.add_argument('--max-depth', dest='max_depth', default=None, type=int, help='Maximum directory depth.')
-    parser.add_argument('--max-filesize', dest='max_filesize', default=10000000, type=int, help='Skip files larger than BYTES.')
-    parser.add_argument('-m', '-M', '--max-count', dest='max_count', default=0, type=int, help='Stop after N matching lines per file.')
-    parser.add_argument('--no-ignore', dest='no_ignore', action="store_true", default=False, help='Do not honour .gitignore / .ignore.')
-    parser.add_argument('--ignore-file', dest='ignore_file', action="append", default=None, help='Additional ignore file (repeatable).')
-    parser.add_argument('--follow', dest='follow', action="store_true", default=False, help='Follow symlinks (with cycle detection).')
-    parser.add_argument('--files-from', dest='files_from', default=None, help='Read file list from PATH (-: stdin).')
-    parser.add_argument('--encoding', dest='encoding', default='utf-8', help='Text encoding to use.')
-    parser.add_argument('--files', dest='list_files', action="store_true", default=False, help='List files that would be searched, then exit.')
-    parser.add_argument('--sort', dest='sort', default='none', help='Sort: path|modified|accessed|created|none.')
-    parser.add_argument('--sortr', dest='sortr', action="store_true", default=False, help='Reverse sort order.')
-    parser.add_argument('--pre', dest='pre_cmd', default=None, help='Pipe each file through CMD and search its stdout.')
-    parser.add_argument('--pre-glob', dest='pre_glob', default=None, help='Only preprocess files matching GLOB.')
-    parser.add_argument('-j', '--threads', dest='threads', default=MAX_WORKERS, type=int, help='Worker count.')
-    parser.add_argument('--no-parallel', dest='no_parallel', action="store_true", default=False, help='Force single-threaded execution.')
-    parser.add_argument('--mmap', dest='mmap_flag', action=argparse.BooleanOptionalAction, default=True, help='Use mmap for large files (default on).')
-    parser.add_argument('--mmap-threshold', dest='mmap_threshold', default=1048576, type=int, help='mmap files >= BYTES.')
-    parser.add_argument('--buffer-size', dest='buffer_size', default=65536, type=int, help='Buffered reader size.')
-    parser.add_argument('--process-lines', dest='process_lines', action="store_true", default=False, help='Stream lines instead of reading whole file.')
-    parser.add_argument('--regex-size-limit', dest='regex_size_limit', default=10000000, type=int, help='Regex size limit (engine=regex only).')
-    parser.add_argument('--dfa-size-limit', dest='dfa_size_limit', default=10000000, type=int, help='DFA size limit (engine=regex only).')
-    parser.add_argument('-W', '--in-place', dest='in_place', action="store_true", default=False, help='Modify files in place (requires --replace).')
-    parser.add_argument('--dry-run', dest='dry_run', action="store_true", default=False, help='Preview changes without writing (implies --diff).')
-    parser.add_argument('--diff', dest='diff', action="store_true", default=False, help='Print unified diff (implies --dry-run).')
-    parser.add_argument('--backup', dest='backup', default=None, help='Save backup with SUFFIX (default .bak).')
-    parser.add_argument('--backup-dir', dest='backup_dir', default=None, help='Mirror backups into DIR.')
-    parser.add_argument('--undo-journal', dest='undo_journal', default=None, help='JSON undo journal path.')
-    parser.add_argument('--undo', dest='undo', action="store_true", default=False, help='Replay --undo-journal in reverse.')
-    parser.add_argument('--prompt', dest='prompt', action="store_true", default=False, help='Interactive per-file [y]/[n]/[a]/[q] prompt.')
-    parser.add_argument('--confirm', dest='confirm', action="store_true", default=False, help='Ask global [y/N] confirmation before writing.')
-    parser.add_argument('--atomic-write', dest='atomic_write', action=argparse.BooleanOptionalAction, default=True, help='Atomic writes (default on for --in-place).')
-    parser.add_argument('--preserve-case', dest='preserve_case', action="store_true", default=False, help='Preserve match case in replacement.')
-    parser.add_argument('--upper', dest='upper', action="store_true", default=False, help='Uppercase the replacement.')
-    parser.add_argument('--lower', dest='lower', action="store_true", default=False, help='Lowercase the replacement.')
-    parser.add_argument('--capitalize', dest='capitalize', action="store_true", default=False, help='Capitalize the replacement.')
-    parser.add_argument('--color', dest='color', default='auto', help='Colour output: auto|always|never.')
-    parser.add_argument('--no-color', dest='no_color', action="store_true", default=False, help='Alias for --color never.')
-    parser.add_argument('--out-file', dest='out_file', default=None, help='Write results to FILE.')
-    parser.add_argument('--stats', dest='stats', action="count", default=0, help='Print summary to stderr (repeat for more detail).')
-    parser.add_argument('--no-messages', dest='no_messages', action="store_true", default=False, help='Suppress per-file error reporting and no-match message.')
-    parser.add_argument('--legacy-flags', dest='legacy_flags', action="store_true", default=False, help='Restore old short-flag meanings (-e/-x/-L).')
-    parser.add_argument('--config', dest='config_path', default=None, help='Load defaults from TOML/JSON config.')
-    parser.add_argument('--no-config', dest='no_config', action="store_true", default=False, help='Disable config auto-discovery.')
-    parser.add_argument('--debug', dest='debug_flag', action="store_true", default=False, help='Enable DEBUG logging (stderr).')
-    parser.add_argument('--trace', dest='trace_flag', action="store_true", default=False, help='Enable TRACE logging (stderr).')
-    parser.add_argument('--log-file', dest='log_file', default=None, help="Override log file path ('' to disable).")
-    parser.add_argument('--version', dest='version_flag', action="store_true", default=False, help='Print version and exit.')
-    parser.add_argument('--generate', dest='generate', default=None, help='Emit shell completions for bash|zsh|fish|powershell.')
+    parser = argparse.ArgumentParser(
+        prog="pyrg",
+        description="pyrg — a ripgrep-like recursive regex search tool.\n\nSearch files for a regular expression (or fixed string) with support for case folding, inversion, multiline patterns, context lines, only-matching output, in-place replacement, glob/extension/type filtering, gitignore-style ignore files, JSON output, counting, quiet mode, and parallel processing.",
+    )
+    parser.add_argument(
+        "pattern",
+        nargs="?",
+        default=None,
+        help="Regex pattern (or use -r/--regexp). Required unless --files/--type-list/--generate/--version/--undo.",
+    )
+    parser.add_argument(
+        "paths", nargs="*", default=None, help="Files or directories to search (default: current directory)."
+    )
+    parser.add_argument(
+        "-r", "--regexp", dest="regexp", default=None, help="Pattern (alternative to positional PATTERN)."
+    )
+    parser.add_argument(
+        "-e", dest="e_opt", default=None, help="Alias for -r/--regexp (extension mode under --legacy-flags)."
+    )
+    parser.add_argument(
+        "-f", "--pattern-file", dest="pattern_file", default=None, help="Read patterns from PATH (one per line)."
+    )
+    parser.add_argument(
+        "--ext",
+        dest="extensions",
+        action="append",
+        default=None,
+        help="Only search files with given extension(s) (repeatable, comma ok).",
+    )
+    parser.add_argument(
+        "-t",
+        "--type",
+        dest="types",
+        action="append",
+        default=None,
+        help="Only search files matching a type preset (repeatable).",
+    )
+    parser.add_argument(
+        "-T",
+        "--type-not",
+        dest="type_not",
+        action="append",
+        default=None,
+        help="Exclude files of a given type preset (repeatable).",
+    )
+    parser.add_argument(
+        "--type-add",
+        dest="type_add",
+        action="append",
+        default=None,
+        help="Register preset NAME:EXT[,EXT...] (repeatable).",
+    )
+    parser.add_argument(
+        "--type-clear", dest="type_clear", action="append", default=None, help="Remove preset NAME (repeatable)."
+    )
+    parser.add_argument(
+        "--type-list", dest="type_list", action="store_true", default=False, help="Print known presets and exit."
+    )
+    parser.add_argument(
+        "-i", "--ignore-case", dest="ignore_case", action="store_true", default=False, help="Case-insensitive matching."
+    )
+    parser.add_argument(
+        "-S",
+        "--smart-case",
+        dest="smart_case",
+        action="store_true",
+        default=False,
+        help="Case-insensitive unless pattern has uppercase.",
+    )
+    parser.add_argument(
+        "-s",
+        "--case-sensitive",
+        dest="case_sensitive",
+        action="store_true",
+        default=False,
+        help="Force case-sensitive matching.",
+    )
+    parser.add_argument(
+        "-F",
+        "--fixed-strings",
+        dest="fixed_strings",
+        action="store_true",
+        default=False,
+        help="Treat PATTERN as a literal string.",
+    )
+    parser.add_argument(
+        "-w", "--word-regexp", dest="word_regexp", action="store_true", default=False, help="Match whole words only."
+    )
+    parser.add_argument(
+        "--line-regexp", dest="line_regexp_x", action="store_true", default=False, help="Match whole lines only."
+    )
+    parser.add_argument(
+        "-v", "--invert-match", dest="invert_match", action="store_true", default=False, help="Show non-matching lines."
+    )
+    parser.add_argument(
+        "-U",
+        "--multiline",
+        dest="multiline",
+        action="store_true",
+        default=False,
+        help="Allow pattern to span lines (DOTALL).",
+    )
+    parser.add_argument(
+        "--no-unicode", dest="no_unicode", action="store_true", default=False, help="Disable Unicode (re.ASCII)."
+    )
+    parser.add_argument(
+        "--crlf", dest="crlf", action="store_true", default=False, help="Strip CR before matching; re-append on write."
+    )
+    parser.add_argument(
+        "-P",
+        "--pcre2",
+        dest="pcre2",
+        action="store_true",
+        default=False,
+        help="Use the 'regex' module (alias for --engine regex).",
+    )
+    parser.add_argument("--engine", dest="engine", default="re", help="Regex engine: 're' (default) or 'regex'.")
+    parser.add_argument(
+        "-o",
+        "--only-matching",
+        dest="only_matching",
+        action="store_true",
+        default=False,
+        help="Print only matched parts.",
+    )
+    parser.add_argument("--replace", dest="replace", default=None, help="Replacement template (\\1 backreferences).")
+    parser.add_argument(
+        "--literal-replace",
+        dest="literal_replace",
+        action="store_true",
+        default=False,
+        help="Do not expand backreferences in replacement.",
+    )
+    parser.add_argument(
+        "--replace-from", dest="replace_from", default=None, help="Read replacement template from PATH (-: stdin)."
+    )
+    parser.add_argument(
+        "-n",
+        "--line-number",
+        dest="line_number_flag",
+        action="store_true",
+        default=True,
+        help="Show line numbers (default on).",
+    )
+    parser.add_argument(
+        "--no-line-number", dest="no_line_number", action="store_true", default=False, help="Hide line numbers."
+    )
+    parser.add_argument(
+        "-l",
+        "--files-with-matches",
+        dest="files_with_matches",
+        action="store_true",
+        default=False,
+        help="Print only paths with matches.",
+    )
+    parser.add_argument(
+        "-L",
+        "--files-without-match",
+        dest="files_without_match",
+        action="store_true",
+        default=False,
+        help="Print only paths without matches.",
+    )
+    parser.add_argument(
+        "-c", "--count", dest="count", action="store_true", default=False, help="Print match count per file."
+    )
+    parser.add_argument(
+        "-q",
+        "--quiet",
+        dest="quiet",
+        action="store_true",
+        default=False,
+        help="Suppress output; exit status indicates match.",
+    )
+    parser.add_argument(
+        "--check", dest="check", action="store_true", default=False, help="Exit 0 on match, 1 on none, 2 on error."
+    )
+    parser.add_argument(
+        "--exit-code", dest="exit_code", action="store_true", default=False, help="Exit 1 when no matches found."
+    )
+    parser.add_argument(
+        "--json", dest="json_out", action="store_true", default=False, help="Emit one JSON object per match."
+    )
+    parser.add_argument(
+        "--json-seq", dest="json_seq", action="store_true", default=False, help="Emit one JSON array per match."
+    )
+    parser.add_argument(
+        "--heading",
+        dest="heading_flag",
+        action="store_true",
+        default=False,
+        help="Force headings above each file's matches.",
+    )
+    parser.add_argument(
+        "--no-heading", dest="no_heading", action="store_true", default=False, help="Suppress headings."
+    )
+    parser.add_argument(
+        "-H",
+        "--with-filename",
+        dest="with_filename",
+        action="store_true",
+        default=False,
+        help="Force filename in output.",
+    )
+    parser.add_argument(
+        "--no-filename", dest="no_filename", action="store_true", default=False, help="Suppress filename in output."
+    )
+    parser.add_argument(
+        "--column", dest="column", action="store_true", default=False, help="Print 1-based column of first match."
+    )
+    parser.add_argument(
+        "-b",
+        "--byte-offset",
+        dest="byte_offset",
+        action="store_true",
+        default=False,
+        help="Print byte offset of match.",
+    )
+    parser.add_argument(
+        "-0", "--null", dest="null_sep", action="store_true", default=False, help="NUL after paths in -l/-L/-c/--files."
+    )
+    parser.add_argument(
+        "--passthru",
+        dest="passthru",
+        action="store_true",
+        default=False,
+        help="Print non-matching lines alongside matches.",
+    )
+    parser.add_argument(
+        "-p",
+        "--pretty",
+        dest="pretty",
+        action="store_true",
+        default=False,
+        help="Shorthand for --color always --heading --line-number.",
+    )
+    parser.add_argument(
+        "--max-columns", dest="max_columns", default=0, type=int, help="Truncate printed lines to N characters."
+    )
+    parser.add_argument(
+        "--max-columns-preview",
+        dest="max_columns_preview",
+        action="store_true",
+        default=False,
+        help="Show truncation preview.",
+    )
+    parser.add_argument(
+        "--stats-only",
+        dest="stats_only",
+        action="store_true",
+        default=False,
+        help="Print only stats summary (implies -q).",
+    )
+    parser.add_argument(
+        "--context-separator",
+        dest="context_separator",
+        default=None,
+        help="Separator between context groups (default: --).",
+    )
+    parser.add_argument(
+        "--field-match-separator",
+        dest="field_match_separator",
+        default=":",
+        help="Separator between path/line/text for matches.",
+    )
+    parser.add_argument(
+        "--field-context-separator", dest="field_context_separator", default="-", help="Separator for context lines."
+    )
+    parser.add_argument(
+        "-A", "--after-context", dest="after_context", default=0, type=int, help="Show N lines after each match."
+    )
+    parser.add_argument(
+        "-B", "--before-context", dest="before_context", default=0, type=int, help="Show N lines before each match."
+    )
+    parser.add_argument("-C", "--context", dest="context", default=None, type=int, help="Shorthand for -A N -B N.")
+    parser.add_argument("--hidden", dest="hidden", action="store_true", default=False, help="Search hidden files/dirs.")
+    parser.add_argument(
+        "-u",
+        "--unrestricted",
+        dest="unrestricted",
+        action="count",
+        default=0,
+        help="Reduce filtering: -u no-ignore, -uu +hidden, -uuu +text.",
+    )
+    parser.add_argument(
+        "-a", "--text", dest="text_flag", action="store_true", default=False, help="Treat binary files as text."
+    )
+    parser.add_argument(
+        "--binary", dest="binary_flag", action="store_true", default=False, help="Search binary files, escape NULs."
+    )
+    parser.add_argument(
+        "--require-git",
+        dest="require_git",
+        action="store_true",
+        default=False,
+        help="Only search files tracked by git.",
+    )
+    parser.add_argument(
+        "--require-clean-git",
+        dest="require_clean_git",
+        action="store_true",
+        default=False,
+        help="Refuse if git working tree is dirty.",
+    )
+    parser.add_argument(
+        "-g",
+        "--glob",
+        dest="glob_patterns",
+        action="append",
+        default=None,
+        help="Only search paths matching GLOB (repeatable).",
+    )
+    parser.add_argument(
+        "--iglob", dest="iglob", action="append", default=None, help="Case-insensitive include glob (repeatable)."
+    )
+    parser.add_argument(
+        "--glob-case-insensitive",
+        dest="glob_case_insensitive",
+        action="store_true",
+        default=False,
+        help="Make -g/--iglob/--exclude-dir case-insensitive.",
+    )
+    parser.add_argument(
+        "--exclude", dest="exclude", action="append", default=None, help="Exclude paths matching GLOB (repeatable)."
+    )
+    parser.add_argument(
+        "--exclude-dir", dest="exclude_dirs", action="append", default=None, help="Exclude directory NAME (repeatable)."
+    )
+    parser.add_argument("--max-depth", dest="max_depth", default=None, type=int, help="Maximum directory depth.")
+    parser.add_argument(
+        "--max-filesize", dest="max_filesize", default=10000000, type=int, help="Skip files larger than BYTES."
+    )
+    parser.add_argument(
+        "-m", "-M", "--max-count", dest="max_count", default=0, type=int, help="Stop after N matching lines per file."
+    )
+    parser.add_argument(
+        "--no-ignore", dest="no_ignore", action="store_true", default=False, help="Do not honour .gitignore / .ignore."
+    )
+    parser.add_argument(
+        "--ignore-file", dest="ignore_file", action="append", default=None, help="Additional ignore file (repeatable)."
+    )
+    parser.add_argument(
+        "--follow", dest="follow", action="store_true", default=False, help="Follow symlinks (with cycle detection)."
+    )
+    parser.add_argument("--files-from", dest="files_from", default=None, help="Read file list from PATH (-: stdin).")
+    parser.add_argument("--encoding", dest="encoding", default="utf-8", help="Text encoding to use.")
+    parser.add_argument(
+        "--files",
+        dest="list_files",
+        action="store_true",
+        default=False,
+        help="List files that would be searched, then exit.",
+    )
+    parser.add_argument("--sort", dest="sort", default="none", help="Sort: path|modified|accessed|created|none.")
+    parser.add_argument("--sortr", dest="sortr", action="store_true", default=False, help="Reverse sort order.")
+    parser.add_argument("--pre", dest="pre_cmd", default=None, help="Pipe each file through CMD and search its stdout.")
+    parser.add_argument("--pre-glob", dest="pre_glob", default=None, help="Only preprocess files matching GLOB.")
+    parser.add_argument("-j", "--threads", dest="threads", default=MAX_WORKERS, type=int, help="Worker count.")
+    parser.add_argument(
+        "--no-parallel", dest="no_parallel", action="store_true", default=False, help="Force single-threaded execution."
+    )
+    parser.add_argument(
+        "--mmap",
+        dest="mmap_flag",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Use mmap for large files (default on).",
+    )
+    parser.add_argument(
+        "--mmap-threshold", dest="mmap_threshold", default=1048576, type=int, help="mmap files >= BYTES."
+    )
+    parser.add_argument("--buffer-size", dest="buffer_size", default=65536, type=int, help="Buffered reader size.")
+    parser.add_argument(
+        "--process-lines",
+        dest="process_lines",
+        action="store_true",
+        default=False,
+        help="Stream lines instead of reading whole file.",
+    )
+    parser.add_argument(
+        "--regex-size-limit",
+        dest="regex_size_limit",
+        default=10000000,
+        type=int,
+        help="Regex size limit (engine=regex only).",
+    )
+    parser.add_argument(
+        "--dfa-size-limit",
+        dest="dfa_size_limit",
+        default=10000000,
+        type=int,
+        help="DFA size limit (engine=regex only).",
+    )
+    parser.add_argument(
+        "-W",
+        "--in-place",
+        dest="in_place",
+        action="store_true",
+        default=False,
+        help="Modify files in place (requires --replace).",
+    )
+    parser.add_argument(
+        "--dry-run",
+        dest="dry_run",
+        action="store_true",
+        default=False,
+        help="Preview changes without writing (implies --diff).",
+    )
+    parser.add_argument(
+        "--diff", dest="diff", action="store_true", default=False, help="Print unified diff (implies --dry-run)."
+    )
+    parser.add_argument("--backup", dest="backup", default=None, help="Save backup with SUFFIX (default .bak).")
+    parser.add_argument("--backup-dir", dest="backup_dir", default=None, help="Mirror backups into DIR.")
+    parser.add_argument("--undo-journal", dest="undo_journal", default=None, help="JSON undo journal path.")
+    parser.add_argument(
+        "--undo", dest="undo", action="store_true", default=False, help="Replay --undo-journal in reverse."
+    )
+    parser.add_argument(
+        "--prompt",
+        dest="prompt",
+        action="store_true",
+        default=False,
+        help="Interactive per-file [y]/[n]/[a]/[q] prompt.",
+    )
+    parser.add_argument(
+        "--confirm",
+        dest="confirm",
+        action="store_true",
+        default=False,
+        help="Ask global [y/N] confirmation before writing.",
+    )
+    parser.add_argument(
+        "--atomic-write",
+        dest="atomic_write",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Atomic writes (default on for --in-place).",
+    )
+    parser.add_argument(
+        "--preserve-case",
+        dest="preserve_case",
+        action="store_true",
+        default=False,
+        help="Preserve match case in replacement.",
+    )
+    parser.add_argument("--upper", dest="upper", action="store_true", default=False, help="Uppercase the replacement.")
+    parser.add_argument("--lower", dest="lower", action="store_true", default=False, help="Lowercase the replacement.")
+    parser.add_argument(
+        "--capitalize", dest="capitalize", action="store_true", default=False, help="Capitalize the replacement."
+    )
+    parser.add_argument("--color", dest="color", default="auto", help="Colour output: auto|always|never.")
+    parser.add_argument(
+        "--no-color", dest="no_color", action="store_true", default=False, help="Alias for --color never."
+    )
+    parser.add_argument("--out-file", dest="out_file", default=None, help="Write results to FILE.")
+    parser.add_argument(
+        "--stats", dest="stats", action="count", default=0, help="Print summary to stderr (repeat for more detail)."
+    )
+    parser.add_argument(
+        "--no-messages",
+        dest="no_messages",
+        action="store_true",
+        default=False,
+        help="Suppress per-file error reporting and no-match message.",
+    )
+    parser.add_argument(
+        "--legacy-flags",
+        dest="legacy_flags",
+        action="store_true",
+        default=False,
+        help="Restore old short-flag meanings (-e/-x/-L).",
+    )
+    parser.add_argument("--config", dest="config_path", default=None, help="Load defaults from TOML/JSON config.")
+    parser.add_argument(
+        "--no-config", dest="no_config", action="store_true", default=False, help="Disable config auto-discovery."
+    )
+    parser.add_argument(
+        "--debug", dest="debug_flag", action="store_true", default=False, help="Enable DEBUG logging (stderr)."
+    )
+    parser.add_argument(
+        "--trace", dest="trace_flag", action="store_true", default=False, help="Enable TRACE logging (stderr)."
+    )
+    parser.add_argument("--log-file", dest="log_file", default=None, help="Override log file path ('' to disable).")
+    parser.add_argument(
+        "--version", dest="version_flag", action="store_true", default=False, help="Print version and exit."
+    )
+    parser.add_argument(
+        "--generate", dest="generate", default=None, help="Emit shell completions for bash|zsh|fish|powershell."
+    )
     return parser
 
 
@@ -2154,7 +2529,7 @@ def _pyrg_command(
     no_unicode: bool = False,
     crlf: bool = False,
     pcre2: bool = False,
-    engine: str = 're',
+    engine: str = "re",
     only_matching: bool = False,
     replace: str | None = None,
     literal_replace: bool = False,
@@ -2182,8 +2557,8 @@ def _pyrg_command(
     max_columns_preview: bool = False,
     stats_only: bool = False,
     context_separator: str | None = None,
-    field_match_separator: str = ':',
-    field_context_separator: str = '-',
+    field_match_separator: str = ":",
+    field_context_separator: str = "-",
     after_context: int = 0,
     before_context: int = 0,
     context: int | None = None,
@@ -2205,9 +2580,9 @@ def _pyrg_command(
     ignore_file: list[str] | None = None,
     follow: bool = False,
     files_from: str | None = None,
-    encoding: str = 'utf-8',
+    encoding: str = "utf-8",
     list_files: bool = False,
-    sort: str = 'none',
+    sort: str = "none",
     sortr: bool = False,
     pre_cmd: str | None = None,
     pre_glob: str | None = None,
@@ -2233,7 +2608,7 @@ def _pyrg_command(
     upper: bool = False,
     lower: bool = False,
     capitalize: bool = False,
-    color: str = 'auto',
+    color: str = "auto",
     no_color: bool = False,
     out_file: str | None = None,
     stats: int = 0,
@@ -2257,14 +2632,14 @@ def _pyrg_command(
     1 if none, and 2 on usage/error.
     """
     if version_flag:
-        print(f'pyrg {__version__}')
+        print(f"pyrg {__version__}")
         raise SystemExit(0)
     if generate is not None:
         raise SystemExit(_emit_completion(generate))
     if type_list:
         for name in sorted(TYPE_PRESETS):
             exts = " ".join(sorted(TYPE_PRESETS[name]))
-            print(f'{name}: {exts}')
+            print(f"{name}: {exts}")
         raise SystemExit(0)
 
     cfg = _load_config(config_path or _env_str("PYRG_CONFIG"), no_config)
@@ -2294,47 +2669,47 @@ def _pyrg_command(
         color = str(cfg["color"])
     effective_color = "never" if no_color else color
     if effective_color not in ("auto", "always", "never"):
-        print(f'invalid --color value: {effective_color}; expected auto, always, never', file=sys.stderr)
+        print(f"invalid --color value: {effective_color}; expected auto, always, never", file=sys.stderr)
         raise SystemExit(2)
     if pretty:
         effective_color = "always"
         heading_flag = True
     if sort not in ("path", "modified", "accessed", "created", "none"):
-        print(f'invalid --sort value: {sort}; expected path|modified|accessed|created|none', file=sys.stderr)
+        print(f"invalid --sort value: {sort}; expected path|modified|accessed|created|none", file=sys.stderr)
         raise SystemExit(2)
     if heading_flag and no_heading:
-        print('--heading and --no-heading are mutually exclusive', file=sys.stderr)
+        print("--heading and --no-heading are mutually exclusive", file=sys.stderr)
         raise SystemExit(2)
     if with_filename and no_filename:
-        print('-H/--with-filename and --no-filename are mutually exclusive', file=sys.stderr)
+        print("-H/--with-filename and --no-filename are mutually exclusive", file=sys.stderr)
         raise SystemExit(2)
     if context is not None:
         after_context = context
         before_context = context
     if line_number_flag and no_line_number:
-        print('error: -n and --no-line-number are mutually exclusive', file=sys.stderr)
+        print("error: -n and --no-line-number are mutually exclusive", file=sys.stderr)
         raise SystemExit(2)
     if files_with_matches and files_without_match:
-        print('error: -l/--files-with-matches and -L/--files-without-match are mutually exclusive', file=sys.stderr)
+        print("error: -l/--files-with-matches and -L/--files-without-match are mutually exclusive", file=sys.stderr)
         raise SystemExit(2)
     if ignore_case and smart_case:
-        print('error: -i/--ignore-case and -S/--smart-case are mutually exclusive', file=sys.stderr)
+        print("error: -i/--ignore-case and -S/--smart-case are mutually exclusive", file=sys.stderr)
         raise SystemExit(2)
     if smart_case and case_sensitive:
-        print('error: -S/--smart-case and -s/--case-sensitive are mutually exclusive', file=sys.stderr)
+        print("error: -S/--smart-case and -s/--case-sensitive are mutually exclusive", file=sys.stderr)
         raise SystemExit(2)
     if ignore_case and case_sensitive:
-        print('error: -i/--ignore-case and -s/--case-sensitive are mutually exclusive', file=sys.stderr)
+        print("error: -i/--ignore-case and -s/--case-sensitive are mutually exclusive", file=sys.stderr)
         raise SystemExit(2)
     if replace is not None and replace_from is not None:
-        print('error: --replace and --replace-from are mutually exclusive', file=sys.stderr)
+        print("error: --replace and --replace-from are mutually exclusive", file=sys.stderr)
         raise SystemExit(2)
     if passthru and (files_with_matches or files_without_match or count or quiet or json_out or json_seq):
-        print('error: --passthru is mutually exclusive with -l/-L/-c/-q/--json', file=sys.stderr)
+        print("error: --passthru is mutually exclusive with -l/-L/-c/-q/--json", file=sys.stderr)
         raise SystemExit(2)
     if in_place:
         if replace is None and replace_from is None:
-            print('error: -W/--in-place requires --replace or --replace-from', file=sys.stderr)
+            print("error: -W/--in-place requires --replace or --replace-from", file=sys.stderr)
             raise SystemExit(2)
         if (
             files_with_matches
@@ -2347,25 +2722,28 @@ def _pyrg_command(
             or list_files
             or files_from is not None
         ):
-            print('error: --in-place is mutually exclusive with -l/-L/-c/-q/--json/--passthru/--files/--files-from', file=sys.stderr)
+            print(
+                "error: --in-place is mutually exclusive with -l/-L/-c/-q/--json/--passthru/--files/--files-from",
+                file=sys.stderr,
+            )
             raise SystemExit(2)
         if prompt and threads > 1:
-            print('error: --prompt requires -j 1', file=sys.stderr)
+            print("error: --prompt requires -j 1", file=sys.stderr)
             raise SystemExit(2)
     if context_separator is not None and json_out:
-        print('error: --context-separator is mutually exclusive with --json', file=sys.stderr)
+        print("error: --context-separator is mutually exclusive with --json", file=sys.stderr)
         raise SystemExit(2)
     if pattern_file is not None and (regexp is not None or e_opt is not None):
-        print('error: -f/--pattern-file is mutually exclusive with -r/--regexp', file=sys.stderr)
+        print("error: -f/--pattern-file is mutually exclusive with -r/--regexp", file=sys.stderr)
         raise SystemExit(2)
     if pattern_file is not None and fixed_strings and replace is not None:
-        print('error: -f + -F + --replace is not supported (backreferences ambiguous)', file=sys.stderr)
+        print("error: -f + -F + --replace is not supported (backreferences ambiguous)", file=sys.stderr)
         raise SystemExit(2)
     if multiline and invert_match:
         logger.warning("--multiline ignored with --invert-match")
         multiline = False
     if sum([preserve_case, upper, lower, capitalize]) > 1:
-        print('error: --preserve-case/--upper/--lower/--capitalize are mutually exclusive', file=sys.stderr)
+        print("error: --preserve-case/--upper/--lower/--capitalize are mutually exclusive", file=sys.stderr)
         raise SystemExit(2)
     case_mode: str | None = None
     if upper:
@@ -2377,7 +2755,7 @@ def _pyrg_command(
 
     if undo:
         if not undo_journal:
-            print('error: --undo requires --undo-journal', file=sys.stderr)
+            print("error: --undo requires --undo-journal", file=sys.stderr)
             raise SystemExit(2)
         raise SystemExit(_undo_from_journal(Path(undo_journal), Path.cwd()))
 
@@ -2397,7 +2775,7 @@ def _pyrg_command(
                 TYPE_PRESETS.pop(piece.strip().lower(), None)
 
     if require_clean_git and not _git_clean(Path.cwd()):
-        print('error: --require-clean-git: git working tree is dirty', file=sys.stderr)
+        print("error: --require-clean-git: git working tree is dirty", file=sys.stderr)
         raise SystemExit(3)
 
     if no_line_number:
@@ -2409,7 +2787,10 @@ def _pyrg_command(
 
     legacy = legacy_flags
     if not legacy and e_opt is not None:
-        print('note: -e is --regexp (alias for -r). Use --ext for extensions; --legacy-flags restores old behaviour.', file=sys.stderr)
+        print(
+            "note: -e is --regexp (alias for -r). Use --ext for extensions; --legacy-flags restores old behaviour.",
+            file=sys.stderr,
+        )
         if regexp is None:
             regexp = e_opt
     if legacy and e_opt is not None:
@@ -2463,7 +2844,7 @@ def _pyrg_command(
             try:
                 compiled = _compile_cached(pattern_str, pattern_flags, engine)
             except Exception as ex:
-                print(f'Invalid regex: {ex}', file=sys.stderr)
+                print(f"Invalid regex: {ex}", file=sys.stderr)
                 raise SystemExit(2)
 
     if sortr and sort != "none":
@@ -2532,7 +2913,7 @@ def _pyrg_command(
 
     if not files:
         if not no_messages:
-            print('pyrg: no files matched the search filters', file=sys.stderr)
+            print("pyrg: no files matched the search filters", file=sys.stderr)
         raise SystemExit(1)
 
     out_fh, should_close = _open_output(out_file)
@@ -2695,7 +3076,7 @@ def _pyrg_command(
 
                 _consume(_gen())
     except KeyboardInterrupt:
-        print('\nSearch cancelled.', file=sys.stderr)
+        print("\nSearch cancelled.", file=sys.stderr)
         if should_close:
             out_fh.close()
         raise SystemExit(130)
@@ -2703,7 +3084,7 @@ def _pyrg_command(
         if should_close and not out_fh.closed:
             out_fh.close()
             if out_file:
-                print(f'Results written to: {out_file}', file=sys.stderr)
+                print(f"Results written to: {out_file}", file=sys.stderr)
 
     if in_place:
         cwd = Path.cwd()
@@ -2718,7 +3099,7 @@ def _pyrg_command(
             confirmed = True
             if confirm and applicable:
                 total_apply = sum(r.match_count for r in applicable)
-                print(f'About to modify {len(applicable)} file(s), {total_apply} replacement(s).')
+                print(f"About to modify {len(applicable)} file(s), {total_apply} replacement(s).")
                 answer = _prompt_yes_no("Proceed? [y/N] ")
                 confirmed = answer in ("y", "yes")
             if confirmed:
@@ -2758,18 +3139,18 @@ def _pyrg_command(
                         try:
                             _atomic_write(p, r.new_content or b"")
                         except OSError as ex:
-                            print(f'write failed for {p}: {ex}', file=sys.stderr)
+                            print(f"write failed for {p}: {ex}", file=sys.stderr)
                             files_errored += 1
                             continue
                     else:
                         try:
                             p.write_bytes(r.new_content or b"")
                         except OSError as ex:
-                            print(f'write failed for {p}: {ex}', file=sys.stderr)
+                            print(f"write failed for {p}: {ex}", file=sys.stderr)
                             files_errored += 1
                             continue
                     write_count += 1
-                print(f'Modified {write_count} file(s)', file=sys.stderr)
+                print(f"Modified {write_count} file(s)", file=sys.stderr)
 
     elapsed = time.monotonic() - t0
     if stats > 0 or stats_only:
@@ -2781,7 +3162,7 @@ def _pyrg_command(
         ]
         if files_errored:
             parts.append(f"{files_errored} errors")
-        print(', '.join(parts), file=sys.stderr)
+        print(", ".join(parts), file=sys.stderr)
         if stats >= 2:
             for d, s in sorted(per_dir_stats.items()):
                 print(f"  {d}: {s['files']} files, {s['matched']} matched, {s['matches']} matches", file=sys.stderr)
@@ -2808,7 +3189,7 @@ def _build_pattern_source(
     if pattern_file is not None:
         pats = _read_pattern_file(pattern_file)
         if not pats:
-            print(f'error: --pattern-file {pattern_file!r} contains no patterns', file=sys.stderr)
+            print(f"error: --pattern-file {pattern_file!r} contains no patterns", file=sys.stderr)
             raise SystemExit(2)
         if fixed_strings:
             combined = "|".join(re.escape(p) for p in pats)
@@ -2817,7 +3198,7 @@ def _build_pattern_source(
     else:
         pat = regexp or pattern
         if not pat:
-            print('No pattern provided. Use positional PATTERN or -r/--regexp PATTERN.', file=sys.stderr)
+            print("No pattern provided. Use positional PATTERN or -r/--regexp PATTERN.", file=sys.stderr)
             raise SystemExit(2)
         combined = pat
 

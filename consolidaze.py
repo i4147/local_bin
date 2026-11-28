@@ -108,6 +108,7 @@ __version__ = "1.0.0"
 def _asname_str(asname: cst.AsName) -> str:
     return asname.name.value if isinstance(asname.name, cst.Name) else ""
 
+
 STDLIB_NAMES = frozenset(getattr(sys, "stdlib_module_names", ())) | {"__future__", "typing_extensions"}
 
 TEXT_SUFFIXES = {
@@ -2010,7 +2011,9 @@ class Consolidator:
                         continue
                     for alias in imp.names:
                         bound = (
-                            _asname_str(alias.asname) if alias.asname else (_dotted_name(alias.name) or "").split(".")[0]
+                            _asname_str(alias.asname)
+                            if alias.asname
+                            else (_dotted_name(alias.name) or "").split(".")[0]
                         )
                         if bound:
                             external_names.setdefault(bound, set()).add(info.module.dotted)

@@ -42,9 +42,7 @@ def dump_file_ranges(path: Path, ranges: list[tuple[int, int]], highlight: set[i
 
 def main(argv: list[str] | None = None) -> int:
     """Dump source context from either `file:start-end` specs or a `ty` report."""
-    parser = argparse.ArgumentParser(
-        description="Dump numbered source lines for explicit ranges or `ty` diagnostics."
-    )
+    parser = argparse.ArgumentParser(description="Dump numbered source lines for explicit ranges or `ty` diagnostics.")
     parser.add_argument(
         "specs",
         nargs="*",

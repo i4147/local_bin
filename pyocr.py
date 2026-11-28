@@ -1218,9 +1218,7 @@ def raw_init(lang: str | None = None):
     try:
         lang_bytes = lang.encode("utf-8") if lang else None
         prefix = os.fsencode(TESSDATA_PREFIX) if TESSDATA_PREFIX else None
-        g_libtesseract.TessBaseAPIInit3(
-            ctypes.c_void_p(handle), ctypes.c_char_p(prefix), ctypes.c_char_p(lang_bytes)
-        )
+        g_libtesseract.TessBaseAPIInit3(ctypes.c_void_p(handle), ctypes.c_char_p(prefix), ctypes.c_char_p(lang_bytes))
         g_libtesseract.TessBaseAPISetVariable(ctypes.c_void_p(handle), b"tessedit_zero_rejection", b"F")
     except Exception:
         g_libtesseract.TessBaseAPIDelete(ctypes.c_void_p(handle))
@@ -1866,24 +1864,36 @@ def _cmd_ocr(args: argparse.Namespace) -> None:
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description='OCR CLI')
-    parser.add_argument('-v', '--version', action="version", version='pyocr ' + __version__, help="show program's version number and exit")
-    subparsers = parser.add_subparsers(dest='command')
-    sub_0 = subparsers.add_parser('tools', help='list OCR tools')
+    parser = argparse.ArgumentParser(description="OCR CLI")
+    parser.add_argument(
+        "-v",
+        "--version",
+        action="version",
+        version="pyocr " + __version__,
+        help="show program's version number and exit",
+    )
+    subparsers = parser.add_subparsers(dest="command")
+    sub_0 = subparsers.add_parser("tools", help="list OCR tools")
     sub_0.set_defaults(func=_cmd_tools)
-    sub_1 = subparsers.add_parser('langs', help='list available languages')
-    sub_1.add_argument('-t', '--tool', choices=list(_TOOLS_BY_NAME), default='tesseract')
+    sub_1 = subparsers.add_parser("langs", help="list available languages")
+    sub_1.add_argument("-t", "--tool", choices=list(_TOOLS_BY_NAME), default="tesseract")
     sub_1.set_defaults(func=_cmd_langs)
-    sub_2 = subparsers.add_parser('orientation', help='detect image orientation')
-    sub_2.add_argument('image')
-    sub_2.add_argument('-t', '--tool', choices=list(_TOOLS_BY_NAME), default='tesseract')
-    sub_2.add_argument('-l', '--lang', default=None)
+    sub_2 = subparsers.add_parser("orientation", help="detect image orientation")
+    sub_2.add_argument("image")
+    sub_2.add_argument("-t", "--tool", choices=list(_TOOLS_BY_NAME), default="tesseract")
+    sub_2.add_argument("-l", "--lang", default=None)
     sub_2.set_defaults(func=_cmd_orientation)
-    sub_3 = subparsers.add_parser('ocr', help='run OCR on an image')
-    sub_3.add_argument('image')
-    sub_3.add_argument('-t', '--tool', choices=list(_TOOLS_BY_NAME), default='tesseract')
-    sub_3.add_argument('-l', '--lang', default=None)
-    sub_3.add_argument('-b', '--builder', choices=list(_BUILDERS), default='text', help='output builder: text, digit, word, line, digit_line, char')
+    sub_3 = subparsers.add_parser("ocr", help="run OCR on an image")
+    sub_3.add_argument("image")
+    sub_3.add_argument("-t", "--tool", choices=list(_TOOLS_BY_NAME), default="tesseract")
+    sub_3.add_argument("-l", "--lang", default=None)
+    sub_3.add_argument(
+        "-b",
+        "--builder",
+        choices=list(_BUILDERS),
+        default="text",
+        help="output builder: text, digit, word, line, digit_line, char",
+    )
     sub_3.set_defaults(func=_cmd_ocr)
     return parser
 
@@ -1901,6 +1911,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: {ex}", file=sys.stderr)
         return 2
     return 0
+
 
 if __name__ == "__main__":
     raise SystemExit(main())

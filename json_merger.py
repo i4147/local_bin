@@ -193,14 +193,43 @@ def write_json_exclusively(path: Path, value: Any, sort_keys: bool = False) -> N
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description='Merge JSON files with matching schemas, including bilingual string dictionaries.')
-    parser.add_argument('inputs', nargs="+", help='Input JSON files or glob patterns; quote patterns containing wildcards')
-    parser.add_argument('--output-dir', type=Path, default=Path.cwd(), help='Directory for a randomly named output file (default: current directory)')
-    parser.add_argument('--output', type=Path, default=None, help='Write to this exact path; existing files are not overwritten')
-    parser.add_argument('--conflict', choices=['last', 'first', 'list', 'error'], default='last', help='How to handle keys with different values (default: last)')
-    parser.add_argument('-d', '--dedup', action="store_true", default=False, help='Remove duplicate list items and repeated values after merging')
-    parser.add_argument('-s', '--sort-keys', action="store_true", default=False, help='Sort object keys in the output JSON')
-    parser.add_argument('--dry-run', action="store_true", default=False, help='Report which files would be merged without writing an output file')
+    parser = argparse.ArgumentParser(
+        description="Merge JSON files with matching schemas, including bilingual string dictionaries."
+    )
+    parser.add_argument(
+        "inputs", nargs="+", help="Input JSON files or glob patterns; quote patterns containing wildcards"
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path.cwd(),
+        help="Directory for a randomly named output file (default: current directory)",
+    )
+    parser.add_argument(
+        "--output", type=Path, default=None, help="Write to this exact path; existing files are not overwritten"
+    )
+    parser.add_argument(
+        "--conflict",
+        choices=["last", "first", "list", "error"],
+        default="last",
+        help="How to handle keys with different values (default: last)",
+    )
+    parser.add_argument(
+        "-d",
+        "--dedup",
+        action="store_true",
+        default=False,
+        help="Remove duplicate list items and repeated values after merging",
+    )
+    parser.add_argument(
+        "-s", "--sort-keys", action="store_true", default=False, help="Sort object keys in the output JSON"
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        default=False,
+        help="Report which files would be merged without writing an output file",
+    )
     return parser
 
 
@@ -297,6 +326,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         for path in sorted(different_schema_paths):
             print(f"  {path}")
     return 0
+
 
 if __name__ == "__main__":
     raise SystemExit(main())

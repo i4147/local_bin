@@ -1310,20 +1310,79 @@ examples:
 
 def build_arg_parser() -> argparse.ArgumentParser:
     """Build arg parser."""
-    parser = argparse.ArgumentParser(description='tokei.py -- a single-file Python reimplementation of tokei (https://github.com/XAMPPRocky/tokei). Counts files, lines, code, comments and blanks, grouped by language.')
-    parser.add_argument('input', nargs="*", type=Path, metavar='PATH', help='file or directory to count (default: current directory)')
-    parser.add_argument('-f', '--files', action="store_true", default=False, help='print statistics for individual files')
-    parser.add_argument('-t', '--type', action="append", default=[], metavar='LANG', help='filter output by language type, comma separated (e.g. -t=Rust,Markdown)')
-    parser.add_argument('-e', '--exclude', action="append", default=[], metavar='PATTERN', help='ignore all files and directories matching PATTERN (gitignore semantics)')
-    parser.add_argument('--hidden', action="store_true", default=False, help='count hidden files')
-    parser.add_argument('--no-ignore', action="store_true", default=False, help="don't respect ignore files (.gitignore, .ignore, .tokeignore)")
-    parser.add_argument('-s', '--sort', choices=['files', 'lines', 'blanks', 'code', 'comments'], default=None, help='sort languages by column (default: alphabetical)')
-    parser.add_argument('-o', '--output', choices=['terminal', 'json', 'yaml', 'toml', 'csv'], default='terminal', help='output format (default: terminal)')
-    parser.add_argument('-c', '--columns', type=int, default=None, metavar='N', help='strict column width for terminal output')
-    parser.add_argument('-j', '--jobs', type=int, default=None, metavar='N', help='worker processes for counting (default: auto on big inputs)')
-    parser.add_argument('-l', '--languages', action="store_true", default=False, help='print the supported languages and their extensions')
-    parser.add_argument('-v', '--verbose', action="store_true", default=False, help='list files whose type could not be recognized')
-    parser.add_argument('--version', action="version", version=f'tokei.py {__version__} (single-file Python tokei)', help="show program's version number and exit")
+    parser = argparse.ArgumentParser(
+        description="tokei.py -- a single-file Python reimplementation of tokei (https://github.com/XAMPPRocky/tokei). Counts files, lines, code, comments and blanks, grouped by language."
+    )
+    parser.add_argument(
+        "input", nargs="*", type=Path, metavar="PATH", help="file or directory to count (default: current directory)"
+    )
+    parser.add_argument(
+        "-f", "--files", action="store_true", default=False, help="print statistics for individual files"
+    )
+    parser.add_argument(
+        "-t",
+        "--type",
+        action="append",
+        default=[],
+        metavar="LANG",
+        help="filter output by language type, comma separated (e.g. -t=Rust,Markdown)",
+    )
+    parser.add_argument(
+        "-e",
+        "--exclude",
+        action="append",
+        default=[],
+        metavar="PATTERN",
+        help="ignore all files and directories matching PATTERN (gitignore semantics)",
+    )
+    parser.add_argument("--hidden", action="store_true", default=False, help="count hidden files")
+    parser.add_argument(
+        "--no-ignore",
+        action="store_true",
+        default=False,
+        help="don't respect ignore files (.gitignore, .ignore, .tokeignore)",
+    )
+    parser.add_argument(
+        "-s",
+        "--sort",
+        choices=["files", "lines", "blanks", "code", "comments"],
+        default=None,
+        help="sort languages by column (default: alphabetical)",
+    )
+    parser.add_argument(
+        "-o",
+        "--output",
+        choices=["terminal", "json", "yaml", "toml", "csv"],
+        default="terminal",
+        help="output format (default: terminal)",
+    )
+    parser.add_argument(
+        "-c", "--columns", type=int, default=None, metavar="N", help="strict column width for terminal output"
+    )
+    parser.add_argument(
+        "-j",
+        "--jobs",
+        type=int,
+        default=None,
+        metavar="N",
+        help="worker processes for counting (default: auto on big inputs)",
+    )
+    parser.add_argument(
+        "-l",
+        "--languages",
+        action="store_true",
+        default=False,
+        help="print the supported languages and their extensions",
+    )
+    parser.add_argument(
+        "-v", "--verbose", action="store_true", default=False, help="list files whose type could not be recognized"
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"tokei.py {__version__} (single-file Python tokei)",
+        help="show program's version number and exit",
+    )
     return parser
 
 
@@ -1417,6 +1476,7 @@ def main(argv: list[str] | None = None) -> int:
 
     print(out)
     return 0
+
 
 if __name__ == "__main__":
     try:

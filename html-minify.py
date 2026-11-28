@@ -25,7 +25,6 @@ logger.add(
 )
 
 
-
 class FileResult(NamedTuple):
     """Store path, before, after, returncode, error."""
 
@@ -116,9 +115,11 @@ def find_html_files(directory: Path) -> list[Path]:
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description='Minify HTML files in the current directory in place.')
-    parser.add_argument('--binary', default='min-html', help='min-html executable name or path (default: min-html)')
-    parser.add_argument('-j', '--workers', type=int, default=max(1, os.cpu_count() or 1), help='number of files to process concurrently')
+    parser = argparse.ArgumentParser(description="Minify HTML files in the current directory in place.")
+    parser.add_argument("--binary", default="min-html", help="min-html executable name or path (default: min-html)")
+    parser.add_argument(
+        "-j", "--workers", type=int, default=max(1, os.cpu_count() or 1), help="number of files to process concurrently"
+    )
     return parser
 
 
@@ -171,6 +172,7 @@ def main() -> int:
     print(f"{label}: {format_bytes(abs(net_saved))}")
 
     return 1 if has_errors else 0
+
 
 if __name__ == "__main__":
     raise SystemExit(main())

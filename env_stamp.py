@@ -2151,40 +2151,92 @@ def _cmd_bisect(args: argparse.Namespace) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     """Build the ``env-stamp`` argument parser (documented in --help)."""
-    parser = argparse.ArgumentParser(description='Reproducible environment fingerprints: capture, diff, bisect.')
-    parser.add_argument('--version', action="version", version=f'%(prog)s {__version__}', help="show program's version number and exit")
-    subparsers = parser.add_subparsers(dest='command')
-    sub_0 = subparsers.add_parser('capture', help='fingerprint the current (or --venv) environment')
-    sub_0.add_argument('--out', '-o', type=Path, default=None, help='write the stamp JSON to this file (default: stdout)')
-    sub_0.add_argument('--venv', type=Path, default=None, help='fingerprint the packages of this venv without activating it')
-    sub_0.add_argument('--allow-values', default=','.join(sorted(SAFE_VALUE_KEYS)), help='comma-separated env names whose values may be recorded (default: TZ,LANG,PYTHONHASHSEED); replaces the default')
-    sub_0.add_argument('--no-redact', action="store_true", default=False, help='record ALL env values (prints a warning; do not share the file)')
-    sub_0.add_argument('--no-paths', action="store_true", default=False, help='strip editable/file:// package origins (leak safety)')
-    sub_0.add_argument('--no-tools', action="store_true", default=False, help='skip probing external tool versions (pip/uv/gcc/...)')
-    sub_0.add_argument('--quiet', '-q', action="store_true", default=False, help='suppress summary output')
+    parser = argparse.ArgumentParser(description="Reproducible environment fingerprints: capture, diff, bisect.")
+    parser.add_argument(
+        "--version", action="version", version=f"%(prog)s {__version__}", help="show program's version number and exit"
+    )
+    subparsers = parser.add_subparsers(dest="command")
+    sub_0 = subparsers.add_parser("capture", help="fingerprint the current (or --venv) environment")
+    sub_0.add_argument(
+        "--out", "-o", type=Path, default=None, help="write the stamp JSON to this file (default: stdout)"
+    )
+    sub_0.add_argument(
+        "--venv", type=Path, default=None, help="fingerprint the packages of this venv without activating it"
+    )
+    sub_0.add_argument(
+        "--allow-values",
+        default=",".join(sorted(SAFE_VALUE_KEYS)),
+        help="comma-separated env names whose values may be recorded (default: TZ,LANG,PYTHONHASHSEED); replaces the default",
+    )
+    sub_0.add_argument(
+        "--no-redact",
+        action="store_true",
+        default=False,
+        help="record ALL env values (prints a warning; do not share the file)",
+    )
+    sub_0.add_argument(
+        "--no-paths", action="store_true", default=False, help="strip editable/file:// package origins (leak safety)"
+    )
+    sub_0.add_argument(
+        "--no-tools", action="store_true", default=False, help="skip probing external tool versions (pip/uv/gcc/...)"
+    )
+    sub_0.add_argument("--quiet", "-q", action="store_true", default=False, help="suppress summary output")
     sub_0.set_defaults(handler=_cmd_capture)
-    sub_1 = subparsers.add_parser('diff', help='rank the differences between two stamps')
-    sub_1.add_argument('baseline', help='path to the baseline (good) stamp JSON')
-    sub_1.add_argument('suspect', nargs="?", default=None, help="path to the suspect (broken) stamp JSON, or '-' for stdin")
-    sub_1.add_argument('--stdin', action="store_true", default=False, help='read the suspect stamp from stdin')
-    sub_1.add_argument('--format', choices=['terminal', 'markdown', 'json'], default='terminal', help='output renderer (default: terminal)')
-    sub_1.add_argument('--all', action="store_true", default=False, help='show every change, not just the top 10')
-    sub_1.add_argument('--max-lines', type=int, default=DEFAULT_MAX_DIFF_LINES, help=f'truncate to N lines (default: {DEFAULT_MAX_DIFF_LINES})')
+    sub_1 = subparsers.add_parser("diff", help="rank the differences between two stamps")
+    sub_1.add_argument("baseline", help="path to the baseline (good) stamp JSON")
+    sub_1.add_argument(
+        "suspect", nargs="?", default=None, help="path to the suspect (broken) stamp JSON, or '-' for stdin"
+    )
+    sub_1.add_argument("--stdin", action="store_true", default=False, help="read the suspect stamp from stdin")
+    sub_1.add_argument(
+        "--format",
+        choices=["terminal", "markdown", "json"],
+        default="terminal",
+        help="output renderer (default: terminal)",
+    )
+    sub_1.add_argument("--all", action="store_true", default=False, help="show every change, not just the top 10")
+    sub_1.add_argument(
+        "--max-lines",
+        type=int,
+        default=DEFAULT_MAX_DIFF_LINES,
+        help=f"truncate to N lines (default: {DEFAULT_MAX_DIFF_LINES})",
+    )
     sub_1.set_defaults(handler=_cmd_diff)
-    sub_2 = subparsers.add_parser('bisect', help='find the smallest change set that flips a test to FAIL')
-    sub_2.add_argument('--baseline', required=True, help='stamp of the environment where the test passes')
-    sub_2.add_argument('--test', required=True, help='shell command; exit code 0 = PASS, anything else = FAIL')
-    sub_2.add_argument('--venv', type=Path, default=None, help='suspect venv to compare against (default: current environment)')
-    sub_2.add_argument('--python', default=None, help='interpreter used to build candidate venvs (default: running python)')
-    sub_2.add_argument('--find-links', action="append", default=[], metavar='DIR', help='local wheel directory; repeatable; implies --no-index (offline mode)')
-    sub_2.add_argument('--max-runs', type=int, default=DEFAULT_MAX_RUNS, help=f'cap on test executions (default: {DEFAULT_MAX_RUNS})')
-    sub_2.add_argument('--timeout', type=float, default=DEFAULT_TEST_TIMEOUT, help='per-test timeout in seconds (default: 900)')
-    sub_2.add_argument('--workdir', type=Path, default=None, help='where throwaway venvs live (default: a fresh temp dir)')
-    sub_2.add_argument('--parallel', action="store_true", default=False, help='run axis-level probes concurrently (each in its own venv)')
-    sub_2.add_argument('--force-pip', action="store_true", default=False, help='use pip even when uv is available')
-    sub_2.add_argument('--keep', action="store_true", default=False, help='keep throwaway venvs for inspection')
-    sub_2.add_argument('--verbose', action="store_true", default=False, help='show tail of the failing test output')
-    sub_2.add_argument('--quiet', '-q', action="store_true", default=False, help='suppress progress logging')
+    sub_2 = subparsers.add_parser("bisect", help="find the smallest change set that flips a test to FAIL")
+    sub_2.add_argument("--baseline", required=True, help="stamp of the environment where the test passes")
+    sub_2.add_argument("--test", required=True, help="shell command; exit code 0 = PASS, anything else = FAIL")
+    sub_2.add_argument(
+        "--venv", type=Path, default=None, help="suspect venv to compare against (default: current environment)"
+    )
+    sub_2.add_argument(
+        "--python", default=None, help="interpreter used to build candidate venvs (default: running python)"
+    )
+    sub_2.add_argument(
+        "--find-links",
+        action="append",
+        default=[],
+        metavar="DIR",
+        help="local wheel directory; repeatable; implies --no-index (offline mode)",
+    )
+    sub_2.add_argument(
+        "--max-runs", type=int, default=DEFAULT_MAX_RUNS, help=f"cap on test executions (default: {DEFAULT_MAX_RUNS})"
+    )
+    sub_2.add_argument(
+        "--timeout", type=float, default=DEFAULT_TEST_TIMEOUT, help="per-test timeout in seconds (default: 900)"
+    )
+    sub_2.add_argument(
+        "--workdir", type=Path, default=None, help="where throwaway venvs live (default: a fresh temp dir)"
+    )
+    sub_2.add_argument(
+        "--parallel",
+        action="store_true",
+        default=False,
+        help="run axis-level probes concurrently (each in its own venv)",
+    )
+    sub_2.add_argument("--force-pip", action="store_true", default=False, help="use pip even when uv is available")
+    sub_2.add_argument("--keep", action="store_true", default=False, help="keep throwaway venvs for inspection")
+    sub_2.add_argument("--verbose", action="store_true", default=False, help="show tail of the failing test output")
+    sub_2.add_argument("--quiet", "-q", action="store_true", default=False, help="suppress progress logging")
     sub_2.set_defaults(handler=_cmd_bisect)
     return parser
 
@@ -2198,6 +2250,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as exc:
         print(f"env-stamp: error: {exc}", file=sys.stderr)
         return 2
+
 
 if __name__ == "__main__":
     raise SystemExit(main())

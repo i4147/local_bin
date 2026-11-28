@@ -45,7 +45,6 @@ logger.add(
 )
 
 
-
 _EXTENSION_TO_LANGUAGE: Final[dict[str, str]] = {
     ".rs": "rust",
     ".sh": "bash",

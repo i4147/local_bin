@@ -1047,44 +1047,96 @@ def _add_common_xz_opts(p: argparse.ArgumentParser) -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     """Build parser."""
-    parser = argparse.ArgumentParser(description='Unified compression / decompression CLI.')
-    subparsers = parser.add_subparsers(dest='command')
-    sub_0 = subparsers.add_parser('compress', help='Recursively compress files to .xz')
-    sub_0.add_argument('--preset', type=int, choices=range(10), default=DEFAULT_PRESET, help=f'xz preset 0-9 (default: {DEFAULT_PRESET})')
-    sub_0.add_argument('--threads', type=int, default=DEFAULT_THREADS, help=f'Threads per compression job (default: {DEFAULT_THREADS})')
-    sub_0.add_argument('--backend', choices=['auto', 'lzma_mt', 'lzmamt', 'lzma'], default='auto', help='Compression backend (default: auto)')
-    sub_0.add_argument('-e', '--extensions', action="append", default=None, help='Only compress files with these extensions')
-    sub_0.add_argument('--no-skip-compressed', action="store_true", default=False, help='Do not skip already-compressed extensions')
-    sub_0.add_argument('--tar-subdirs', action="store_true", default=False, help='Tar top-level subdirs first, then compress')
-    sub_0.add_argument('--auto-tar-dirs', action="store_true", default=False, help='(xzer.py) Same as --tar-subdirs but only top-level files are subsequently compressed')
-    sub_0.add_argument('--dry-run', action="store_true", default=False, help='Show what would be done; modify nothing')
-    sub_0.add_argument('--verbose', action="store_true", default=False, help='Print per-file results')
-    sub_0.add_argument('--no-size-stats', action="store_true", default=False, help='Skip the size summary at the end')
-    sub_0.add_argument('--chunk-size', type=int, default=DEFAULT_CHUNK_SIZE, help=f'Chunk size for large files (default: {DEFAULT_CHUNK_SIZE})')
+    parser = argparse.ArgumentParser(description="Unified compression / decompression CLI.")
+    subparsers = parser.add_subparsers(dest="command")
+    sub_0 = subparsers.add_parser("compress", help="Recursively compress files to .xz")
+    sub_0.add_argument(
+        "--preset",
+        type=int,
+        choices=range(10),
+        default=DEFAULT_PRESET,
+        help=f"xz preset 0-9 (default: {DEFAULT_PRESET})",
+    )
+    sub_0.add_argument(
+        "--threads", type=int, default=DEFAULT_THREADS, help=f"Threads per compression job (default: {DEFAULT_THREADS})"
+    )
+    sub_0.add_argument(
+        "--backend",
+        choices=["auto", "lzma_mt", "lzmamt", "lzma"],
+        default="auto",
+        help="Compression backend (default: auto)",
+    )
+    sub_0.add_argument(
+        "-e", "--extensions", action="append", default=None, help="Only compress files with these extensions"
+    )
+    sub_0.add_argument(
+        "--no-skip-compressed", action="store_true", default=False, help="Do not skip already-compressed extensions"
+    )
+    sub_0.add_argument(
+        "--tar-subdirs", action="store_true", default=False, help="Tar top-level subdirs first, then compress"
+    )
+    sub_0.add_argument(
+        "--auto-tar-dirs",
+        action="store_true",
+        default=False,
+        help="(xzer.py) Same as --tar-subdirs but only top-level files are subsequently compressed",
+    )
+    sub_0.add_argument("--dry-run", action="store_true", default=False, help="Show what would be done; modify nothing")
+    sub_0.add_argument("--verbose", action="store_true", default=False, help="Print per-file results")
+    sub_0.add_argument("--no-size-stats", action="store_true", default=False, help="Skip the size summary at the end")
+    sub_0.add_argument(
+        "--chunk-size",
+        type=int,
+        default=DEFAULT_CHUNK_SIZE,
+        help=f"Chunk size for large files (default: {DEFAULT_CHUNK_SIZE})",
+    )
     sub_0.set_defaults(func=cmd_compress)
-    sub_1 = subparsers.add_parser('decompress', help='Recursively decompress .xz files')
-    sub_1.add_argument('--handle-tar-xz', action="store_true", default=False, help='Extract `*.tar.xz` files into directories')
+    sub_1 = subparsers.add_parser("decompress", help="Recursively decompress .xz files")
+    sub_1.add_argument(
+        "--handle-tar-xz", action="store_true", default=False, help="Extract `*.tar.xz` files into directories"
+    )
     sub_1.set_defaults(func=cmd_decompress)
-    sub_2 = subparsers.add_parser('tar-dirs', help='Pack each top-level subdirectory into .tar.xz')
-    sub_2.add_argument('directory', nargs="?", default='.', help='Directory containing the subdirectories (default: cwd)')
-    sub_2.add_argument('--preset', type=int, choices=range(10), default=DEFAULT_PRESET, help=f'xz preset 0-9 (default: {DEFAULT_PRESET})')
-    sub_2.add_argument('--keep-orig', action="store_true", default=False, help='Keep the source subdirectory')
-    sub_2.add_argument('--no-verify', action="store_true", default=False, help='Skip archive verification (faster, riskier)')
+    sub_2 = subparsers.add_parser("tar-dirs", help="Pack each top-level subdirectory into .tar.xz")
+    sub_2.add_argument(
+        "directory", nargs="?", default=".", help="Directory containing the subdirectories (default: cwd)"
+    )
+    sub_2.add_argument(
+        "--preset",
+        type=int,
+        choices=range(10),
+        default=DEFAULT_PRESET,
+        help=f"xz preset 0-9 (default: {DEFAULT_PRESET})",
+    )
+    sub_2.add_argument("--keep-orig", action="store_true", default=False, help="Keep the source subdirectory")
+    sub_2.add_argument(
+        "--no-verify", action="store_true", default=False, help="Skip archive verification (faster, riskier)"
+    )
     sub_2.set_defaults(func=cmd_tar_dirs)
-    sub_3 = subparsers.add_parser('archive-cwd', help='Archive cwd to ../<cwd>.tar.xz and delete it')
+    sub_3 = subparsers.add_parser("archive-cwd", help="Archive cwd to ../<cwd>.tar.xz and delete it")
     sub_3.set_defaults(func=cmd_archive_cwd)
-    sub_4 = subparsers.add_parser('7z', help='pylzma-based .7z / .tar.7z codec')
-    sub_4.add_argument('paths', nargs="*", help='Files / directories (default: cwd recursively)')
-    sub_4.add_argument('-d', '--decompress', action="store_true", default=False, help='Decompress mode')
-    sub_4.add_argument('-k', '--keep', action="store_true", default=False, help='Keep originals after processing')
-    sub_4.add_argument('--output-dir', default=None, help='Write outputs into this directory (compress_pylzma.py behaviour)')
-    sub_4.add_argument('--tar-subdirs', action="store_true", default=False, help='(Accepted for parity; directories are always tarred)')
+    sub_4 = subparsers.add_parser("7z", help="pylzma-based .7z / .tar.7z codec")
+    sub_4.add_argument("paths", nargs="*", help="Files / directories (default: cwd recursively)")
+    sub_4.add_argument("-d", "--decompress", action="store_true", default=False, help="Decompress mode")
+    sub_4.add_argument("-k", "--keep", action="store_true", default=False, help="Keep originals after processing")
+    sub_4.add_argument(
+        "--output-dir", default=None, help="Write outputs into this directory (compress_pylzma.py behaviour)"
+    )
+    sub_4.add_argument(
+        "--tar-subdirs", action="store_true", default=False, help="(Accepted for parity; directories are always tarred)"
+    )
     sub_4.set_defaults(func=cmd_7z)
-    sub_5 = subparsers.add_parser('lzma-chunk', help='pylzma chunked .lzma codec (max compression)')
-    sub_5.add_argument('-c', '--compress', action=argparse.BooleanOptionalAction, default=True, help='Compress (default)')
-    sub_5.add_argument('-d', '--decompress', action="store_true", default=False, help='Decompress .lzma files')
-    sub_5.add_argument('--chunk-size', type=int, default=DEFAULT_PYLZMA_CHUNK, help=f'Chunk size in bytes (default: {DEFAULT_PYLZMA_CHUNK})')
-    sub_5.add_argument('--keep-orig', action="store_true", default=False, help='Keep original files after processing')
+    sub_5 = subparsers.add_parser("lzma-chunk", help="pylzma chunked .lzma codec (max compression)")
+    sub_5.add_argument(
+        "-c", "--compress", action=argparse.BooleanOptionalAction, default=True, help="Compress (default)"
+    )
+    sub_5.add_argument("-d", "--decompress", action="store_true", default=False, help="Decompress .lzma files")
+    sub_5.add_argument(
+        "--chunk-size",
+        type=int,
+        default=DEFAULT_PYLZMA_CHUNK,
+        help=f"Chunk size in bytes (default: {DEFAULT_PYLZMA_CHUNK})",
+    )
+    sub_5.add_argument("--keep-orig", action="store_true", default=False, help="Keep original files after processing")
     sub_5.set_defaults(func=cmd_lzma_chunk)
     return parser
 
@@ -1101,6 +1153,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     except Exception as exc:
         logger.error(f"Unexpected error: {exc}")
         return 1
+
 
 if __name__ == "__main__":
     raise SystemExit(main())

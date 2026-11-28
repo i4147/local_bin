@@ -19,7 +19,6 @@ from dh import MAX_WORKERS, atomic_write
 from loguru import logger
 
 
-
 LOGURU_LOGFORMAT: str = "{time:YYYY-MM-DD HH:mm:ss.SSS} {level} {file.name}:{line} {message}"
 MERGED_FILE_HEADER_RE: re.Pattern[str] = re.compile(r"^#\s*File:\s*(.+?)\s*$", re.MULTILINE)
 STDLIB_MODULES: frozenset[str] = frozenset(getattr(sys, "stdlib_module_names", ()))

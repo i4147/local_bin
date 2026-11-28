@@ -1366,9 +1366,7 @@ def scan_dir(corpus: Any, root: str | Path, subdir: str | None, opts: Any, table
         dirnames[:] = sorted(
             d
             for d in dirnames
-            if d not in SKIP_DIRS
-            and not d.startswith(".")
-            and not _is_excluded(str((cur / d).relative_to(base)), opts)
+            if d not in SKIP_DIRS and not d.startswith(".") and not _is_excluded(str((cur / d).relative_to(base)), opts)
         )
         for fn in sorted(filenames):
             if fn.lower() in SKIP_FILE_NAMES:

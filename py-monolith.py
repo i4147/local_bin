@@ -111,7 +111,6 @@ logger.add(
 )
 
 
-
 __all__: list[str] = ["AssetFetchError", "FetchResult", "Monolith", "default_fetcher"]
 
 # Register a few MIME types that the stdlib doesn't know by default.
@@ -904,29 +903,57 @@ class Monolith:
 # --------------------------------------------------------------------------- #
 def build_parser() -> argparse.ArgumentParser:
     """Build parser."""
-    parser = argparse.ArgumentParser(description='Save a web page as a single self-contained HTML file (pure-stdlib port of Y2Z/monolith).')
-    parser.add_argument('url', help="URL to fetch, or '-' to read HTML from stdin")
-    parser.add_argument('-o', '--output', default=None, help="write output to file ('-' for stdout; default stdout)")
-    parser.add_argument('-a', '--no-audio', action="store_true", default=False, help='exclude audio')
-    parser.add_argument('-s', '--no-css', action="store_true", default=False, help='exclude CSS (upstream: -s exclude styles)')
-    parser.add_argument('-f', '--no-fonts', action="store_true", default=False, help='exclude fonts')
-    parser.add_argument('-F', '--no-frames', action="store_true", default=False, help='exclude iframes (extension)')
-    parser.add_argument('-i', '--no-images', action="store_true", default=False, help='exclude images')
-    parser.add_argument('-j', '--no-js', action="store_true", default=False, help='exclude JavaScript')
-    parser.add_argument('-l', '--no-links', action="store_true", default=False, help='strip link/anchor hrefs (extension)')
-    parser.add_argument('-M', '--no-metadata', action="store_true", default=False, help="don't add timestamp/URL comment (upstream -M)")
-    parser.add_argument('-v', '--no-video', action="store_true", default=False, help='exclude video (extension)')
-    parser.add_argument('-q', '--silent', action="store_true", default=False, help='suppress informational output (upstream: -q quiet)')
-    parser.add_argument('-t', '--timeout', type=float, default=DEFAULT_TIMEOUT, help='network request timeout in seconds')
-    parser.add_argument('-u', '--user-agent', default=DEFAULT_USER_AGENT, help='custom User-Agent string')
-    parser.add_argument('-b', '--base-url', default=None, help='custom base URL for resolving relative refs')
-    parser.add_argument('-E', '--encoding', default=None, help='output encoding (upstream -E; default utf-8)')
-    parser.add_argument('-I', '--isolate', action="store_true", default=False, help='isolate the document (inject strict CSP)')
-    parser.add_argument('--no-color', action="store_true", default=False, help='suppress ANSI color in stderr messages (extension)')
-    parser.add_argument('-D', '--make-dirs', action="store_true", default=False, help='create missing directories in the output path')
-    parser.add_argument('-e', '--ignore-network-errors', action="store_true", default=False, help='ignore network errors when fetching assets')
-    parser.add_argument('-k', '--insecure', action="store_true", default=False, help='accept invalid X.509 (TLS) certificates')
-    parser.add_argument('-V', '--version', action="version", version='monolith.py 2.0.0', help="show program's version number and exit")
+    parser = argparse.ArgumentParser(
+        description="Save a web page as a single self-contained HTML file (pure-stdlib port of Y2Z/monolith)."
+    )
+    parser.add_argument("url", help="URL to fetch, or '-' to read HTML from stdin")
+    parser.add_argument("-o", "--output", default=None, help="write output to file ('-' for stdout; default stdout)")
+    parser.add_argument("-a", "--no-audio", action="store_true", default=False, help="exclude audio")
+    parser.add_argument(
+        "-s", "--no-css", action="store_true", default=False, help="exclude CSS (upstream: -s exclude styles)"
+    )
+    parser.add_argument("-f", "--no-fonts", action="store_true", default=False, help="exclude fonts")
+    parser.add_argument("-F", "--no-frames", action="store_true", default=False, help="exclude iframes (extension)")
+    parser.add_argument("-i", "--no-images", action="store_true", default=False, help="exclude images")
+    parser.add_argument("-j", "--no-js", action="store_true", default=False, help="exclude JavaScript")
+    parser.add_argument(
+        "-l", "--no-links", action="store_true", default=False, help="strip link/anchor hrefs (extension)"
+    )
+    parser.add_argument(
+        "-M", "--no-metadata", action="store_true", default=False, help="don't add timestamp/URL comment (upstream -M)"
+    )
+    parser.add_argument("-v", "--no-video", action="store_true", default=False, help="exclude video (extension)")
+    parser.add_argument(
+        "-q", "--silent", action="store_true", default=False, help="suppress informational output (upstream: -q quiet)"
+    )
+    parser.add_argument(
+        "-t", "--timeout", type=float, default=DEFAULT_TIMEOUT, help="network request timeout in seconds"
+    )
+    parser.add_argument("-u", "--user-agent", default=DEFAULT_USER_AGENT, help="custom User-Agent string")
+    parser.add_argument("-b", "--base-url", default=None, help="custom base URL for resolving relative refs")
+    parser.add_argument("-E", "--encoding", default=None, help="output encoding (upstream -E; default utf-8)")
+    parser.add_argument(
+        "-I", "--isolate", action="store_true", default=False, help="isolate the document (inject strict CSP)"
+    )
+    parser.add_argument(
+        "--no-color", action="store_true", default=False, help="suppress ANSI color in stderr messages (extension)"
+    )
+    parser.add_argument(
+        "-D", "--make-dirs", action="store_true", default=False, help="create missing directories in the output path"
+    )
+    parser.add_argument(
+        "-e",
+        "--ignore-network-errors",
+        action="store_true",
+        default=False,
+        help="ignore network errors when fetching assets",
+    )
+    parser.add_argument(
+        "-k", "--insecure", action="store_true", default=False, help="accept invalid X.509 (TLS) certificates"
+    )
+    parser.add_argument(
+        "-V", "--version", action="version", version="monolith.py 2.0.0", help="show program's version number and exit"
+    )
     return parser
 
 
@@ -984,6 +1011,7 @@ def main(argv: list[str] | None = None) -> int:
         sys.stderr.write(_ansi("31", "error", use_color) + f": {m.error}\n")
         sys.stderr.flush()
     return 1
+
 
 if __name__ == "__main__":
     raise SystemExit(main())

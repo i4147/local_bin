@@ -423,7 +423,9 @@ def _resolve_relative_module(current_module: str, is_package: bool, level: int, 
     return ".".join(base_parts)
 
 
-def _extract_target_names(target: cst.BaseExpression | cst.BaseAssignTargetExpression | cst.StarredElement) -> list[str]:
+def _extract_target_names(
+    target: cst.BaseExpression | cst.BaseAssignTargetExpression | cst.StarredElement,
+) -> list[str]:
     """Extract assigned variable names from an assignment target."""
     if isinstance(target, cst.Name):
         return [target.value]

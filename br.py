@@ -1126,22 +1126,90 @@ def swallowed_directory(args: argparse.Namespace) -> str | None:
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description='📦 Recursively compress/decompress files using Brotli with parallel processing (deletes originals by default)')
-    parser.add_argument('-c', '--compress', action=argparse.BooleanOptionalAction, default=True, help='Compress files (default)')
-    parser.add_argument('-d', '--decompress', action="store_true", default=False, help='Decompress .br files')
-    parser.add_argument('-t', '--tar-subdirs-first', action="store_true", default=False, help='Tar subdirectories first, then apply Brotli compression on the .tar files (only valid with -c/--compress)')
-    parser.add_argument('paths', nargs="*", help='Files and/or directories to process. If omitted, uses current directory and tars subdirs first.')
-    parser.add_argument('-e', '--extensions', action="append", default=None, help='Compress only specific file extensions (e.g., txt log csv). Only valid with -c/--compress.')
-    parser.add_argument('-q', '--quality', type=int, choices=range(12), default=11, help='Brotli compression quality (0-11, default: 11). Only valid with -c/--compress.')
-    parser.add_argument('--chunk-size', type=int, default=DEFAULT_CHUNK_SIZE, help=f'Streaming chunk size in bytes (default: {DEFAULT_CHUNK_SIZE}, minimum: {MIN_CHUNK_SIZE})')
-    parser.add_argument('--verify', action="store_true", default=False, help='Decompress each result in memory and compare SHA-256 with the source before deleting originals')
-    parser.add_argument('--keep-originals', action="store_true", default=False, help='Keep original files after processing (default: delete originals)')
-    parser.add_argument('--allow-truncated', action="store_true", default=False, help='Accept Brotli streams without an end-of-stream marker (only valid with -d/--decompress)')
-    parser.add_argument('--exclude', action="append", default=[], help='Directory/file patterns to exclude from processing (e.g., node_modules .git)')
-    parser.add_argument('--no-parallel', action="store_true", default=False, help='Disable parallel processing')
-    parser.add_argument('--dry-run', action="store_true", default=False, help='Show what would be processed without actually modifying files')
-    parser.add_argument('--no-skip-compressed', action="store_true", default=False, help='Do not skip already compressed files (dangerous, may double-compress). Only valid with -c/--compress.')
-    parser.add_argument('-y', '--yes', action="store_true", default=False, help='Skip the confirmation prompt shown before deleting originals')
+    parser = argparse.ArgumentParser(
+        description="📦 Recursively compress/decompress files using Brotli with parallel processing (deletes originals by default)"
+    )
+    parser.add_argument(
+        "-c", "--compress", action=argparse.BooleanOptionalAction, default=True, help="Compress files (default)"
+    )
+    parser.add_argument("-d", "--decompress", action="store_true", default=False, help="Decompress .br files")
+    parser.add_argument(
+        "-t",
+        "--tar-subdirs-first",
+        action="store_true",
+        default=False,
+        help="Tar subdirectories first, then apply Brotli compression on the .tar files (only valid with -c/--compress)",
+    )
+    parser.add_argument(
+        "paths",
+        nargs="*",
+        help="Files and/or directories to process. If omitted, uses current directory and tars subdirs first.",
+    )
+    parser.add_argument(
+        "-e",
+        "--extensions",
+        action="append",
+        default=None,
+        help="Compress only specific file extensions (e.g., txt log csv). Only valid with -c/--compress.",
+    )
+    parser.add_argument(
+        "-q",
+        "--quality",
+        type=int,
+        choices=range(12),
+        default=11,
+        help="Brotli compression quality (0-11, default: 11). Only valid with -c/--compress.",
+    )
+    parser.add_argument(
+        "--chunk-size",
+        type=int,
+        default=DEFAULT_CHUNK_SIZE,
+        help=f"Streaming chunk size in bytes (default: {DEFAULT_CHUNK_SIZE}, minimum: {MIN_CHUNK_SIZE})",
+    )
+    parser.add_argument(
+        "--verify",
+        action="store_true",
+        default=False,
+        help="Decompress each result in memory and compare SHA-256 with the source before deleting originals",
+    )
+    parser.add_argument(
+        "--keep-originals",
+        action="store_true",
+        default=False,
+        help="Keep original files after processing (default: delete originals)",
+    )
+    parser.add_argument(
+        "--allow-truncated",
+        action="store_true",
+        default=False,
+        help="Accept Brotli streams without an end-of-stream marker (only valid with -d/--decompress)",
+    )
+    parser.add_argument(
+        "--exclude",
+        action="append",
+        default=[],
+        help="Directory/file patterns to exclude from processing (e.g., node_modules .git)",
+    )
+    parser.add_argument("--no-parallel", action="store_true", default=False, help="Disable parallel processing")
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        default=False,
+        help="Show what would be processed without actually modifying files",
+    )
+    parser.add_argument(
+        "--no-skip-compressed",
+        action="store_true",
+        default=False,
+        help="Do not skip already compressed files (dangerous, may double-compress). Only valid with -c/--compress.",
+    )
+    parser.add_argument(
+        "-y",
+        "--yes",
+        action="store_true",
+        default=False,
+        help="Skip the confirmation prompt shown before deleting originals",
+    )
     return parser
 
 
@@ -1296,6 +1364,7 @@ def main() -> int:
     print(f"⏲️  Wall clock: {time.time() - wall_start:.2f}s")
     successful: int = sum(1 for r in results if r.success)
     return 0 if successful else 1
+
 
 if __name__ == "__main__":
     mp.freeze_support()

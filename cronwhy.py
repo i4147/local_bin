@@ -354,15 +354,22 @@ def detect_overlaps(specs: Sequence[CronSpec], tz: ZoneInfo, horizon_days: int =
 
 def build_parser() -> argparse.ArgumentParser:
     """Build parser."""
-    parser = argparse.ArgumentParser(description='Explain cron expressions in plain English and estimate next runs.')
-    parser.add_argument('expression', nargs="?", default=None, help="A single cron expression like '*/5 * * * *'")
-    parser.add_argument('--file', default=None, help='Crontab file to parse instead of one expression')
-    parser.add_argument('--tz', default='UTC', help='Timezone to evaluate scheduling in, e.g. Europe/London')
-    parser.add_argument('--next', type=int, default=5, help='How many future run times to show')
-    parser.add_argument('--overlaps', action="store_true", default=False, help='Detect duplicate/overlapping schedules in a crontab file')
-    parser.add_argument('--dst-warnings', action="store_true", default=False, help='Call out times near DST transitions')
-    parser.add_argument('--json', action="store_true", default=False, help='Emit JSON output')
-    parser.add_argument('--horizon-days', type=int, default=30, help='Horizon used for overlap detection (days)')
+    parser = argparse.ArgumentParser(description="Explain cron expressions in plain English and estimate next runs.")
+    parser.add_argument("expression", nargs="?", default=None, help="A single cron expression like '*/5 * * * *'")
+    parser.add_argument("--file", default=None, help="Crontab file to parse instead of one expression")
+    parser.add_argument("--tz", default="UTC", help="Timezone to evaluate scheduling in, e.g. Europe/London")
+    parser.add_argument("--next", type=int, default=5, help="How many future run times to show")
+    parser.add_argument(
+        "--overlaps",
+        action="store_true",
+        default=False,
+        help="Detect duplicate/overlapping schedules in a crontab file",
+    )
+    parser.add_argument(
+        "--dst-warnings", action="store_true", default=False, help="Call out times near DST transitions"
+    )
+    parser.add_argument("--json", action="store_true", default=False, help="Emit JSON output")
+    parser.add_argument("--horizon-days", type=int, default=30, help="Horizon used for overlap detection (days)")
     return parser
 
 
@@ -474,6 +481,7 @@ def main() -> int:
                 else:
                     print(f"  - {dt.strftime('%Y-%m-%d %H:%M %Z')}")
     return 0
+
 
 if __name__ == "__main__":
     raise SystemExit(main())

@@ -202,17 +202,44 @@ def render_list(
 
 def build_parser() -> argparse.ArgumentParser:
     """Create the command-line argument parser."""
-    parser = argparse.ArgumentParser(description='Convert JSON from a file or stdin into a Markdown table or list.')
-    parser.add_argument('input', nargs="?", default='-', help='JSON input file; defaults to stdin')
-    parser.add_argument('-o', '--output', default=None, help='write Markdown to this file instead of stdout')
-    parser.add_argument('-f', '--format', choices=['table', 'list'], default='table', help='output format (default: table)')
-    parser.add_argument('--array-mode', choices=['json', 'join', 'expand'], default='json', help='how to display or handle arrays: compact JSON, join scalar values, or expand array items into rows (default: json)')
-    parser.add_argument('--separator', default='.', help='separator used in flattened column paths (default: .)')
-    parser.add_argument('--header', action="append", type=parse_header, default=[], metavar='PATH=LABEL', help='rename a flattened column; may be supplied more than once')
-    parser.add_argument('--exclude', action="append", default=[], metavar='GLOB', help='exclude columns matching a glob pattern; may be supplied more than once')
-    parser.add_argument('--sort-columns', action="store_true", default=False, help='sort columns alphabetically by their displayed header')
-    parser.add_argument('--no-header', action="store_true", default=False, help='omit the header and separator rows (table format only)')
-    parser.add_argument('--null-text', default='—', help='text to use for JSON null values (default: —)')
+    parser = argparse.ArgumentParser(description="Convert JSON from a file or stdin into a Markdown table or list.")
+    parser.add_argument("input", nargs="?", default="-", help="JSON input file; defaults to stdin")
+    parser.add_argument("-o", "--output", default=None, help="write Markdown to this file instead of stdout")
+    parser.add_argument(
+        "-f", "--format", choices=["table", "list"], default="table", help="output format (default: table)"
+    )
+    parser.add_argument(
+        "--array-mode",
+        choices=["json", "join", "expand"],
+        default="json",
+        help="how to display or handle arrays: compact JSON, join scalar values, or expand array items into rows (default: json)",
+    )
+    parser.add_argument("--separator", default=".", help="separator used in flattened column paths (default: .)")
+    parser.add_argument(
+        "--header",
+        action="append",
+        type=parse_header,
+        default=[],
+        metavar="PATH=LABEL",
+        help="rename a flattened column; may be supplied more than once",
+    )
+    parser.add_argument(
+        "--exclude",
+        action="append",
+        default=[],
+        metavar="GLOB",
+        help="exclude columns matching a glob pattern; may be supplied more than once",
+    )
+    parser.add_argument(
+        "--sort-columns",
+        action="store_true",
+        default=False,
+        help="sort columns alphabetically by their displayed header",
+    )
+    parser.add_argument(
+        "--no-header", action="store_true", default=False, help="omit the header and separator rows (table format only)"
+    )
+    parser.add_argument("--null-text", default="—", help="text to use for JSON null values (default: —)")
     return parser
 
 
@@ -268,6 +295,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"json-to-markdown: {error}", file=sys.stderr)
         return 1
     return 0
+
 
 if __name__ == "__main__":
     raise SystemExit(main())

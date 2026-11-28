@@ -37,6 +37,7 @@ from rich.progress import (
     TextColumn,
 )
 from rich.table import Table
+
 try:
     from black import TargetVersion
 
@@ -601,65 +602,109 @@ def run_watch(paths: list[Path], runner: Any, config: Config) -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     """Build the command-line argument parser."""
-    parser = argparse.ArgumentParser(prog='clean-py', description='Auto-lint .py and .ipynb files with autoflake, isort and black')
-    parser.add_argument('path', nargs="*", type=Path, default=None, help='File or directory to clean')
-    parser.add_argument('--stdin', dest='stdin', action="store_true", default=False, help='Read source from stdin, write to stdout')
-    parser.add_argument('--py', dest='py', action=argparse.BooleanOptionalAction, default=True, help='Apply to .py source')
-    parser.add_argument('--ipynb', dest='ipynb', action=argparse.BooleanOptionalAction, default=True, help='Apply to .ipynb source')
-    parser.add_argument('--autoflake', dest='autoflake', action=argparse.BooleanOptionalAction, default=True, help='Apply autoflake to source')
-    parser.add_argument('--isort', dest='isort', action=argparse.BooleanOptionalAction, default=True, help='Apply isort to source')
-    parser.add_argument('--black', dest='black', action=argparse.BooleanOptionalAction, default=True, help='Apply black to source')
-    parser.add_argument('--verbose', dest='verbose', action="store_true", default=False, help='Enable verbose output')
-    parser.add_argument('-q', '--quiet', dest='quiet', action="store_true", default=False, help='Suppress info output')
-    parser.add_argument('--no-color', dest='no_color', action="store_true", default=False, help='Disable color output')
-    parser.add_argument('--line-length', dest='line_length', default=DEFAULT_LINE_LENGTH, type=int, help='Line length')
-    parser.add_argument('--skip-string-normalization', dest='skip_string_normalization', action="store_true", default=False)
-    parser.add_argument('--skip-magic-trailing-comma', dest='skip_magic_trailing_comma', action="store_true", default=False)
-    parser.add_argument('--target-version', dest='target_version', default=None)
-    parser.add_argument('--isort-profile', dest='isort_profile', default='black')
-    parser.add_argument('--autoflake-remove-unused-variables', dest='autoflake_remove_unused_variables', action=argparse.BooleanOptionalAction, default=True)
-    parser.add_argument('--autoflake-ignore-init-module-imports', dest='autoflake_ignore_init_module_imports', action="store_true", default=False)
-    parser.add_argument('--check', dest='check', action="store_true", default=False, help='Do not write; fail if changes needed')
-    parser.add_argument('--diff', dest='diff', action="store_true", default=False, help='Print unified diff')
-    parser.add_argument('--backup', dest='backup', action="store_true", default=False, help='Backup files before writing')
-    parser.add_argument('--backup-suffix', dest='backup_suffix', default='.bak')
-    parser.add_argument('--fail-fast', dest='fail_fast', action="store_true", default=False)
-    parser.add_argument('--clear-output', dest='clear_output', action="store_true", default=True)
-    parser.add_argument('--keep-output', dest='clear_output', action="store_false")
-    parser.add_argument('--strip-magics', dest='strip_magics', action="store_true", default=True)
-    parser.add_argument('--keep-magics', dest='strip_magics', action="store_false")
-    parser.add_argument('--dedupe-cells', dest='dedupe_cells', action=argparse.BooleanOptionalAction, default=False)
-    parser.add_argument('--drop-empty-cells', dest='drop_empty_cells', action=argparse.BooleanOptionalAction, default=False)
-    parser.add_argument('--strip-metadata', dest='strip_metadata', action="store_true", default=False)
-    parser.add_argument('--normalize-outputs', dest='normalize_outputs', action="store_true", default=False)
-    parser.add_argument('--strict-cell-errors', dest='strict_cell_errors', action="store_true", default=False)
-    parser.add_argument('--skip-header', dest='skip_header', action="store_true", default=False)
-    parser.add_argument('--add-trailing-newline', dest='add_trailing_newline', action=argparse.BooleanOptionalAction, default=True)
-    parser.add_argument('--remove-trailing-newline', dest='remove_trailing_newline', action="store_true", default=False)
-    parser.add_argument('--respect-fmt-off', dest='respect_fmt_off', action=argparse.BooleanOptionalAction, default=True)
-    parser.add_argument('-j', '--jobs', dest='jobs', default=cpu_count(), type=int)
-    parser.add_argument('--no-parallel', dest='no_parallel', action="store_true", default=False)
-    parser.add_argument('--cache', dest='cache', action=argparse.BooleanOptionalAction, default=False)
-    parser.add_argument('--include', dest='include', default=None)
-    parser.add_argument('--exclude', dest='exclude', action="append", default=[])
-    parser.add_argument('--respect-gitignore', dest='respect_gitignore', action="store_true", default=False)
-    parser.add_argument('--follow-symlinks', dest='follow_symlinks', action=argparse.BooleanOptionalAction, default=False)
-    parser.add_argument('--max-depth', dest='max_depth', default=None, type=int)
-    parser.add_argument('--extensions', dest='extensions', default='.py,.pyi,.ipynb')
-    parser.add_argument('--notebook-version', dest='notebook_version', default=None, type=int)
-    parser.add_argument('--config', dest='config_path', default=None, type=Path)
-    parser.add_argument('--profile', dest='profile', default='default')
-    parser.add_argument('--stats', dest='show_stats', action="store_true", default=False)
-    parser.add_argument('--json-report', dest='json_report', default=None)
-    parser.add_argument('--progress', dest='progress', action="store_true", default=False)
-    parser.add_argument('--list-files', dest='list_files', action="store_true", default=False)
-    parser.add_argument('--show-unchanged', dest='show_unchanged', action="store_true", default=False)
-    parser.add_argument('--error-format', dest='error_format', default='plain')
-    parser.add_argument('--require-changes', dest='require_changes', action="store_true", default=False)
-    parser.add_argument('--since', dest='since', default=None)
-    parser.add_argument('--watch', dest='watch', action="store_true", default=False)
-    parser.add_argument('--linters', dest='linters', action="append", default=[])
-    parser.add_argument('--doctor', dest='doctor', action="store_true", default=False)
+    parser = argparse.ArgumentParser(
+        prog="clean-py", description="Auto-lint .py and .ipynb files with autoflake, isort and black"
+    )
+    parser.add_argument("path", nargs="*", type=Path, default=None, help="File or directory to clean")
+    parser.add_argument(
+        "--stdin", dest="stdin", action="store_true", default=False, help="Read source from stdin, write to stdout"
+    )
+    parser.add_argument(
+        "--py", dest="py", action=argparse.BooleanOptionalAction, default=True, help="Apply to .py source"
+    )
+    parser.add_argument(
+        "--ipynb", dest="ipynb", action=argparse.BooleanOptionalAction, default=True, help="Apply to .ipynb source"
+    )
+    parser.add_argument(
+        "--autoflake",
+        dest="autoflake",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Apply autoflake to source",
+    )
+    parser.add_argument(
+        "--isort", dest="isort", action=argparse.BooleanOptionalAction, default=True, help="Apply isort to source"
+    )
+    parser.add_argument(
+        "--black", dest="black", action=argparse.BooleanOptionalAction, default=True, help="Apply black to source"
+    )
+    parser.add_argument("--verbose", dest="verbose", action="store_true", default=False, help="Enable verbose output")
+    parser.add_argument("-q", "--quiet", dest="quiet", action="store_true", default=False, help="Suppress info output")
+    parser.add_argument("--no-color", dest="no_color", action="store_true", default=False, help="Disable color output")
+    parser.add_argument("--line-length", dest="line_length", default=DEFAULT_LINE_LENGTH, type=int, help="Line length")
+    parser.add_argument(
+        "--skip-string-normalization", dest="skip_string_normalization", action="store_true", default=False
+    )
+    parser.add_argument(
+        "--skip-magic-trailing-comma", dest="skip_magic_trailing_comma", action="store_true", default=False
+    )
+    parser.add_argument("--target-version", dest="target_version", default=None)
+    parser.add_argument("--isort-profile", dest="isort_profile", default="black")
+    parser.add_argument(
+        "--autoflake-remove-unused-variables",
+        dest="autoflake_remove_unused_variables",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+    )
+    parser.add_argument(
+        "--autoflake-ignore-init-module-imports",
+        dest="autoflake_ignore_init_module_imports",
+        action="store_true",
+        default=False,
+    )
+    parser.add_argument(
+        "--check", dest="check", action="store_true", default=False, help="Do not write; fail if changes needed"
+    )
+    parser.add_argument("--diff", dest="diff", action="store_true", default=False, help="Print unified diff")
+    parser.add_argument(
+        "--backup", dest="backup", action="store_true", default=False, help="Backup files before writing"
+    )
+    parser.add_argument("--backup-suffix", dest="backup_suffix", default=".bak")
+    parser.add_argument("--fail-fast", dest="fail_fast", action="store_true", default=False)
+    parser.add_argument("--clear-output", dest="clear_output", action="store_true", default=True)
+    parser.add_argument("--keep-output", dest="clear_output", action="store_false")
+    parser.add_argument("--strip-magics", dest="strip_magics", action="store_true", default=True)
+    parser.add_argument("--keep-magics", dest="strip_magics", action="store_false")
+    parser.add_argument("--dedupe-cells", dest="dedupe_cells", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument(
+        "--drop-empty-cells", dest="drop_empty_cells", action=argparse.BooleanOptionalAction, default=False
+    )
+    parser.add_argument("--strip-metadata", dest="strip_metadata", action="store_true", default=False)
+    parser.add_argument("--normalize-outputs", dest="normalize_outputs", action="store_true", default=False)
+    parser.add_argument("--strict-cell-errors", dest="strict_cell_errors", action="store_true", default=False)
+    parser.add_argument("--skip-header", dest="skip_header", action="store_true", default=False)
+    parser.add_argument(
+        "--add-trailing-newline", dest="add_trailing_newline", action=argparse.BooleanOptionalAction, default=True
+    )
+    parser.add_argument("--remove-trailing-newline", dest="remove_trailing_newline", action="store_true", default=False)
+    parser.add_argument(
+        "--respect-fmt-off", dest="respect_fmt_off", action=argparse.BooleanOptionalAction, default=True
+    )
+    parser.add_argument("-j", "--jobs", dest="jobs", default=cpu_count(), type=int)
+    parser.add_argument("--no-parallel", dest="no_parallel", action="store_true", default=False)
+    parser.add_argument("--cache", dest="cache", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument("--include", dest="include", default=None)
+    parser.add_argument("--exclude", dest="exclude", action="append", default=[])
+    parser.add_argument("--respect-gitignore", dest="respect_gitignore", action="store_true", default=False)
+    parser.add_argument(
+        "--follow-symlinks", dest="follow_symlinks", action=argparse.BooleanOptionalAction, default=False
+    )
+    parser.add_argument("--max-depth", dest="max_depth", default=None, type=int)
+    parser.add_argument("--extensions", dest="extensions", default=".py,.pyi,.ipynb")
+    parser.add_argument("--notebook-version", dest="notebook_version", default=None, type=int)
+    parser.add_argument("--config", dest="config_path", default=None, type=Path)
+    parser.add_argument("--profile", dest="profile", default="default")
+    parser.add_argument("--stats", dest="show_stats", action="store_true", default=False)
+    parser.add_argument("--json-report", dest="json_report", default=None)
+    parser.add_argument("--progress", dest="progress", action="store_true", default=False)
+    parser.add_argument("--list-files", dest="list_files", action="store_true", default=False)
+    parser.add_argument("--show-unchanged", dest="show_unchanged", action="store_true", default=False)
+    parser.add_argument("--error-format", dest="error_format", default="plain")
+    parser.add_argument("--require-changes", dest="require_changes", action="store_true", default=False)
+    parser.add_argument("--since", dest="since", default=None)
+    parser.add_argument("--watch", dest="watch", action="store_true", default=False)
+    parser.add_argument("--linters", dest="linters", action="append", default=[])
+    parser.add_argument("--doctor", dest="doctor", action="store_true", default=False)
     return parser
 
 
@@ -678,13 +723,13 @@ def main(
     skip_string_normalization: Any = False,
     skip_magic_trailing_comma: Any = False,
     target_version: str | None = None,
-    isort_profile: Any = 'black',
+    isort_profile: Any = "black",
     autoflake_remove_unused_variables: Any = True,
     autoflake_ignore_init_module_imports: Any = False,
     check: bool = False,
     diff: Any = False,
     backup: Any = False,
-    backup_suffix: str = '.bak',
+    backup_suffix: str = ".bak",
     fail_fast: Any = False,
     clear_output: Any = True,
     strip_magics: Any = True,
@@ -705,16 +750,16 @@ def main(
     respect_gitignore: Any = False,
     follow_symlinks: Any = False,
     max_depth: int | None = None,
-    extensions: str = '.py,.pyi,.ipynb',
+    extensions: str = ".py,.pyi,.ipynb",
     notebook_version: int | None = None,
     config_path: Path | None = None,
-    profile: Any = 'default',
+    profile: Any = "default",
     show_stats: Any = False,
     json_report: Any = None,
     progress: Any = False,
     list_files: bool = False,
     show_unchanged: Any = False,
-    error_format: str = 'plain',
+    error_format: str = "plain",
     require_changes: Any = False,
     since: Any = None,
     watch: Any = False,

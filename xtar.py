@@ -297,8 +297,15 @@ def find_archives(directory: str = ".") -> list[Path]:
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description='Extract supported archives; originals are removed after successful extraction.')
-    parser.add_argument('archives', nargs="*", type=Path, help='archive files to extract; defaults to a recursive scan of the current directory')
+    parser = argparse.ArgumentParser(
+        description="Extract supported archives; originals are removed after successful extraction."
+    )
+    parser.add_argument(
+        "archives",
+        nargs="*",
+        type=Path,
+        help="archive files to extract; defaults to a recursive scan of the current directory",
+    )
     return parser
 
 
@@ -325,6 +332,7 @@ def main() -> None:
     failed: int = sum(1 for result in results if not result)
     print("-" * 40)
     print(f"Summary: {successful} successful, {failed} failed/skipped")
+
 
 if __name__ == "__main__":
     raise SystemExit(main())

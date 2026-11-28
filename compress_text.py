@@ -554,15 +554,17 @@ def print_report(console: Console, results: list[Result], orig: int, wall: float
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
-    parser.add_argument('path', type=Path)
-    parser.add_argument('-o', '--out-dir', type=Path, default=Path('output'))
-    parser.add_argument('-p', '--preset', choices=list(LEVELS), default='max')
-    parser.add_argument('-a', '--algos', action="append", default=ORDER, metavar='ALGO')
-    parser.add_argument('--verify', action=argparse.BooleanOptionalAction, default=True)
-    parser.add_argument('--force', action="store_true", default=False)
-    parser.add_argument('--keep-tar', action="store_true", default=False)
-    parser.add_argument('--tmp-dir', type=Path, default=Path(os.environ['TMPDIR']) if os.environ.get('TMPDIR') else None)
-    parser.add_argument('--json', dest='json_path', type=Path, default=None)
+    parser.add_argument("path", type=Path)
+    parser.add_argument("-o", "--out-dir", type=Path, default=Path("output"))
+    parser.add_argument("-p", "--preset", choices=list(LEVELS), default="max")
+    parser.add_argument("-a", "--algos", action="append", default=ORDER, metavar="ALGO")
+    parser.add_argument("--verify", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument("--force", action="store_true", default=False)
+    parser.add_argument("--keep-tar", action="store_true", default=False)
+    parser.add_argument(
+        "--tmp-dir", type=Path, default=Path(os.environ["TMPDIR"]) if os.environ.get("TMPDIR") else None
+    )
+    parser.add_argument("--json", dest="json_path", type=Path, default=None)
     return parser
 
 
@@ -655,6 +657,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     except KeyboardInterrupt:
         console.print("[yellow]interrupted[/]")
         return 130
+
 
 if __name__ == "__main__":
     raise SystemExit(main())

@@ -405,9 +405,7 @@ def strip_x(source: str) -> str | None:
                 )
             return updated_node
 
-        def leave_EmptyLine(
-            self, original_node: cst.EmptyLine, updated_node: cst.EmptyLine
-        ) -> cst.RemovalSentinel:
+        def leave_EmptyLine(self, original_node: cst.EmptyLine, updated_node: cst.EmptyLine) -> cst.RemovalSentinel:
             return cst.RemoveFromParent()
 
         def leave_Module(self, original_node: cst.Module, updated_node: cst.Module) -> cst.Module:

@@ -500,27 +500,76 @@ def run(opts: Options) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     """Build parser."""
-    parser = argparse.ArgumentParser(description='List and bulk-delete branches that are already merged into the base branch.')
-    parser.add_argument('patterns', nargs="*", metavar='PATTERN', help='only consider branches matching these globs')
-    parser.add_argument('-C', '--repo', type=Path, default=Path(), help='repository path (default: current directory)')
-    parser.add_argument('-b', '--base', default=None, help='base ref to compare against (default: remote HEAD, main or master)')
-    parser.add_argument('-s', '--scope', choices=['local', 'remote', 'both'], default='local', help='which branches to consider')
-    parser.add_argument('--remote', default='origin', help='remote name (default: origin)')
-    parser.add_argument('-x', '--exclude', action="append", default=[], metavar='GLOB', help='skip branches matching this glob (repeatable)')
-    parser.add_argument('-e', '--regex', default=None, help='only consider branch names matching this regular expression')
-    parser.add_argument('--older-than', type=int, default=None, metavar='DAYS', help='only branches whose last commit is older than DAYS')
-    parser.add_argument('--author', default=None, help='only branches whose last commit author contains this text')
-    parser.add_argument('-p', '--protect', action="append", default=[], metavar='GLOB', help='extra protected branch globs (repeatable)')
-    parser.add_argument('--no-default-protect', action="store_true", default=False, help=f"do not protect {', '.join(DEFAULT_PROTECTED)}")
-    parser.add_argument('--squash', action="store_true", default=False, help='also detect squash/rebase-merged branches (git 2.38+)')
-    parser.add_argument('-F', '--fetch', action="store_true", default=False, help="run 'git fetch --prune' on the remote first")
-    parser.add_argument('-d', '--delete', action="store_true", default=False, help='delete the listed branches after confirmation')
-    parser.add_argument('-y', '--yes', action="store_true", default=False, help='skip the confirmation prompt')
-    parser.add_argument('-n', '--dry-run', action="store_true", default=False, help='with --delete, print the commands without running them')
-    parser.add_argument('--show-skipped', action="store_true", default=False, help='list protected and checked-out branches that were kept')
-    parser.add_argument('--json', dest='as_json', action="store_true", default=False, help='print machine-readable output (no deletion)')
-    parser.add_argument('--undo-file', type=Path, default=None, help='write a shell script that restores the deleted branches')
-    parser.add_argument('--no-color', action="store_true", default=False, help='disable colored output')
+    parser = argparse.ArgumentParser(
+        description="List and bulk-delete branches that are already merged into the base branch."
+    )
+    parser.add_argument("patterns", nargs="*", metavar="PATTERN", help="only consider branches matching these globs")
+    parser.add_argument("-C", "--repo", type=Path, default=Path(), help="repository path (default: current directory)")
+    parser.add_argument(
+        "-b", "--base", default=None, help="base ref to compare against (default: remote HEAD, main or master)"
+    )
+    parser.add_argument(
+        "-s", "--scope", choices=["local", "remote", "both"], default="local", help="which branches to consider"
+    )
+    parser.add_argument("--remote", default="origin", help="remote name (default: origin)")
+    parser.add_argument(
+        "-x",
+        "--exclude",
+        action="append",
+        default=[],
+        metavar="GLOB",
+        help="skip branches matching this glob (repeatable)",
+    )
+    parser.add_argument(
+        "-e", "--regex", default=None, help="only consider branch names matching this regular expression"
+    )
+    parser.add_argument(
+        "--older-than",
+        type=int,
+        default=None,
+        metavar="DAYS",
+        help="only branches whose last commit is older than DAYS",
+    )
+    parser.add_argument("--author", default=None, help="only branches whose last commit author contains this text")
+    parser.add_argument(
+        "-p", "--protect", action="append", default=[], metavar="GLOB", help="extra protected branch globs (repeatable)"
+    )
+    parser.add_argument(
+        "--no-default-protect",
+        action="store_true",
+        default=False,
+        help=f"do not protect {', '.join(DEFAULT_PROTECTED)}",
+    )
+    parser.add_argument(
+        "--squash", action="store_true", default=False, help="also detect squash/rebase-merged branches (git 2.38+)"
+    )
+    parser.add_argument(
+        "-F", "--fetch", action="store_true", default=False, help="run 'git fetch --prune' on the remote first"
+    )
+    parser.add_argument(
+        "-d", "--delete", action="store_true", default=False, help="delete the listed branches after confirmation"
+    )
+    parser.add_argument("-y", "--yes", action="store_true", default=False, help="skip the confirmation prompt")
+    parser.add_argument(
+        "-n",
+        "--dry-run",
+        action="store_true",
+        default=False,
+        help="with --delete, print the commands without running them",
+    )
+    parser.add_argument(
+        "--show-skipped",
+        action="store_true",
+        default=False,
+        help="list protected and checked-out branches that were kept",
+    )
+    parser.add_argument(
+        "--json", dest="as_json", action="store_true", default=False, help="print machine-readable output (no deletion)"
+    )
+    parser.add_argument(
+        "--undo-file", type=Path, default=None, help="write a shell script that restores the deleted branches"
+    )
+    parser.add_argument("--no-color", action="store_true", default=False, help="disable colored output")
     return parser
 
 
@@ -583,6 +632,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     except (KeyboardInterrupt, EOFError):
         print("\naborted", file=sys.stderr)
         return 130
+
 
 if __name__ == "__main__":
     raise SystemExit(main())

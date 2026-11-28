@@ -1750,47 +1750,174 @@ def _similarity_value(value: str) -> float:
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description='Find duplicate Python files, definitions, and near-duplicates using normalized AST fingerprints.')
-    parser.add_argument('paths', nargs="*", metavar='PATH', help="files or directories to scan; '-' reads newline-separated paths from stdin")
-    parser.add_argument('--root', action="append", type=Path, default=None, metavar='DIR', help='directory root to scan (repeatable, enables cross-project comparison)')
-    parser.add_argument('-r', '--remove', action="store_true", default=False, help='remove duplicate files (requires confirmation unless -y)')
-    parser.add_argument('-y', '--yes', action="store_true", default=False, help='skip interactive confirmation prompts')
-    parser.add_argument('--dry-run', action="store_true", default=False, help='print a verbose deletion plan (keepers, removals, sizes, totals) without removing anything')
-    parser.add_argument('-s', '--save-similar', action="store_true", default=False, help='compare ssdeep fuzzy hashes of all scanned files and save pairs scoring above 70 to simz.json')
-    parser.add_argument('--tlsh', action="store_true", default=False, help='also compare TLSH fuzzy hashes and include pairs scoring above 70 in simz.json')
-    parser.add_argument('--minhash', action="store_true", default=False, help='also compare 128-bit MinHash signatures (LSH-banded token shingles) and include pairs scoring above 70 in simz.json')
-    parser.add_argument('--simhash', action="store_true", default=False, help='also compare 64-bit SimHash fingerprints (token shingles) and include pairs scoring above 70 in simz.json')
-    parser.add_argument('--mp-method', type=_mp_method_value, default='cf.ProcessPoolExecutor', metavar='NAME', help='parallel engine: cf.{Process,Thread,Interpreter}PoolExecutor (default), mp.pool.{map,imap,imap_unordered,apply,apply_async,map_async,starmap,starmap_async}, joblib')
-    parser.add_argument('--to-trash', action="store_true", default=False, help='send duplicates to the system trash via send2trash instead of unlinking')
-    parser.add_argument('--quarantine', type=Path, default=None, metavar='DIR', help='move duplicates into DIR instead of unlinking them')
-    parser.add_argument('--keep', choices=['first', 'oldest', 'newest', 'shortest', 'longest', 'pattern', 'prefer'], default='first', help='keeper selection policy for each duplicate group (default: first)')
-    parser.add_argument('--pattern', default=None, metavar='GLOB', help='keeper glob for --keep pattern')
-    parser.add_argument('--prefer', default=None, metavar='PREFIX', help='keeper path prefix for --keep prefer')
-    parser.add_argument('--exclude', action="append", default=[], metavar='GLOB', help='exclude paths matching GLOB (repeatable)')
-    parser.add_argument('--mode', choices=['strict', 'default', 'loose', 'structural'], default='loose', help='normalization level: strict (raw bytes), default (docstrings stripped), loose (also annotations/types), structural (AST + token stream)')
-    parser.add_argument('--similarity', type=_similarity_value, default=None, metavar='FLOAT', help='report near-duplicate pairs with token n-gram Jaccard >= FLOAT, e.g. 0.9')
-    parser.add_argument('--functions', action="store_true", default=False, help='report duplicate functions and classes within and across files')
-    parser.add_argument('--ignore-imports', action="store_true", default=False, help='treat files differing only by import order or unused imports as duplicates')
-    parser.add_argument('--changed-since', default=None, metavar='REF', help='only scan files changed since the given git ref')
-    parser.add_argument('--notebooks', action="store_true", default=False, help='include .ipynb notebooks (code cells are extracted)')
-    parser.add_argument('--min-lines', type=_nonneg_int, default=0, metavar='N', help='skip files with fewer than N non-blank lines')
-    parser.add_argument('--min-bytes', type=_nonneg_int, default=0, metavar='N', help='skip files smaller than N bytes')
-    parser.add_argument('--skip-empty', action="store_true", default=False, help='skip files that normalize to an empty module')
-    parser.add_argument('--fail-on-dupes', '--exit-code', action="store_true", default=False, help='exit with code 1 when duplicate groups are found')
-    parser.add_argument('--fail-on-error', action="store_true", default=False, help='exit with code 1 when files fail to parse')
-    parser.add_argument('--format', dest='output_format', choices=['text', 'json', 'ndjson', 'csv'], default='text', help='report format (default: text)')
-    parser.add_argument('--rich', action="store_true", default=False, help='show rich progress while processing')
-    parser.add_argument('--no-cache', action="store_true", default=False, help='disable the .pydup-cache.json fingerprint cache')
-    parser.add_argument('--baseline', type=Path, default=None, metavar='FILE', help='only report duplicate groups not present in FILE')
-    parser.add_argument('--print-keep', action="store_true", default=False, help='print only keeper paths, one per line')
-    parser.add_argument('--manifest', type=Path, default=None, metavar='FILE', help='write a machine-readable deletion manifest to FILE')
-    parser.add_argument('--diff', nargs=2, type=Path, default=None, help='print a unified diff of two normalized files and exit')
-    parser.add_argument('--stats', action="store_true", default=False, help='print a run summary at the end')
-    parser.add_argument('--watch', action="store_true", default=False, help='watch for changes and rescan continuously (report-only)')
-    parser.add_argument('-v', '--verbose', action="count", default=0, help='increase log verbosity (repeatable)')
-    parser.add_argument('-q', '--quiet', action="store_true", default=False, help='only log errors')
-    parser.add_argument('--log-format', choices=['text', 'json'], default='text', help='log line format on stderr')
-    parser.add_argument('--version', action="version", version=f'pydup {__version__}', help="show program's version number and exit")
+    parser = argparse.ArgumentParser(
+        description="Find duplicate Python files, definitions, and near-duplicates using normalized AST fingerprints."
+    )
+    parser.add_argument(
+        "paths",
+        nargs="*",
+        metavar="PATH",
+        help="files or directories to scan; '-' reads newline-separated paths from stdin",
+    )
+    parser.add_argument(
+        "--root",
+        action="append",
+        type=Path,
+        default=None,
+        metavar="DIR",
+        help="directory root to scan (repeatable, enables cross-project comparison)",
+    )
+    parser.add_argument(
+        "-r",
+        "--remove",
+        action="store_true",
+        default=False,
+        help="remove duplicate files (requires confirmation unless -y)",
+    )
+    parser.add_argument("-y", "--yes", action="store_true", default=False, help="skip interactive confirmation prompts")
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        default=False,
+        help="print a verbose deletion plan (keepers, removals, sizes, totals) without removing anything",
+    )
+    parser.add_argument(
+        "-s",
+        "--save-similar",
+        action="store_true",
+        default=False,
+        help="compare ssdeep fuzzy hashes of all scanned files and save pairs scoring above 70 to simz.json",
+    )
+    parser.add_argument(
+        "--tlsh",
+        action="store_true",
+        default=False,
+        help="also compare TLSH fuzzy hashes and include pairs scoring above 70 in simz.json",
+    )
+    parser.add_argument(
+        "--minhash",
+        action="store_true",
+        default=False,
+        help="also compare 128-bit MinHash signatures (LSH-banded token shingles) and include pairs scoring above 70 in simz.json",
+    )
+    parser.add_argument(
+        "--simhash",
+        action="store_true",
+        default=False,
+        help="also compare 64-bit SimHash fingerprints (token shingles) and include pairs scoring above 70 in simz.json",
+    )
+    parser.add_argument(
+        "--mp-method",
+        type=_mp_method_value,
+        default="cf.ProcessPoolExecutor",
+        metavar="NAME",
+        help="parallel engine: cf.{Process,Thread,Interpreter}PoolExecutor (default), mp.pool.{map,imap,imap_unordered,apply,apply_async,map_async,starmap,starmap_async}, joblib",
+    )
+    parser.add_argument(
+        "--to-trash",
+        action="store_true",
+        default=False,
+        help="send duplicates to the system trash via send2trash instead of unlinking",
+    )
+    parser.add_argument(
+        "--quarantine",
+        type=Path,
+        default=None,
+        metavar="DIR",
+        help="move duplicates into DIR instead of unlinking them",
+    )
+    parser.add_argument(
+        "--keep",
+        choices=["first", "oldest", "newest", "shortest", "longest", "pattern", "prefer"],
+        default="first",
+        help="keeper selection policy for each duplicate group (default: first)",
+    )
+    parser.add_argument("--pattern", default=None, metavar="GLOB", help="keeper glob for --keep pattern")
+    parser.add_argument("--prefer", default=None, metavar="PREFIX", help="keeper path prefix for --keep prefer")
+    parser.add_argument(
+        "--exclude", action="append", default=[], metavar="GLOB", help="exclude paths matching GLOB (repeatable)"
+    )
+    parser.add_argument(
+        "--mode",
+        choices=["strict", "default", "loose", "structural"],
+        default="loose",
+        help="normalization level: strict (raw bytes), default (docstrings stripped), loose (also annotations/types), structural (AST + token stream)",
+    )
+    parser.add_argument(
+        "--similarity",
+        type=_similarity_value,
+        default=None,
+        metavar="FLOAT",
+        help="report near-duplicate pairs with token n-gram Jaccard >= FLOAT, e.g. 0.9",
+    )
+    parser.add_argument(
+        "--functions",
+        action="store_true",
+        default=False,
+        help="report duplicate functions and classes within and across files",
+    )
+    parser.add_argument(
+        "--ignore-imports",
+        action="store_true",
+        default=False,
+        help="treat files differing only by import order or unused imports as duplicates",
+    )
+    parser.add_argument(
+        "--changed-since", default=None, metavar="REF", help="only scan files changed since the given git ref"
+    )
+    parser.add_argument(
+        "--notebooks", action="store_true", default=False, help="include .ipynb notebooks (code cells are extracted)"
+    )
+    parser.add_argument(
+        "--min-lines", type=_nonneg_int, default=0, metavar="N", help="skip files with fewer than N non-blank lines"
+    )
+    parser.add_argument("--min-bytes", type=_nonneg_int, default=0, metavar="N", help="skip files smaller than N bytes")
+    parser.add_argument(
+        "--skip-empty", action="store_true", default=False, help="skip files that normalize to an empty module"
+    )
+    parser.add_argument(
+        "--fail-on-dupes",
+        "--exit-code",
+        action="store_true",
+        default=False,
+        help="exit with code 1 when duplicate groups are found",
+    )
+    parser.add_argument(
+        "--fail-on-error", action="store_true", default=False, help="exit with code 1 when files fail to parse"
+    )
+    parser.add_argument(
+        "--format",
+        dest="output_format",
+        choices=["text", "json", "ndjson", "csv"],
+        default="text",
+        help="report format (default: text)",
+    )
+    parser.add_argument("--rich", action="store_true", default=False, help="show rich progress while processing")
+    parser.add_argument(
+        "--no-cache", action="store_true", default=False, help="disable the .pydup-cache.json fingerprint cache"
+    )
+    parser.add_argument(
+        "--baseline", type=Path, default=None, metavar="FILE", help="only report duplicate groups not present in FILE"
+    )
+    parser.add_argument(
+        "--print-keep", action="store_true", default=False, help="print only keeper paths, one per line"
+    )
+    parser.add_argument(
+        "--manifest", type=Path, default=None, metavar="FILE", help="write a machine-readable deletion manifest to FILE"
+    )
+    parser.add_argument(
+        "--diff", nargs=2, type=Path, default=None, help="print a unified diff of two normalized files and exit"
+    )
+    parser.add_argument("--stats", action="store_true", default=False, help="print a run summary at the end")
+    parser.add_argument(
+        "--watch", action="store_true", default=False, help="watch for changes and rescan continuously (report-only)"
+    )
+    parser.add_argument("-v", "--verbose", action="count", default=0, help="increase log verbosity (repeatable)")
+    parser.add_argument("-q", "--quiet", action="store_true", default=False, help="only log errors")
+    parser.add_argument("--log-format", choices=["text", "json"], default="text", help="log line format on stderr")
+    parser.add_argument(
+        "--version", action="version", version=f"pydup {__version__}", help="show program's version number and exit"
+    )
     return parser
 
 
@@ -2894,6 +3021,7 @@ def main(argv: list[str] | None = None) -> int:
         return 130
     except BrokenPipeError:
         return 0
+
 
 if __name__ == "__main__":
     raise SystemExit(main())

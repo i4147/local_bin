@@ -2578,7 +2578,9 @@ def insert_imports(module: cst.Module, statements: Sequence[cst.BaseStatement]) 
     new_lines: list[cst.SimpleStatementLine | cst.BaseCompoundStatement] = [
         s
         for raw in statements
-        if isinstance((s := _strip_leading(raw) if insert_at else raw), (cst.SimpleStatementLine, cst.BaseCompoundStatement))
+        if isinstance(
+            (s := _strip_leading(raw) if insert_at else raw), (cst.SimpleStatementLine, cst.BaseCompoundStatement)
+        )
     ]
     body[insert_at:insert_at] = new_lines
     return module.with_changes(body=body)

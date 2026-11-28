@@ -2016,29 +2016,77 @@ def _parse_color(val: str, what: str) -> tuple[int, int, int]:
 
 def build_arg_parser() -> argparse.ArgumentParser:
     """Build arg parser."""
-    parser = argparse.ArgumentParser(description='Show images in your terminal (single-file chafa clone).')
-    parser.add_argument('files', nargs="*", metavar='FILE', help='image file, or - for stdin')
-    parser.add_argument('-s', '--size', default=None, metavar='WxH', help='output size in cells')
-    parser.add_argument('-c', '--colors', default=None, metavar='MODE', help='none|2|8|16/8|16|240|256|full (default: auto)')
-    parser.add_argument('-f', '--format', default=None, metavar='FMT', help='symbols|sixels|kitty|iterm|auto (default: symbols or auto-detected)')
-    parser.add_argument('--symbols', default=None, metavar='SPEC', help='output symbols (see below)')
-    parser.add_argument('--fill', default=None, metavar='SPEC', help='fill symbols for gradients')
-    parser.add_argument('--color-space', choices=['rgb', 'din99d'], default=None, help='color distance metric (default: din99d)')
-    parser.add_argument('-w', '--work', type=int, default=None, metavar='1..9', help='work factor; 1-2 uses nearest-neighbor scaling (default: 5)')
-    parser.add_argument('--dither', choices=['none', 'ordered', 'diffusion', 'noise'], default=None, help='dither mode (default: none)')
-    parser.add_argument('--dither-intensity', type=float, default=None, metavar='0..1', help='dither intensity (default: 1.0)')
-    parser.add_argument('--dither-grain', default=None, metavar='WxH', help='dither grain size, 1/2/4/8 (default: 4x4)')
-    parser.add_argument('--no-preprocess', dest='preprocess', action="store_false", default=True, help='disable auto-contrast/saturation preprocessing')
-    parser.add_argument('-t', '--threshold', type=float, default=None, metavar='0..1', help='transparency threshold (default: 0.5; 1.0 = opaque)')
-    parser.add_argument('--fg', default=None, metavar='COLOR', help='default foreground color')
-    parser.add_argument('--bg', default=None, metavar='COLOR', help='default background color')
-    parser.add_argument('--fg-only', action="store_true", default=False, help='never emit background colors')
-    parser.add_argument('--invert', action="store_true", default=False, help='swap foreground and background colors')
-    parser.add_argument('--stretch', action="store_true", default=False, help='stretch image to fill output dimensions')
-    parser.add_argument('--align', choices=['start', 'center', 'end'], default=None, help='horizontal alignment (default: start)')
-    parser.add_argument('--animate', dest='animate', action="store_true", default=None, help='dump all frames of animated input (default)')
-    parser.add_argument('--still', dest='animate', action="store_false")
-    parser.add_argument('-V', '--version', action="version", version='chafa.py 1.0 (chafa clone)', help="show program's version number and exit")
+    parser = argparse.ArgumentParser(description="Show images in your terminal (single-file chafa clone).")
+    parser.add_argument("files", nargs="*", metavar="FILE", help="image file, or - for stdin")
+    parser.add_argument("-s", "--size", default=None, metavar="WxH", help="output size in cells")
+    parser.add_argument(
+        "-c", "--colors", default=None, metavar="MODE", help="none|2|8|16/8|16|240|256|full (default: auto)"
+    )
+    parser.add_argument(
+        "-f",
+        "--format",
+        default=None,
+        metavar="FMT",
+        help="symbols|sixels|kitty|iterm|auto (default: symbols or auto-detected)",
+    )
+    parser.add_argument("--symbols", default=None, metavar="SPEC", help="output symbols (see below)")
+    parser.add_argument("--fill", default=None, metavar="SPEC", help="fill symbols for gradients")
+    parser.add_argument(
+        "--color-space", choices=["rgb", "din99d"], default=None, help="color distance metric (default: din99d)"
+    )
+    parser.add_argument(
+        "-w",
+        "--work",
+        type=int,
+        default=None,
+        metavar="1..9",
+        help="work factor; 1-2 uses nearest-neighbor scaling (default: 5)",
+    )
+    parser.add_argument(
+        "--dither", choices=["none", "ordered", "diffusion", "noise"], default=None, help="dither mode (default: none)"
+    )
+    parser.add_argument(
+        "--dither-intensity", type=float, default=None, metavar="0..1", help="dither intensity (default: 1.0)"
+    )
+    parser.add_argument("--dither-grain", default=None, metavar="WxH", help="dither grain size, 1/2/4/8 (default: 4x4)")
+    parser.add_argument(
+        "--no-preprocess",
+        dest="preprocess",
+        action="store_false",
+        default=True,
+        help="disable auto-contrast/saturation preprocessing",
+    )
+    parser.add_argument(
+        "-t",
+        "--threshold",
+        type=float,
+        default=None,
+        metavar="0..1",
+        help="transparency threshold (default: 0.5; 1.0 = opaque)",
+    )
+    parser.add_argument("--fg", default=None, metavar="COLOR", help="default foreground color")
+    parser.add_argument("--bg", default=None, metavar="COLOR", help="default background color")
+    parser.add_argument("--fg-only", action="store_true", default=False, help="never emit background colors")
+    parser.add_argument("--invert", action="store_true", default=False, help="swap foreground and background colors")
+    parser.add_argument("--stretch", action="store_true", default=False, help="stretch image to fill output dimensions")
+    parser.add_argument(
+        "--align", choices=["start", "center", "end"], default=None, help="horizontal alignment (default: start)"
+    )
+    parser.add_argument(
+        "--animate",
+        dest="animate",
+        action="store_true",
+        default=None,
+        help="dump all frames of animated input (default)",
+    )
+    parser.add_argument("--still", dest="animate", action="store_false")
+    parser.add_argument(
+        "-V",
+        "--version",
+        action="version",
+        version="chafa.py 1.0 (chafa clone)",
+        help="show program's version number and exit",
+    )
     return parser
 
 
@@ -2267,6 +2315,7 @@ def main() -> None:
         sys.exit(0)
     except KeyboardInterrupt:
         sys.exit(130)
+
 
 if __name__ == "__main__":
     raise SystemExit(main())

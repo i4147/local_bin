@@ -873,7 +873,9 @@ def _disc(cx: Any, cy: Any, r: int, n: int = 12) -> list:
     return [(cx + r * math.cos(2 * math.pi * i / n), cy + r * math.sin(2 * math.pi * i / n)) for i in range(n + 1)]
 
 
-def _dashes(pts: Sequence[Any], closed: Any, pattern: Sequence[float], offset: float) -> list[tuple[Sequence[Any], Any]]:
+def _dashes(
+    pts: Sequence[Any], closed: Any, pattern: Sequence[float], offset: float
+) -> list[tuple[Sequence[Any], Any]]:
     """Split a polyline into dash runs -> [(points, False)]."""
     segs = []
     n = len(pts)
@@ -2501,7 +2503,9 @@ def main(argv: list[str] | None = None) -> int | None:
         if warn is not None and not warn.empty:
             note(f"  skipped: {warn.text()} — install cairosvg for full fidelity")
         if args.verbose:
-            note(f"  engine={engine} renderer={renderer_name} truecolor={truecolor} bg={bg_rgb} term={term.cols}x{term.rows}")
+            note(
+                f"  engine={engine} renderer={renderer_name} truecolor={truecolor} bg={bg_rgb} term={term.cols}x{term.rows}"
+            )
 
     return 1 if failures else 0
 

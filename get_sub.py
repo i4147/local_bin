@@ -39,7 +39,6 @@ logger.add(
 )
 
 
-
 __version__: str = "0.0.0"
 SUB_FORMATS: list[str] = [".ass", ".srt", ".ssa", ".sub", ".sup"]
 ARCHIVE_TYPES: list[str] = [".zip", ".rar", ".7z"]
@@ -1090,18 +1089,41 @@ class GetSubtitles:
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description='download subtitles easily')
-    parser.add_argument('name', help="the video's name or full path or a dir with videos")
-    parser.add_argument('-p', '--directory', default='', help='set specified subtitle download path')
-    parser.add_argument('-q', '--query', action="store_true", default=False, help='show search results and choose one to download')
-    parser.add_argument('-s', '--single', action="store_true", default=False, help='show subtitles in the compacted file and choose one to download')
-    parser.add_argument('-o', '--over', action="store_true", default=False, help='replace the subtitle already exists')
-    parser.add_argument('-m', '--more', action="store_true", default=False, help='save original download file.')
-    parser.add_argument('-n', '--number', default=None, help='set max number of subtitles to be choosen when in query mode')
-    parser.add_argument('-b', '--both', action="store_true", default=False, help='save .srt and .ass subtitles at the same time if two types exist in the same archive')
-    parser.add_argument('-d', '--downloader', default=None, help='choose downloader from ' + ', '.join(DownloaderManager.downloader_names))
-    parser.add_argument('--debug', action="store_true", default=False, help='show more info of the error')
-    parser.add_argument('--plex', action="store_true", default=False, help="add .zh to the subtitle's name for plex to recognize")
+    parser = argparse.ArgumentParser(description="download subtitles easily")
+    parser.add_argument("name", help="the video's name or full path or a dir with videos")
+    parser.add_argument("-p", "--directory", default="", help="set specified subtitle download path")
+    parser.add_argument(
+        "-q", "--query", action="store_true", default=False, help="show search results and choose one to download"
+    )
+    parser.add_argument(
+        "-s",
+        "--single",
+        action="store_true",
+        default=False,
+        help="show subtitles in the compacted file and choose one to download",
+    )
+    parser.add_argument("-o", "--over", action="store_true", default=False, help="replace the subtitle already exists")
+    parser.add_argument("-m", "--more", action="store_true", default=False, help="save original download file.")
+    parser.add_argument(
+        "-n", "--number", default=None, help="set max number of subtitles to be choosen when in query mode"
+    )
+    parser.add_argument(
+        "-b",
+        "--both",
+        action="store_true",
+        default=False,
+        help="save .srt and .ass subtitles at the same time if two types exist in the same archive",
+    )
+    parser.add_argument(
+        "-d",
+        "--downloader",
+        default=None,
+        help="choose downloader from " + ", ".join(DownloaderManager.downloader_names),
+    )
+    parser.add_argument("--debug", action="store_true", default=False, help="show more info of the error")
+    parser.add_argument(
+        "--plex", action="store_true", default=False, help="add .zh to the subtitle's name for plex to recognize"
+    )
     return parser
 
 
@@ -1124,6 +1146,7 @@ def main() -> None:
         downloader=args.downloader,
         sub_path=args.directory,
     ).start()
+
 
 if __name__ == "__main__":
     raise SystemExit(main())

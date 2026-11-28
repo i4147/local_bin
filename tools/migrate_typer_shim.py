@@ -86,11 +86,17 @@ def _extract_typer_call(
         base_node, meta_call = _unwrap_annotated(ann)
     default_expr: str | None = ast.unparse(default_node) if default_node is not None else None
     if meta_call is None and isinstance(default_node, ast.Call):
-        if isinstance(default_node.func, ast.Attribute) and isinstance(default_node.func.value, ast.Name) and default_node.func.value.id == "typer":
+        if (
+            isinstance(default_node.func, ast.Attribute)
+            and isinstance(default_node.func.value, ast.Name)
+            and default_node.func.value.id == "typer"
+        ):
             meta_call = default_node
             if default_node.args:
                 first = default_node.args[0]
-                default_expr = None if (isinstance(first, ast.Constant) and first.value is Ellipsis) else ast.unparse(first)
+                default_expr = (
+                    None if (isinstance(first, ast.Constant) and first.value is Ellipsis) else ast.unparse(first)
+                )
             else:
                 default_expr = None
 
@@ -382,7 +388,9 @@ def _needs_dest(flags: list[str], param_name: str) -> bool:
     return inferred != param_name
 
 
-def _find_cli_only_enums(tree: ast.Module, cli_fn_nodes: set[int]) -> tuple[dict[str, list[str]], dict[str, dict[str, str]], set[str]]:
+def _find_cli_only_enums(
+    tree: ast.Module, cli_fn_nodes: set[int]
+) -> tuple[dict[str, list[str]], dict[str, dict[str, str]], set[str]]:
     enum_values: dict[str, list[str]] = {}
     enum_members: dict[str, dict[str, str]] = {}
     enum_nodes: dict[str, ast.ClassDef] = {}
@@ -504,7 +512,9 @@ def migrate_file(path: Path, *, dry_run: bool = False) -> bool:
 
                 choices_hints, post_defaults, extra_defaults = _extract_body_hints(node)
                 all_args = node.args.args + node.args.kwonlyargs
-                pos_defs: list[ast.expr | None] = [None] * (len(node.args.args) - len(node.args.defaults)) + list(node.args.defaults)
+                pos_defs: list[ast.expr | None] = [None] * (len(node.args.args) - len(node.args.defaults)) + list(
+                    node.args.defaults
+                )
                 all_defs = pos_defs + list(node.args.kw_defaults)
 
                 params: list[ParamSpec] = []
@@ -651,7 +661,7 @@ def migrate_file(path: Path, *, dry_run: bool = False) -> bool:
             result = "import argparse\n" + result
 
     # Append clean if __name__ == "__main__": block
-    main_guard = "\n\nif __name__ == \"__main__\":\n" + "\n".join(f"    {ln}" for ln in run_body_lines) + "\n"
+    main_guard = '\n\nif __name__ == "__main__":\n' + "\n".join(f"    {ln}" for ln in run_body_lines) + "\n"
     result = result.rstrip() + main_guard
 
     # Collapse excessive blank lines (3+ -> 2)

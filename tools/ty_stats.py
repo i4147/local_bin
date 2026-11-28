@@ -63,10 +63,7 @@ def main(argv: list[str] | None = None) -> int:
     dirty_files = len(by_file)
     clean_files = max(0, total_py - dirty_files)
 
-    print(
-        f"Diagnostics: {total_diags} "
-        f"({by_level['error']} errors, {by_level['warning']} warnings)"
-    )
+    print(f"Diagnostics: {total_diags} ({by_level['error']} errors, {by_level['warning']} warnings)")
     if total_py:
         print(f"Files: {dirty_files}/{total_py} with diagnostics ({clean_files}/{total_py} clean)")
     else:

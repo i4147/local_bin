@@ -96,7 +96,6 @@ from loguru import logger
 import argparse
 
 
-
 __version__: str = "1.0.0"
 
 LOG = logger
@@ -1313,54 +1312,117 @@ def _rich_report(
 
 def build_parser() -> argparse.ArgumentParser:
     """Build the ``xztool`` argument parser (subcommand based)."""
-    parser = argparse.ArgumentParser(description='Recursive LZMA/XZ/7Z compression toolkit merged from 13 sibling scripts.')
-    parser.add_argument('--version', action="version", version=f'%(prog)s {__version__}', help="show program's version number and exit")
-    subparsers = parser.add_subparsers(dest='command')
-    sub_0 = subparsers.add_parser('compress', help='compress files recursively')
-    sub_0.add_argument('root', nargs="?", default='.', help='root directory (default: cwd)')
-    sub_0.add_argument('-f', '--backend', choices=sorted(BACKEND_SUFFIX), default='xz', help='compression backend (default: xz)')
-    sub_0.add_argument('-p', '--preset', type=int, choices=range(10), default=9, help='LZMA preset 0-9 (default: 9)')
-    sub_0.add_argument('-t', '--tar-subdirs', action="store_true", default=False, help='tar top-level subdirectories first, then compress them')
-    sub_0.add_argument('--threads', type=int, default=4, help='threads per file for the lzma_mt backend (default: 4)')
-    sub_0.add_argument('-w', '--workers', type=int, default=0, help='parallel worker processes (default: auto)')
-    sub_0.add_argument('-k', '--keep-original', action="store_true", default=False, help='keep original files after compression')
-    sub_0.add_argument('--overwrite', action="store_true", default=False, help='overwrite existing outputs instead of skipping them')
-    sub_0.add_argument('--extreme', action="store_true", default=False, help='enable LZMA PRESET_EXTREME (slower, slightly smaller)')
-    sub_0.add_argument('--only-if-smaller', action="store_true", default=False, help='discard the archive when it does not shrink the file')
-    sub_0.add_argument('--min-size', type=int, default=MIN_SIZE_DEFAULT, help='only compress files of at least this many bytes')
-    sub_0.add_argument('-e', '--ext', action="append", default=[], help='compress only files with these extensions (e.g. txt log)')
-    sub_0.add_argument('--exclude', action="append", default=[], help='exclude paths containing these substrings')
-    sub_0.add_argument('--include-media', action="store_true", default=False, help='also compress media/binary files (jpg, mp4, pdf, ...)')
-    sub_0.add_argument('--no-skip-compressed', action="store_true", default=False, help='also compress foreign archives (own outputs stay skipped)')
-    sub_0.add_argument('--out', type=Path, default=None, help='write archives into this directory (relative paths preserved)')
-    sub_0.add_argument('--report', choices=['plain', 'rich', 'auto'], default='auto', help='summary renderer (default: auto)')
-    sub_0.add_argument('--dry-run', action="store_true", default=False, help='show what would happen')
-    sub_0.add_argument('-v', '--verbose', action="store_true", default=False, help='chatty output')
+    parser = argparse.ArgumentParser(
+        description="Recursive LZMA/XZ/7Z compression toolkit merged from 13 sibling scripts."
+    )
+    parser.add_argument(
+        "--version", action="version", version=f"%(prog)s {__version__}", help="show program's version number and exit"
+    )
+    subparsers = parser.add_subparsers(dest="command")
+    sub_0 = subparsers.add_parser("compress", help="compress files recursively")
+    sub_0.add_argument("root", nargs="?", default=".", help="root directory (default: cwd)")
+    sub_0.add_argument(
+        "-f", "--backend", choices=sorted(BACKEND_SUFFIX), default="xz", help="compression backend (default: xz)"
+    )
+    sub_0.add_argument("-p", "--preset", type=int, choices=range(10), default=9, help="LZMA preset 0-9 (default: 9)")
+    sub_0.add_argument(
+        "-t",
+        "--tar-subdirs",
+        action="store_true",
+        default=False,
+        help="tar top-level subdirectories first, then compress them",
+    )
+    sub_0.add_argument("--threads", type=int, default=4, help="threads per file for the lzma_mt backend (default: 4)")
+    sub_0.add_argument("-w", "--workers", type=int, default=0, help="parallel worker processes (default: auto)")
+    sub_0.add_argument(
+        "-k", "--keep-original", action="store_true", default=False, help="keep original files after compression"
+    )
+    sub_0.add_argument(
+        "--overwrite", action="store_true", default=False, help="overwrite existing outputs instead of skipping them"
+    )
+    sub_0.add_argument(
+        "--extreme", action="store_true", default=False, help="enable LZMA PRESET_EXTREME (slower, slightly smaller)"
+    )
+    sub_0.add_argument(
+        "--only-if-smaller",
+        action="store_true",
+        default=False,
+        help="discard the archive when it does not shrink the file",
+    )
+    sub_0.add_argument(
+        "--min-size", type=int, default=MIN_SIZE_DEFAULT, help="only compress files of at least this many bytes"
+    )
+    sub_0.add_argument(
+        "-e", "--ext", action="append", default=[], help="compress only files with these extensions (e.g. txt log)"
+    )
+    sub_0.add_argument("--exclude", action="append", default=[], help="exclude paths containing these substrings")
+    sub_0.add_argument(
+        "--include-media",
+        action="store_true",
+        default=False,
+        help="also compress media/binary files (jpg, mp4, pdf, ...)",
+    )
+    sub_0.add_argument(
+        "--no-skip-compressed",
+        action="store_true",
+        default=False,
+        help="also compress foreign archives (own outputs stay skipped)",
+    )
+    sub_0.add_argument(
+        "--out", type=Path, default=None, help="write archives into this directory (relative paths preserved)"
+    )
+    sub_0.add_argument(
+        "--report", choices=["plain", "rich", "auto"], default="auto", help="summary renderer (default: auto)"
+    )
+    sub_0.add_argument("--dry-run", action="store_true", default=False, help="show what would happen")
+    sub_0.add_argument("-v", "--verbose", action="store_true", default=False, help="chatty output")
     sub_0.set_defaults(handler=_cmd_compress)
-    sub_1 = subparsers.add_parser('decompress', help='decompress archives recursively')
-    sub_1.add_argument('root', nargs="?", default='.', help='root directory (default: cwd)')
-    sub_1.add_argument('-k', '--keep-original', action="store_true", default=False, help='keep the archive files after decompression')
-    sub_1.add_argument('--no-extract-tar', action="store_true", default=False, help='turn .tar.xz into .tar files instead of extracting them')
-    sub_1.add_argument('--overwrite', action="store_true", default=False, help='overwrite existing outputs instead of skipping them')
-    sub_1.add_argument('-w', '--workers', type=int, default=0, help='parallel worker processes (default: auto)')
-    sub_1.add_argument('--exclude', action="append", default=[], help='exclude paths containing these substrings')
-    sub_1.add_argument('--out', type=Path, default=None, help='write results into this directory (relative paths preserved)')
-    sub_1.add_argument('--report', choices=['plain', 'rich', 'auto'], default='auto', help='summary renderer (default: auto)')
-    sub_1.add_argument('--dry-run', action="store_true", default=False, help='show what would happen')
-    sub_1.add_argument('-v', '--verbose', action="store_true", default=False, help='chatty output')
+    sub_1 = subparsers.add_parser("decompress", help="decompress archives recursively")
+    sub_1.add_argument("root", nargs="?", default=".", help="root directory (default: cwd)")
+    sub_1.add_argument(
+        "-k", "--keep-original", action="store_true", default=False, help="keep the archive files after decompression"
+    )
+    sub_1.add_argument(
+        "--no-extract-tar",
+        action="store_true",
+        default=False,
+        help="turn .tar.xz into .tar files instead of extracting them",
+    )
+    sub_1.add_argument(
+        "--overwrite", action="store_true", default=False, help="overwrite existing outputs instead of skipping them"
+    )
+    sub_1.add_argument("-w", "--workers", type=int, default=0, help="parallel worker processes (default: auto)")
+    sub_1.add_argument("--exclude", action="append", default=[], help="exclude paths containing these substrings")
+    sub_1.add_argument(
+        "--out", type=Path, default=None, help="write results into this directory (relative paths preserved)"
+    )
+    sub_1.add_argument(
+        "--report", choices=["plain", "rich", "auto"], default="auto", help="summary renderer (default: auto)"
+    )
+    sub_1.add_argument("--dry-run", action="store_true", default=False, help="show what would happen")
+    sub_1.add_argument("-v", "--verbose", action="store_true", default=False, help="chatty output")
     sub_1.set_defaults(handler=_cmd_decompress)
-    sub_2 = subparsers.add_parser('archive', help='verified .tar.xz per top-level subdirectory')
-    sub_2.add_argument('root', nargs="?", default='.', help='directory containing subdirs')
-    sub_2.add_argument('-p', '--preset', type=int, choices=range(10), default=9, help='xz preset (default: 9)')
-    sub_2.add_argument('-w', '--workers', type=int, default=0, help='parallel worker processes (default: auto)')
-    sub_2.add_argument('-k', '--keep-original', action="store_true", default=False, help='keep source directories after archiving')
-    sub_2.add_argument('--no-verify', action="store_true", default=False, help='skip the read-back verification pass')
-    sub_2.add_argument('-v', '--verbose', action="store_true", default=False, help='chatty output')
+    sub_2 = subparsers.add_parser("archive", help="verified .tar.xz per top-level subdirectory")
+    sub_2.add_argument("root", nargs="?", default=".", help="directory containing subdirs")
+    sub_2.add_argument("-p", "--preset", type=int, choices=range(10), default=9, help="xz preset (default: 9)")
+    sub_2.add_argument("-w", "--workers", type=int, default=0, help="parallel worker processes (default: auto)")
+    sub_2.add_argument(
+        "-k", "--keep-original", action="store_true", default=False, help="keep source directories after archiving"
+    )
+    sub_2.add_argument("--no-verify", action="store_true", default=False, help="skip the read-back verification pass")
+    sub_2.add_argument("-v", "--verbose", action="store_true", default=False, help="chatty output")
     sub_2.set_defaults(handler=_cmd_archive)
-    sub_3 = subparsers.add_parser('pack', help='pack one directory into ../<name>.tar.xz')
-    sub_3.add_argument('root', nargs="?", default='.', help='directory to pack (default: cwd)')
-    sub_3.add_argument('-p', '--preset', type=int, choices=range(10), default=6, help='xz preset (default: 6, as in the original ptrr.py)')
-    sub_3.add_argument('-v', '--verbose', action="store_true", default=False, help='chatty output')
+    sub_3 = subparsers.add_parser("pack", help="pack one directory into ../<name>.tar.xz")
+    sub_3.add_argument("root", nargs="?", default=".", help="directory to pack (default: cwd)")
+    sub_3.add_argument(
+        "-p",
+        "--preset",
+        type=int,
+        choices=range(10),
+        default=6,
+        help="xz preset (default: 6, as in the original ptrr.py)",
+    )
+    sub_3.add_argument("-v", "--verbose", action="store_true", default=False, help="chatty output")
     sub_3.set_defaults(handler=_cmd_pack)
     return parser
 
@@ -1496,6 +1558,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     except KeyboardInterrupt:
         print("\nInterrupted by user", file=sys.stderr)
         return 130
+
 
 if __name__ == "__main__":
     raise SystemExit(main())

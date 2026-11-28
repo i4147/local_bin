@@ -1290,28 +1290,113 @@ def _default_output_name(entry: str) -> str:
 
 def build_parser() -> argparse.ArgumentParser:
     """Build parser."""
-    parser = argparse.ArgumentParser(description='Consolidate a pure-Python package or script into a single self-contained file.')
-    parser.add_argument('entry', help='entry script, package directory, or module name (with -m)')
-    parser.add_argument('-o', '--output', default=None, help="output file ('-' for stdout); default: ./output/<name>_standalone.py")
-    parser.add_argument('-m', '--module', action="store_true", default=False, help='treat ENTRY as a module name, emulating `python -m ENTRY`')
-    parser.add_argument('-p', '--add-python-path', action="append", default=[], metavar='DIR', help="extra directories to search for local packages (repeatable; ':'-separated lists allowed)")
-    parser.add_argument('--include-package', action="append", default=[], metavar='PKG', help='pure-Python third-party packages to bundle (name or path)')
-    parser.add_argument('--site-path', action="append", default=[], metavar='DIR', help='extra directories searched for --include-package names')
-    parser.add_argument('--exclude-module', action="append", default=[], metavar='PAT', help='exclude modules/packages (fnmatch on dotted names; a bare name excludes its whole subtree)')
-    parser.add_argument('--include-data', action="append", default=[], metavar='SPEC', help="embed data files: 'PKG:GLOB', 'GLOB' (relative to the entry directory and --add-python-path roots), or an existing directory/file path")
-    parser.add_argument('--exclude-data', action="append", default=[], metavar='GLOB', help='exclude data files (glob matched against bundle-relative paths)')
-    parser.add_argument('--main-module', default=None, metavar='MOD', help='module inside the entry package to run as its __main__ (dotted, relative to the package; auto-detected if omitted)')
-    parser.add_argument('--no-whole-package', dest='whole_package', action="store_false", default=True, help='embed only statically reachable modules instead of whole packages')
-    parser.add_argument('--python', default=None, metavar='INTERP', help='shebang interpreter (default: the python running consolidator)')
-    parser.add_argument('--compression', choices=sorted(_COMPRESSIONS), default='deflate', help='payload compression (default: deflate)')
-    parser.add_argument('--keep-tmpdir', action="store_true", default=False, help='the generated bundle keeps its extraction directory')
-    parser.add_argument('--runtime-debug', action="store_true", default=False, help='the generated bundle prints its extraction directory to stderr')
-    parser.add_argument('--strict', action="store_true", default=False, help='fail the build on unresolved imports')
-    parser.add_argument('--no-deterministic', dest='deterministic', action="store_false", default=True, help='embed the build date instead of a fixed timestamp')
-    parser.add_argument('--dry-run', action="store_true", default=False, help='print the consolidation plan and exit without writing')
-    parser.add_argument('-q', '--quiet', action="store_true", default=False, help='only report errors')
-    parser.add_argument('-v', '--verbose', action="store_true", default=False, help='log more detail while building')
-    parser.add_argument('--version', action="version", version=f'consolidator {__version__}', help="show program's version number and exit")
+    parser = argparse.ArgumentParser(
+        description="Consolidate a pure-Python package or script into a single self-contained file."
+    )
+    parser.add_argument("entry", help="entry script, package directory, or module name (with -m)")
+    parser.add_argument(
+        "-o", "--output", default=None, help="output file ('-' for stdout); default: ./output/<name>_standalone.py"
+    )
+    parser.add_argument(
+        "-m",
+        "--module",
+        action="store_true",
+        default=False,
+        help="treat ENTRY as a module name, emulating `python -m ENTRY`",
+    )
+    parser.add_argument(
+        "-p",
+        "--add-python-path",
+        action="append",
+        default=[],
+        metavar="DIR",
+        help="extra directories to search for local packages (repeatable; ':'-separated lists allowed)",
+    )
+    parser.add_argument(
+        "--include-package",
+        action="append",
+        default=[],
+        metavar="PKG",
+        help="pure-Python third-party packages to bundle (name or path)",
+    )
+    parser.add_argument(
+        "--site-path",
+        action="append",
+        default=[],
+        metavar="DIR",
+        help="extra directories searched for --include-package names",
+    )
+    parser.add_argument(
+        "--exclude-module",
+        action="append",
+        default=[],
+        metavar="PAT",
+        help="exclude modules/packages (fnmatch on dotted names; a bare name excludes its whole subtree)",
+    )
+    parser.add_argument(
+        "--include-data",
+        action="append",
+        default=[],
+        metavar="SPEC",
+        help="embed data files: 'PKG:GLOB', 'GLOB' (relative to the entry directory and --add-python-path roots), or an existing directory/file path",
+    )
+    parser.add_argument(
+        "--exclude-data",
+        action="append",
+        default=[],
+        metavar="GLOB",
+        help="exclude data files (glob matched against bundle-relative paths)",
+    )
+    parser.add_argument(
+        "--main-module",
+        default=None,
+        metavar="MOD",
+        help="module inside the entry package to run as its __main__ (dotted, relative to the package; auto-detected if omitted)",
+    )
+    parser.add_argument(
+        "--no-whole-package",
+        dest="whole_package",
+        action="store_false",
+        default=True,
+        help="embed only statically reachable modules instead of whole packages",
+    )
+    parser.add_argument(
+        "--python",
+        default=None,
+        metavar="INTERP",
+        help="shebang interpreter (default: the python running consolidator)",
+    )
+    parser.add_argument(
+        "--compression", choices=sorted(_COMPRESSIONS), default="deflate", help="payload compression (default: deflate)"
+    )
+    parser.add_argument(
+        "--keep-tmpdir", action="store_true", default=False, help="the generated bundle keeps its extraction directory"
+    )
+    parser.add_argument(
+        "--runtime-debug",
+        action="store_true",
+        default=False,
+        help="the generated bundle prints its extraction directory to stderr",
+    )
+    parser.add_argument("--strict", action="store_true", default=False, help="fail the build on unresolved imports")
+    parser.add_argument(
+        "--no-deterministic",
+        dest="deterministic",
+        action="store_false",
+        default=True,
+        help="embed the build date instead of a fixed timestamp",
+    )
+    parser.add_argument(
+        "--dry-run", action="store_true", default=False, help="print the consolidation plan and exit without writing"
+    )
+    parser.add_argument("-q", "--quiet", action="store_true", default=False, help="only report errors")
+    parser.add_argument("-v", "--verbose", action="store_true", default=False, help="log more detail while building")
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"consolidator {__version__}",
+        help="show program's version number and exit",
+    )
     return parser
 
 
@@ -1370,6 +1455,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 2
     except KeyboardInterrupt:
         return 130
+
 
 if __name__ == "__main__":
     raise SystemExit(main())

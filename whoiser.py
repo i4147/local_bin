@@ -984,83 +984,232 @@ def generate_completion(parser: argparse.ArgumentParser, shell: str) -> str:
 
 def build_parser() -> argparse.ArgumentParser:
     """Build parser."""
-    parser = argparse.ArgumentParser(description='Command-line utility to query domains in the WhoisXML API WHOIS service similarly to the whois command.')
-    parser.add_argument('domainName', nargs="?", default=None, help='The domain to be queried (or @FILE, or - for stdin). Unicode/IDN accepted.')
-    parser.add_argument('--version', action="version", version=f'{MYNAME} ver. {VERSION}\n    (c) WhoisXML API Inc.', help="show program's version number and exit")
-    parser.add_argument('--version-full', action="store_true", default=False, help='Print version, Python version, and platform, then exit.')
-    parser.add_argument('--changelog', action="store_true", default=False, help='Print changelog and exit.')
-    parser.add_argument('--rcfile', type=Path, default=None, help='Use this rc file (plain text API key). Overrides default rc locations.')
-    parser.add_argument('--config', type=Path, default=None, help='Use this TOML config file.')
-    parser.add_argument('--profile', default=None, help='Named section in the TOML config to use.')
-    parser.add_argument('--dotenv', type=Path, default=None, help='Load environment from this .env file.')
-    parser.add_argument('--apikey', default=None, help='Directly specify the API key. Overrides any other source.')
-    parser.add_argument('--print-key-source', action="store_true", default=False, help='Print which source the API key came from.')
-    parser.add_argument('--print-config', action="store_true", default=False, help='Print resolved configuration and exit.')
-    parser.add_argument('--check-key', action="store_true", default=False, help='Check API key and print account balance, then exit.')
-    parser.add_argument('--balance', action="store_true", default=False, help='Alias for --check-key.')
-    parser.add_argument('--file', type=Path, default=None, help="Read domains from file (one per line, '#' comments allowed).")
-    parser.add_argument('--stdin', action="store_true", default=False, help='Read domains from standard input.')
-    parser.add_argument('--batch', action="store_true", default=False, help='Emit one NDJSON object per domain (default for multi-domain inputs).')
-    parser.add_argument('--parallel', type=int, default=None, metavar='N', help='Process N domains concurrently (default 1).')
-    parser.add_argument('--rate-limit', type=float, default=None, metavar='N', help='Global requests-per-second limit.')
-    parser.add_argument('--stop-on-error', action="store_true", default=False, help='Stop processing on the first error.')
-    parser.add_argument('--skip-empty', action="store_true", default=False, help='Skip records that resolve to empty results.')
-    parser.add_argument('--ip', default=None, metavar='ADDRESS', help='Query an IP address instead of a domain.')
-    parser.add_argument('--dns', action="store_true", default=False, help='Query the DNS API instead of WHOIS.')
-    parser.add_argument('--reverse', default=None, metavar='TYPE:VALUE', help='Reverse WHOIS lookup, e.g. email:user@example.com or org:"Example Inc".')
-    parser.add_argument('--history', action="store_true", default=False, help='Get historic records from the history API. Implied by date filters.')
-    parser.add_argument('--since-date', type=valid_date, default=None, metavar='YYYY-MM-DD', help='(history) Search activities discovered since this date.')
-    parser.add_argument('--created-date-from', type=valid_date, default=None, metavar='YYYY-MM-DD', help='(history) Domains created after this date.')
-    parser.add_argument('--created-date-to', type=valid_date, default=None, metavar='YYYY-MM-DD', help='(history) Domains created before this date.')
-    parser.add_argument('--updated-date-from', type=valid_date, default=None, metavar='YYYY-MM-DD', help='(history) Domains updated after this date.')
-    parser.add_argument('--updated-date-to', type=valid_date, default=None, metavar='YYYY-MM-DD', help='(history) Domains updated before this date.')
-    parser.add_argument('--expired-date-from', type=valid_date, default=None, metavar='YYYY-MM-DD', help='(history) Domains expired after this date.')
-    parser.add_argument('--expired-date-to', type=valid_date, default=None, metavar='YYYY-MM-DD', help='(history) Domains expired before this date.')
-    parser.add_argument('--history-limit', type=int, default=None, metavar='N', help='(history) Maximum number of records to return.')
-    parser.add_argument('--history-offset', type=int, default=None, metavar='N', help='(history) Pagination offset.')
-    parser.add_argument('--history-sort', default=None, metavar='FIELD', help='(history) Sort field if supported by the API.')
-    parser.add_argument('--rawtext', choices=['none', 'stripped', 'full'], default=None, help='Raw-text handling: none (default), stripped (first 64 chars), full.')
-    parser.add_argument('--fullrawtext', action="store_true", default=False, help=argparse.SUPPRESS)
-    parser.add_argument('--strippedrawtext', action="store_true", default=False, help=argparse.SUPPRESS)
-    parser.add_argument('--keep-empty', action="store_true", default=False, help='Keep and display fields with empty and null values.')
-    parser.add_argument('--keep-null', action="store_true", default=False, help='Keep null fields while still removing empty strings/collections.')
-    parser.add_argument('--no-purge-nested', action="store_true", default=False, help='Only purge empty fields at the top level; do not recurse.')
-    parser.add_argument('--text', action="store_true", default=False, help='Print a textual output instead of JSON.')
-    parser.add_argument('--json', action="store_true", default=False, help='Force machine-readable JSON (disables coloring).')
-    parser.add_argument('--yaml', action="store_true", default=False, help='Print YAML instead of JSON.')
-    parser.add_argument('--csv', action="store_true", default=False, help='Print CSV (flattened records, one row each).')
-    parser.add_argument('--raw-whois', action="store_true", default=False, help='Print only the raw WHOIS text.')
-    parser.add_argument('--jsonpath', default=None, metavar='EXPR', help='Select a subset of the record using a JSONPath expression.')
-    parser.add_argument('--fields', default=None, metavar='A,B.C,...', help='Only output the given dotted-path fields.')
-    parser.add_argument('--exclude-fields', default=None, metavar='A,B.C,...', help='Drop the given dotted-path fields.')
-    parser.add_argument('--compact', action="store_true", default=False, help='Compact JSON output.')
-    parser.add_argument('--indent', type=int, default=None, metavar='N', help='JSON indent (default 1).')
-    parser.add_argument('--sort-keys', action="store_true", default=False, help='Sort JSON keys.')
-    parser.add_argument('--theme', default=None, metavar='NAME', help='Pygments style name (e.g. monokai, dracula).')
-    parser.add_argument('--nocolor', action="store_true", default=False, help=argparse.SUPPRESS)
-    parser.add_argument('--color', choices=['auto', 'always', 'never'], default='auto', help='Colorize output.')
-    parser.add_argument('--no-header', action="store_true", default=False, help='Suppress the historic-record header.')
-    parser.add_argument('--quiet', '-q', action="store_true", default=False, help='Suppress informational output.')
-    parser.add_argument('--verbose', '-v', action="store_true", default=False, help='Print verbose info to stderr.')
-    parser.add_argument('--debug', action="store_true", default=False, help='Print full tracebacks on error.')
-    parser.add_argument('--trace', action="store_true", default=False, help='Print HTTP request/response details to stderr.')
-    parser.add_argument('--wrap', type=int, default=0, metavar='N', help='Wrap text/raw output at N columns (0 = no wrap).')
-    parser.add_argument('--pager', '-P', action="store_true", default=False, help='Pipe output through $PAGER when stdout is a tty.')
-    parser.add_argument('--output', '-o', default=None, metavar='FILE', help="Write output to FILE ('-' for stdout).")
-    parser.add_argument('--timeout', type=float, default=None, metavar='SECS', help='Per-request timeout (default 30s).')
-    parser.add_argument('--retries', type=int, default=None, metavar='N', help='Retry count for transient failures (default 0).')
-    parser.add_argument('--retry-backoff', type=float, default=None, metavar='SECS', help='Base delay between retries (default 0.5s).')
-    parser.add_argument('--no-verify', action="store_true", default=False, help='Disable TLS certificate verification.')
-    parser.add_argument('--ca-bundle', default=None, metavar='PATH', help='Custom CA bundle for TLS verification.')
-    parser.add_argument('--user-agent', default=None, metavar='UA', help='Override the HTTP User-Agent header.')
-    parser.add_argument('--proxy', default=None, metavar='URL', help='HTTP(S) proxy to use for requests.')
-    parser.add_argument('--dry-run', action="store_true", default=False, help='Print effective URLs (API key redacted) and exit.')
-    parser.add_argument('--cache-dir', type=Path, default=None, help='Cache directory (default: XDG cache).')
-    parser.add_argument('--no-cache', action="store_true", default=False, help='Disable response caching.')
-    parser.add_argument('--cache-ttl', type=int, default=None, metavar='SECS', help='Cache time-to-live (default 0 = off).')
-    parser.add_argument('--reconcile', type=Path, default=None, metavar='PATH', help='Compare results against a saved JSON file and report changes on stderr.')
-    parser.add_argument('--shell-completion', choices=['bash', 'zsh', 'fish'], default=None, help='Print shell completion script and exit.')
-    parser.add_argument('--manpage', action="store_true", default=False, help='Print a manpage and exit.')
+    parser = argparse.ArgumentParser(
+        description="Command-line utility to query domains in the WhoisXML API WHOIS service similarly to the whois command."
+    )
+    parser.add_argument(
+        "domainName",
+        nargs="?",
+        default=None,
+        help="The domain to be queried (or @FILE, or - for stdin). Unicode/IDN accepted.",
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"{MYNAME} ver. {VERSION}\n    (c) WhoisXML API Inc.",
+        help="show program's version number and exit",
+    )
+    parser.add_argument(
+        "--version-full",
+        action="store_true",
+        default=False,
+        help="Print version, Python version, and platform, then exit.",
+    )
+    parser.add_argument("--changelog", action="store_true", default=False, help="Print changelog and exit.")
+    parser.add_argument(
+        "--rcfile",
+        type=Path,
+        default=None,
+        help="Use this rc file (plain text API key). Overrides default rc locations.",
+    )
+    parser.add_argument("--config", type=Path, default=None, help="Use this TOML config file.")
+    parser.add_argument("--profile", default=None, help="Named section in the TOML config to use.")
+    parser.add_argument("--dotenv", type=Path, default=None, help="Load environment from this .env file.")
+    parser.add_argument("--apikey", default=None, help="Directly specify the API key. Overrides any other source.")
+    parser.add_argument(
+        "--print-key-source", action="store_true", default=False, help="Print which source the API key came from."
+    )
+    parser.add_argument(
+        "--print-config", action="store_true", default=False, help="Print resolved configuration and exit."
+    )
+    parser.add_argument(
+        "--check-key", action="store_true", default=False, help="Check API key and print account balance, then exit."
+    )
+    parser.add_argument("--balance", action="store_true", default=False, help="Alias for --check-key.")
+    parser.add_argument(
+        "--file", type=Path, default=None, help="Read domains from file (one per line, '#' comments allowed)."
+    )
+    parser.add_argument("--stdin", action="store_true", default=False, help="Read domains from standard input.")
+    parser.add_argument(
+        "--batch",
+        action="store_true",
+        default=False,
+        help="Emit one NDJSON object per domain (default for multi-domain inputs).",
+    )
+    parser.add_argument(
+        "--parallel", type=int, default=None, metavar="N", help="Process N domains concurrently (default 1)."
+    )
+    parser.add_argument("--rate-limit", type=float, default=None, metavar="N", help="Global requests-per-second limit.")
+    parser.add_argument(
+        "--stop-on-error", action="store_true", default=False, help="Stop processing on the first error."
+    )
+    parser.add_argument(
+        "--skip-empty", action="store_true", default=False, help="Skip records that resolve to empty results."
+    )
+    parser.add_argument("--ip", default=None, metavar="ADDRESS", help="Query an IP address instead of a domain.")
+    parser.add_argument("--dns", action="store_true", default=False, help="Query the DNS API instead of WHOIS.")
+    parser.add_argument(
+        "--reverse",
+        default=None,
+        metavar="TYPE:VALUE",
+        help='Reverse WHOIS lookup, e.g. email:user@example.com or org:"Example Inc".',
+    )
+    parser.add_argument(
+        "--history",
+        action="store_true",
+        default=False,
+        help="Get historic records from the history API. Implied by date filters.",
+    )
+    parser.add_argument(
+        "--since-date",
+        type=valid_date,
+        default=None,
+        metavar="YYYY-MM-DD",
+        help="(history) Search activities discovered since this date.",
+    )
+    parser.add_argument(
+        "--created-date-from",
+        type=valid_date,
+        default=None,
+        metavar="YYYY-MM-DD",
+        help="(history) Domains created after this date.",
+    )
+    parser.add_argument(
+        "--created-date-to",
+        type=valid_date,
+        default=None,
+        metavar="YYYY-MM-DD",
+        help="(history) Domains created before this date.",
+    )
+    parser.add_argument(
+        "--updated-date-from",
+        type=valid_date,
+        default=None,
+        metavar="YYYY-MM-DD",
+        help="(history) Domains updated after this date.",
+    )
+    parser.add_argument(
+        "--updated-date-to",
+        type=valid_date,
+        default=None,
+        metavar="YYYY-MM-DD",
+        help="(history) Domains updated before this date.",
+    )
+    parser.add_argument(
+        "--expired-date-from",
+        type=valid_date,
+        default=None,
+        metavar="YYYY-MM-DD",
+        help="(history) Domains expired after this date.",
+    )
+    parser.add_argument(
+        "--expired-date-to",
+        type=valid_date,
+        default=None,
+        metavar="YYYY-MM-DD",
+        help="(history) Domains expired before this date.",
+    )
+    parser.add_argument(
+        "--history-limit", type=int, default=None, metavar="N", help="(history) Maximum number of records to return."
+    )
+    parser.add_argument("--history-offset", type=int, default=None, metavar="N", help="(history) Pagination offset.")
+    parser.add_argument(
+        "--history-sort", default=None, metavar="FIELD", help="(history) Sort field if supported by the API."
+    )
+    parser.add_argument(
+        "--rawtext",
+        choices=["none", "stripped", "full"],
+        default=None,
+        help="Raw-text handling: none (default), stripped (first 64 chars), full.",
+    )
+    parser.add_argument("--fullrawtext", action="store_true", default=False, help=argparse.SUPPRESS)
+    parser.add_argument("--strippedrawtext", action="store_true", default=False, help=argparse.SUPPRESS)
+    parser.add_argument(
+        "--keep-empty", action="store_true", default=False, help="Keep and display fields with empty and null values."
+    )
+    parser.add_argument(
+        "--keep-null",
+        action="store_true",
+        default=False,
+        help="Keep null fields while still removing empty strings/collections.",
+    )
+    parser.add_argument(
+        "--no-purge-nested",
+        action="store_true",
+        default=False,
+        help="Only purge empty fields at the top level; do not recurse.",
+    )
+    parser.add_argument("--text", action="store_true", default=False, help="Print a textual output instead of JSON.")
+    parser.add_argument(
+        "--json", action="store_true", default=False, help="Force machine-readable JSON (disables coloring)."
+    )
+    parser.add_argument("--yaml", action="store_true", default=False, help="Print YAML instead of JSON.")
+    parser.add_argument(
+        "--csv", action="store_true", default=False, help="Print CSV (flattened records, one row each)."
+    )
+    parser.add_argument("--raw-whois", action="store_true", default=False, help="Print only the raw WHOIS text.")
+    parser.add_argument(
+        "--jsonpath", default=None, metavar="EXPR", help="Select a subset of the record using a JSONPath expression."
+    )
+    parser.add_argument("--fields", default=None, metavar="A,B.C,...", help="Only output the given dotted-path fields.")
+    parser.add_argument(
+        "--exclude-fields", default=None, metavar="A,B.C,...", help="Drop the given dotted-path fields."
+    )
+    parser.add_argument("--compact", action="store_true", default=False, help="Compact JSON output.")
+    parser.add_argument("--indent", type=int, default=None, metavar="N", help="JSON indent (default 1).")
+    parser.add_argument("--sort-keys", action="store_true", default=False, help="Sort JSON keys.")
+    parser.add_argument("--theme", default=None, metavar="NAME", help="Pygments style name (e.g. monokai, dracula).")
+    parser.add_argument("--nocolor", action="store_true", default=False, help=argparse.SUPPRESS)
+    parser.add_argument("--color", choices=["auto", "always", "never"], default="auto", help="Colorize output.")
+    parser.add_argument("--no-header", action="store_true", default=False, help="Suppress the historic-record header.")
+    parser.add_argument("--quiet", "-q", action="store_true", default=False, help="Suppress informational output.")
+    parser.add_argument("--verbose", "-v", action="store_true", default=False, help="Print verbose info to stderr.")
+    parser.add_argument("--debug", action="store_true", default=False, help="Print full tracebacks on error.")
+    parser.add_argument(
+        "--trace", action="store_true", default=False, help="Print HTTP request/response details to stderr."
+    )
+    parser.add_argument(
+        "--wrap", type=int, default=0, metavar="N", help="Wrap text/raw output at N columns (0 = no wrap)."
+    )
+    parser.add_argument(
+        "--pager", "-P", action="store_true", default=False, help="Pipe output through $PAGER when stdout is a tty."
+    )
+    parser.add_argument("--output", "-o", default=None, metavar="FILE", help="Write output to FILE ('-' for stdout).")
+    parser.add_argument(
+        "--timeout", type=float, default=None, metavar="SECS", help="Per-request timeout (default 30s)."
+    )
+    parser.add_argument(
+        "--retries", type=int, default=None, metavar="N", help="Retry count for transient failures (default 0)."
+    )
+    parser.add_argument(
+        "--retry-backoff", type=float, default=None, metavar="SECS", help="Base delay between retries (default 0.5s)."
+    )
+    parser.add_argument("--no-verify", action="store_true", default=False, help="Disable TLS certificate verification.")
+    parser.add_argument("--ca-bundle", default=None, metavar="PATH", help="Custom CA bundle for TLS verification.")
+    parser.add_argument("--user-agent", default=None, metavar="UA", help="Override the HTTP User-Agent header.")
+    parser.add_argument("--proxy", default=None, metavar="URL", help="HTTP(S) proxy to use for requests.")
+    parser.add_argument(
+        "--dry-run", action="store_true", default=False, help="Print effective URLs (API key redacted) and exit."
+    )
+    parser.add_argument("--cache-dir", type=Path, default=None, help="Cache directory (default: XDG cache).")
+    parser.add_argument("--no-cache", action="store_true", default=False, help="Disable response caching.")
+    parser.add_argument(
+        "--cache-ttl", type=int, default=None, metavar="SECS", help="Cache time-to-live (default 0 = off)."
+    )
+    parser.add_argument(
+        "--reconcile",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help="Compare results against a saved JSON file and report changes on stderr.",
+    )
+    parser.add_argument(
+        "--shell-completion",
+        choices=["bash", "zsh", "fish"],
+        default=None,
+        help="Print shell completion script and exit.",
+    )
+    parser.add_argument("--manpage", action="store_true", default=False, help="Print a manpage and exit.")
     return parser
 
 
@@ -1211,6 +1360,7 @@ def main() -> int:
     write_output(results, args, color_on, theme)
 
     return 1 if any(r.error for r in results) else 0
+
 
 if __name__ == "__main__":
     raise SystemExit(main())

@@ -609,5 +609,6 @@ def main(argv: Iterable[str] | None = None) -> int:
         return 2
     return args.func(args)
 
+
 if __name__ == "__main__":
     raise SystemExit(main())

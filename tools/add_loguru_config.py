@@ -78,9 +78,7 @@ def _header_end_line(tree: ast.Module) -> tuple[int, set[str], bool]:
             last_import_line = max(last_import_line, node.end_lineno or node.lineno)
             continue
         if isinstance(node, ast.ImportFrom):
-            if node.module == "loguru" and any(
-                a.name == "logger" and a.asname is None for a in node.names
-            ):
+            if node.module == "loguru" and any(a.name == "logger" and a.asname is None for a in node.names):
                 has_logger = True
             last_import_line = max(last_import_line, node.end_lineno or node.lineno)
             continue
@@ -137,9 +135,7 @@ def add_config_to_source(src: str) -> tuple[str, bool, str]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(
-        description="Add top-level loguru configuration to Python scripts lacking one."
-    )
+    parser = argparse.ArgumentParser(description="Add top-level loguru configuration to Python scripts lacking one.")
     parser.add_argument("--dry-run", action="store_true", help="Do not modify files.")
     parser.add_argument(
         "files",

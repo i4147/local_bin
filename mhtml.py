@@ -4277,28 +4277,109 @@ def _resolve_log_level(arguments: argparse.Namespace) -> str:
 
 def _build_argument_parser() -> argparse.ArgumentParser:
     """Create the standalone script's command-line argument parser."""
-    parser = argparse.ArgumentParser(description='Convert MHTML/MHT archives into single self-contained HTML files (consolidation of mhtml.py and mhtml_to_html.py).')
-    parser.add_argument('inputs', nargs="*", metavar='INPUT', help='input .mht/.mhtml files, directories (searched recursively) or glob patterns; defaults to a recursive search of the current directory')
-    parser.add_argument('-o', '--output', type=Path, default=None, help='Output HTML path (single input only; default: beside the input with a .html suffix)')
-    parser.add_argument('--profile', default=ConversionProfile.STANDARD.value, help='Conversion preset (minimal/standard/full/secure/optimized)')
-    parser.add_argument('--fetch-external', action=argparse.BooleanOptionalAction, default=False, help='Fetch referenced public HTTP(S) assets missing from the archive (SSRF-guarded)')
-    parser.add_argument('--enable-scripts', dest='enable_scripts', action="store_true", default=True, help='Keep scripts and event handlers (--no-scripts strips them)')
-    parser.add_argument('--no-scripts', dest='enable_scripts', action="store_false")
-    parser.add_argument('--csp', action=argparse.BooleanOptionalAction, default=True, dest='inject_csp', help='Inject a Content-Security-Policy meta tag into the output')
-    parser.add_argument('--allow-domain', action="append", default=[], metavar='DOMAIN', help='Restrict external fetches to this domain; may be repeated')
-    parser.add_argument('--block-domain', action="append", default=[], metavar='DOMAIN', help='Block external fetches to this domain; may be repeated')
-    parser.add_argument('--allow-private-network', action="store_true", default=False, help='Allow external fetches from loopback/private addresses (blocked by default)')
-    parser.add_argument('--resource-handling', choices=['inline', 'external', 'mixed'], default=None, help="Override the profile's resource handling strategy")
-    parser.add_argument('--minify', action="store_true", default=False, help='Minify HTML and CSS output')
-    parser.add_argument('--timeout', type=float, default=None, metavar='SECONDS', help='Connect/read timeout for external fetches (seconds)')
-    parser.add_argument('--max-size', type=int, default=None, metavar='BYTES', help='Maximum size of externally fetched resources (bytes)')
-    parser.add_argument('--no-clobber', action="store_true", default=False, help='Never overwrite an existing output file')
-    parser.add_argument('--fail-fast', action="store_true", default=False, help='Abort the batch on the first conversion failure')
-    parser.add_argument('--progress', action="store_true", default=False, help='Print conversion progress to standard error')
-    parser.add_argument('--log-level', choices=['TRACE', 'DEBUG', 'INFO', 'SUCCESS', 'WARNING', 'ERROR', 'CRITICAL'], default=None, help='Set the minimum log level (overrides -v/-q)')
-    parser.add_argument('-v', '--verbose', action="store_true", default=False, help='Verbose (DEBUG) logging')
-    parser.add_argument('-q', '--quiet', action="store_true", default=False, help='Suppress per-file logs')
-    parser.add_argument('--version', action="version", version=f'mhtml_converter {__version__}', help='Show the version number and exit')
+    parser = argparse.ArgumentParser(
+        description="Convert MHTML/MHT archives into single self-contained HTML files (consolidation of mhtml.py and mhtml_to_html.py)."
+    )
+    parser.add_argument(
+        "inputs",
+        nargs="*",
+        metavar="INPUT",
+        help="input .mht/.mhtml files, directories (searched recursively) or glob patterns; defaults to a recursive search of the current directory",
+    )
+    parser.add_argument(
+        "-o",
+        "--output",
+        type=Path,
+        default=None,
+        help="Output HTML path (single input only; default: beside the input with a .html suffix)",
+    )
+    parser.add_argument(
+        "--profile",
+        default=ConversionProfile.STANDARD.value,
+        help="Conversion preset (minimal/standard/full/secure/optimized)",
+    )
+    parser.add_argument(
+        "--fetch-external",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Fetch referenced public HTTP(S) assets missing from the archive (SSRF-guarded)",
+    )
+    parser.add_argument(
+        "--enable-scripts",
+        dest="enable_scripts",
+        action="store_true",
+        default=True,
+        help="Keep scripts and event handlers (--no-scripts strips them)",
+    )
+    parser.add_argument("--no-scripts", dest="enable_scripts", action="store_false")
+    parser.add_argument(
+        "--csp",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        dest="inject_csp",
+        help="Inject a Content-Security-Policy meta tag into the output",
+    )
+    parser.add_argument(
+        "--allow-domain",
+        action="append",
+        default=[],
+        metavar="DOMAIN",
+        help="Restrict external fetches to this domain; may be repeated",
+    )
+    parser.add_argument(
+        "--block-domain",
+        action="append",
+        default=[],
+        metavar="DOMAIN",
+        help="Block external fetches to this domain; may be repeated",
+    )
+    parser.add_argument(
+        "--allow-private-network",
+        action="store_true",
+        default=False,
+        help="Allow external fetches from loopback/private addresses (blocked by default)",
+    )
+    parser.add_argument(
+        "--resource-handling",
+        choices=["inline", "external", "mixed"],
+        default=None,
+        help="Override the profile's resource handling strategy",
+    )
+    parser.add_argument("--minify", action="store_true", default=False, help="Minify HTML and CSS output")
+    parser.add_argument(
+        "--timeout",
+        type=float,
+        default=None,
+        metavar="SECONDS",
+        help="Connect/read timeout for external fetches (seconds)",
+    )
+    parser.add_argument(
+        "--max-size",
+        type=int,
+        default=None,
+        metavar="BYTES",
+        help="Maximum size of externally fetched resources (bytes)",
+    )
+    parser.add_argument(
+        "--no-clobber", action="store_true", default=False, help="Never overwrite an existing output file"
+    )
+    parser.add_argument(
+        "--fail-fast", action="store_true", default=False, help="Abort the batch on the first conversion failure"
+    )
+    parser.add_argument(
+        "--progress", action="store_true", default=False, help="Print conversion progress to standard error"
+    )
+    parser.add_argument(
+        "--log-level",
+        choices=["TRACE", "DEBUG", "INFO", "SUCCESS", "WARNING", "ERROR", "CRITICAL"],
+        default=None,
+        help="Set the minimum log level (overrides -v/-q)",
+    )
+    parser.add_argument("-v", "--verbose", action="store_true", default=False, help="Verbose (DEBUG) logging")
+    parser.add_argument("-q", "--quiet", action="store_true", default=False, help="Suppress per-file logs")
+    parser.add_argument(
+        "--version", action="version", version=f"mhtml_converter {__version__}", help="Show the version number and exit"
+    )
     return parser
 
 
@@ -4398,6 +4479,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if failures:
         return CONVERSION_FAILURE_EXIT
     return 0
+
 
 if __name__ == "__main__":
     raise SystemExit(main())

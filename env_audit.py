@@ -404,17 +404,17 @@ def reconcile(
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description='env-audit: Reconcile .env, .env.example, CI, and Python code.')
-    subparsers = parser.add_subparsers(dest='command')
-    sub_0 = subparsers.add_parser('check', help='Auto-discover and check environment configuration')
-    sub_0.add_argument('--example', default='.env.example')
-    sub_0.add_argument('--env', default='.env')
-    sub_0.add_argument('--strict', action="store_true", default=False)
-    sub_1 = subparsers.add_parser('scan', help='Generate usage table from source code alone')
-    sub_1.add_argument('--source', default='.')
-    sub_1.add_argument('--redact', action="store_true", default=False)
-    sub_2 = subparsers.add_parser('init', help='Propose a .env.example from code + current .env')
-    sub_2.add_argument('--output', default='.env.example')
+    parser = argparse.ArgumentParser(description="env-audit: Reconcile .env, .env.example, CI, and Python code.")
+    subparsers = parser.add_subparsers(dest="command")
+    sub_0 = subparsers.add_parser("check", help="Auto-discover and check environment configuration")
+    sub_0.add_argument("--example", default=".env.example")
+    sub_0.add_argument("--env", default=".env")
+    sub_0.add_argument("--strict", action="store_true", default=False)
+    sub_1 = subparsers.add_parser("scan", help="Generate usage table from source code alone")
+    sub_1.add_argument("--source", default=".")
+    sub_1.add_argument("--redact", action="store_true", default=False)
+    sub_2 = subparsers.add_parser("init", help="Propose a .env.example from code + current .env")
+    sub_2.add_argument("--output", default=".env.example")
     return parser
 
 
@@ -489,6 +489,7 @@ def main() -> None:
         if has_errors or (args.strict and findings):
             sys.exit(1)
         sys.exit(0)
+
 
 if __name__ == "__main__":
     raise SystemExit(main())

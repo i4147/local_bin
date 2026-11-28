@@ -3146,6 +3146,7 @@ def _min_int(minimum: int):
         if num < minimum:
             raise argparse.ArgumentTypeError(f"must be >= {minimum}")
         return num
+
     return _parse
 
 
@@ -3155,168 +3156,454 @@ def _min_float(minimum: float):
         if num < minimum:
             raise argparse.ArgumentTypeError(f"must be >= {minimum}")
         return num
+
     return _parse
 
 
 def build_parser() -> argparse.ArgumentParser:
     """Build the command-line argument parser."""
-    parser = argparse.ArgumentParser(description='Run the command-line interface.')
-    parser.add_argument('urls', nargs="*", default=None, help='URLs to download')
-    parser.add_argument('-f', '--input', '--input-file', dest='input_file', action="append", default=None, help="Read URLs from a file ('-' for stdin).")
-    parser.add_argument('--input-format', dest='input_format', default=_d('input_format', 'auto'), help='plain|json|csv|auto')
-    parser.add_argument('--base-url', dest='base_url', default=_d('base_url', None), help='Resolve relative URLs against this base.')
-    parser.add_argument('-c', '--connections', dest='connections', default=_d('connections', 8), type=_min_int(1), help='Connections per file.')
-    parser.add_argument('-j', '--jobs', dest='jobs', default=_d('jobs', 1), type=_min_int(1), help='Files in parallel.')
-    parser.add_argument('--max-active', dest='max_active', default=_d('max_active', 1), type=_min_int(1), help='Hard cap on concurrent files.')
-    parser.add_argument('--max-per-host', dest='max_per_host', default=_d('max_per_host', 6), type=_min_int(1), help='Connections per host.')
-    parser.add_argument('--retry', dest='retry', default=_d('retry', 5), type=_min_int(0), help='Retries per request.')
-    parser.add_argument('--retry-delay', dest='retry_delay', default=_d('retry_delay', 1.0), type=_min_float(0.0), help='Base retry delay in seconds.')
-    parser.add_argument('--retry-backoff', dest='retry_backoff', default=_d('retry_backoff', 2.0), type=_min_float(1.0), help='Exponential backoff factor.')
-    parser.add_argument('--retry-max-delay', dest='retry_max_delay', default=_d('retry_max_delay', 60.0), type=_min_float(0.0), help='Delay ceiling.')
-    parser.add_argument('--retry-jitter', dest='retry_jitter', default=_d('retry_jitter', 0.25), type=_min_float(0.0), help='Random jitter fraction.')
-    parser.add_argument('--retry-http', dest='retry_http', default=_d('retry_http', None), help='HTTP statuses to retry (comma list).')
-    parser.add_argument('--timeout', dest='timeout', default=_d('timeout', 30.0), type=_min_float(0.0), help='Stall timeout in seconds.')
-    parser.add_argument('--connect-timeout', dest='connect_timeout', default=_d('connect_timeout', 10.0), type=_min_float(0.0), help='Connect timeout.')
-    parser.add_argument('--max-redirects', dest='max_redirects', default=_d('max_redirects', 10), type=_min_int(0), help='Redirect limit.')
-    parser.add_argument('-C', '--continue', dest='continue_', action="store_true", default=_d('continue', False), help='Resume from an existing .part file.')
-    parser.add_argument('--allow-unvalidated-resume', dest='allow_unvalidated_resume', action="store_true", default=_d('allow_unvalidated_resume', False), help='Resume even without ETag/Last-Modified.')
-    parser.add_argument('--keep-partial', dest='keep_partial', action=argparse.BooleanOptionalAction, default=_d('keep_partial', True), help='Keep .part on error.')
-    parser.add_argument('--remove-on-error', dest='remove_on_error', action="store_true", default=_d('remove_on_error', False), help='Delete partial data on error.')
-    parser.add_argument('--check-disk', dest='check_disk', action=argparse.BooleanOptionalAction, default=_d('check_disk', True), help='Verify free space first.')
-    parser.add_argument('--checksum', dest='checksum', action="append", default=_d('checksum', None), help='Expected digest (sha256:hex or hex).')
-    parser.add_argument('--checksum-file', dest='checksum_file', default=_d('checksum_file', None), help='sha256sum-style checksum file.')
-    parser.add_argument('-k', '--insecure', dest='insecure', action="store_true", default=_d('insecure', False), help='Skip TLS verification.')
-    parser.add_argument('--ca-cert', dest='ca_cert', default=_d('ca_cert', None), help='CA bundle.')
-    parser.add_argument('--client-cert', dest='client_cert', default=_d('client_cert', None), help='Client certificate (PEM).')
-    parser.add_argument('--client-key', dest='client_key', default=_d('client_key', None), help='Client private key (PEM).')
-    parser.add_argument('--user', dest='user', default=_d('user', None), help='HTTP basic user.')
-    parser.add_argument('--password', dest='password', default=_d('password', None), help='HTTP basic password.')
-    parser.add_argument('--bearer-token', dest='bearer_token', default=_d('bearer_token', None), help='Authorization: Bearer token.')
-    parser.add_argument('--netrc', dest='netrc', default=_d('netrc', None), help='Read credentials from a netrc file.')
-    parser.add_argument('-H', '--header', dest='header', action="append", default=_d('header', None), help='Extra request header (repeatable).')
-    parser.add_argument('--user-agent', dest='user_agent', default=_d('user_agent', None), help='UA.')
-    parser.add_argument('--referer', dest='referer', default=_d('referer', None), help='Referer.')
-    parser.add_argument('--cookie', dest='cookie', action="append", default=_d('cookie', None), help="Cookie 'name=value' (repeatable).")
-    parser.add_argument('--cookie-jar', dest='cookie_jar', default=_d('cookie_jar', None), help='Load/save cookies from this file.')
-    parser.add_argument('--method', dest='method', default=_d('method', None), help='HTTP method.')
-    parser.add_argument('--data', '--data-binary', dest='data', default=_d('data', None), help="Request body ('@file' allowed).")
-    parser.add_argument('--proxy', dest='proxy', default=_d('proxy', None), help='Proxy URL.')
-    parser.add_argument('--no-proxy', dest='no_proxy', action="store_true", default=_d('no_proxy', False), help='Ignore proxies.')
-    parser.add_argument('--http1', dest='http1', action="store_true", default=_d('http1', False), help='Disable HTTP/2.')
-    parser.add_argument('-O', '--output', dest='output', default=_d('output', None), help='Exact output path (single URL).')
-    parser.add_argument('--output-template', dest='output_template', default=_d('output_template', None), help='Per-file path template, e.g. {host}/{filename}.')
-    parser.add_argument('-P', '--output-dir', dest='output_dir', default=_d('output_dir', '.'), help='Destination directory.')
-    parser.add_argument('-nc', '--no-clobber', dest='no_clobber', action="store_true", default=_d('no_clobber', False), help='Skip existing files.')
-    parser.add_argument('--overwrite', dest='overwrite', action=argparse.BooleanOptionalAction, default=_d('overwrite', True), help='Replace existing files.')
-    parser.add_argument('-N', '--timestamping', dest='timestamping', action="store_true", default=_d('timestamping', False), help='Skip up-to-date files.')
-    parser.add_argument('--unique', dest='unique', action="store_true", default=_d('unique', False), help='Never overwrite; add a numeric suffix.')
-    parser.add_argument('--content-disposition', dest='content_disposition', action=argparse.BooleanOptionalAction, default=_d('content_disposition', True), help='Honour Content-Disposition filenames.')
-    parser.add_argument('--manifest', dest='manifest', action="store_true", default=_d('manifest', False), help='Write a .wget2.json sidecar per file.')
-    parser.add_argument('--max-filesize', dest='max_filesize', default=_d('max_filesize', None), help='Reject resources larger than this.')
-    parser.add_argument('--rate-limit', dest='rate_limit', default=_d('rate_limit', None), help='Global rate limit, e.g. 5M.')
-    parser.add_argument('--rate-limit-per-connection', dest='rate_limit_per_connection', default=_d('rate_limit_per_connection', None), help='Per-connection rate limit.')
-    parser.add_argument('--buffer-threshold', dest='buffer_threshold', default=_d('buffer_threshold', None), help='Buffer files up to this size.')
-    parser.add_argument('--mirror-list', dest='mirror_list', action="append", default=_d('mirror_list', None), help='Fallback URL(s) tried in order on failure.')
-    parser.add_argument('-r', '--recursive', dest='recursive', action="store_true", default=_d('recursive', False), help='Follow links on HTML pages.')
-    parser.add_argument('-m', '--mirror', dest='mirror', action="store_true", default=_d('mirror', False), help='Recursive mirroring (implies -r -N).')
-    parser.add_argument('-l', '--level', dest='level', default=_d('level', 5), type=_min_int(0), help='Crawl depth.')
-    parser.add_argument('--spider', dest='spider', action="store_true", default=_d('spider', False), help='Only check URLs, write nothing.')
-    parser.add_argument('-A', '--accept', dest='accept', action="append", default=_d('accept', None), help='Filename globs to accept.')
-    parser.add_argument('-R', '--reject', dest='reject', action="append", default=_d('reject', None), help='Filename globs to reject.')
-    parser.add_argument('-I', '--include', dest='include', action="append", default=_d('include', None), help='URL globs to include.')
-    parser.add_argument('-X', '--exclude', dest='exclude', action="append", default=_d('exclude', None), help='URL globs to exclude.')
-    parser.add_argument('--dry-run', dest='dry_run', action="store_true", default=_d('dry_run', False), help='Probe only (HEAD), download nothing.')
-    parser.add_argument('--json', dest='json_report', action="store_true", default=_d('json', False), help='Emit a JSON report on stdout.')
-    parser.add_argument('-q', '--quiet', dest='quiet', action="store_true", default=_d('quiet', False), help='Only errors.')
-    parser.add_argument('-v', '--verbose', dest='verbose', action="store_true", default=_d('verbose', False), help='Debug logging.')
-    parser.add_argument('--progress', dest='progress', default=_d('progress', 'rich'), help='rich|plain|none')
-    parser.add_argument('--no-progress', dest='no_progress', action="store_true", default=_d('no_progress', False), help='Disable the progress display.')
-    parser.add_argument('--log-file', dest='log_file', default=_d('log_file', None), help='Log file.')
-    parser.add_argument('--log-level', dest='log_level', default=_d('log_level', 'info'), help='debug|info|warning|error')
-    parser.add_argument('--json-logs', dest='json_logs', action="store_true", default=_d('json_logs', False), help='Emit log lines as JSON.')
-    parser.add_argument('--allow-unsafe-schemes', dest='allow_unsafe_schemes', action="store_true", default=_d('allow_unsafe_schemes', False), help='Permit file://, ftp:// and ftps://.')
-    parser.add_argument('--config', dest='config', default=None, help='TOML config file (defaults are auto-discovered).')
-    parser.add_argument('--no-config', dest='no_config', action="store_true", default=False, help='Ignore config files and WGET2_*.')
-    parser.add_argument('--check', dest='check', action="store_true", default=False, help='Verify the environment and exit.')
-    parser.add_argument('--version', dest='version', action="store_true", default=False, help='Print the version and exit.')
+    parser = argparse.ArgumentParser(description="Run the command-line interface.")
+    parser.add_argument("urls", nargs="*", default=None, help="URLs to download")
+    parser.add_argument(
+        "-f",
+        "--input",
+        "--input-file",
+        dest="input_file",
+        action="append",
+        default=None,
+        help="Read URLs from a file ('-' for stdin).",
+    )
+    parser.add_argument(
+        "--input-format", dest="input_format", default=_d("input_format", "auto"), help="plain|json|csv|auto"
+    )
+    parser.add_argument(
+        "--base-url", dest="base_url", default=_d("base_url", None), help="Resolve relative URLs against this base."
+    )
+    parser.add_argument(
+        "-c",
+        "--connections",
+        dest="connections",
+        default=_d("connections", 8),
+        type=_min_int(1),
+        help="Connections per file.",
+    )
+    parser.add_argument("-j", "--jobs", dest="jobs", default=_d("jobs", 1), type=_min_int(1), help="Files in parallel.")
+    parser.add_argument(
+        "--max-active",
+        dest="max_active",
+        default=_d("max_active", 1),
+        type=_min_int(1),
+        help="Hard cap on concurrent files.",
+    )
+    parser.add_argument(
+        "--max-per-host",
+        dest="max_per_host",
+        default=_d("max_per_host", 6),
+        type=_min_int(1),
+        help="Connections per host.",
+    )
+    parser.add_argument("--retry", dest="retry", default=_d("retry", 5), type=_min_int(0), help="Retries per request.")
+    parser.add_argument(
+        "--retry-delay",
+        dest="retry_delay",
+        default=_d("retry_delay", 1.0),
+        type=_min_float(0.0),
+        help="Base retry delay in seconds.",
+    )
+    parser.add_argument(
+        "--retry-backoff",
+        dest="retry_backoff",
+        default=_d("retry_backoff", 2.0),
+        type=_min_float(1.0),
+        help="Exponential backoff factor.",
+    )
+    parser.add_argument(
+        "--retry-max-delay",
+        dest="retry_max_delay",
+        default=_d("retry_max_delay", 60.0),
+        type=_min_float(0.0),
+        help="Delay ceiling.",
+    )
+    parser.add_argument(
+        "--retry-jitter",
+        dest="retry_jitter",
+        default=_d("retry_jitter", 0.25),
+        type=_min_float(0.0),
+        help="Random jitter fraction.",
+    )
+    parser.add_argument(
+        "--retry-http", dest="retry_http", default=_d("retry_http", None), help="HTTP statuses to retry (comma list)."
+    )
+    parser.add_argument(
+        "--timeout", dest="timeout", default=_d("timeout", 30.0), type=_min_float(0.0), help="Stall timeout in seconds."
+    )
+    parser.add_argument(
+        "--connect-timeout",
+        dest="connect_timeout",
+        default=_d("connect_timeout", 10.0),
+        type=_min_float(0.0),
+        help="Connect timeout.",
+    )
+    parser.add_argument(
+        "--max-redirects",
+        dest="max_redirects",
+        default=_d("max_redirects", 10),
+        type=_min_int(0),
+        help="Redirect limit.",
+    )
+    parser.add_argument(
+        "-C",
+        "--continue",
+        dest="continue_",
+        action="store_true",
+        default=_d("continue", False),
+        help="Resume from an existing .part file.",
+    )
+    parser.add_argument(
+        "--allow-unvalidated-resume",
+        dest="allow_unvalidated_resume",
+        action="store_true",
+        default=_d("allow_unvalidated_resume", False),
+        help="Resume even without ETag/Last-Modified.",
+    )
+    parser.add_argument(
+        "--keep-partial",
+        dest="keep_partial",
+        action=argparse.BooleanOptionalAction,
+        default=_d("keep_partial", True),
+        help="Keep .part on error.",
+    )
+    parser.add_argument(
+        "--remove-on-error",
+        dest="remove_on_error",
+        action="store_true",
+        default=_d("remove_on_error", False),
+        help="Delete partial data on error.",
+    )
+    parser.add_argument(
+        "--check-disk",
+        dest="check_disk",
+        action=argparse.BooleanOptionalAction,
+        default=_d("check_disk", True),
+        help="Verify free space first.",
+    )
+    parser.add_argument(
+        "--checksum",
+        dest="checksum",
+        action="append",
+        default=_d("checksum", None),
+        help="Expected digest (sha256:hex or hex).",
+    )
+    parser.add_argument(
+        "--checksum-file",
+        dest="checksum_file",
+        default=_d("checksum_file", None),
+        help="sha256sum-style checksum file.",
+    )
+    parser.add_argument(
+        "-k",
+        "--insecure",
+        dest="insecure",
+        action="store_true",
+        default=_d("insecure", False),
+        help="Skip TLS verification.",
+    )
+    parser.add_argument("--ca-cert", dest="ca_cert", default=_d("ca_cert", None), help="CA bundle.")
+    parser.add_argument(
+        "--client-cert", dest="client_cert", default=_d("client_cert", None), help="Client certificate (PEM)."
+    )
+    parser.add_argument(
+        "--client-key", dest="client_key", default=_d("client_key", None), help="Client private key (PEM)."
+    )
+    parser.add_argument("--user", dest="user", default=_d("user", None), help="HTTP basic user.")
+    parser.add_argument("--password", dest="password", default=_d("password", None), help="HTTP basic password.")
+    parser.add_argument(
+        "--bearer-token", dest="bearer_token", default=_d("bearer_token", None), help="Authorization: Bearer token."
+    )
+    parser.add_argument("--netrc", dest="netrc", default=_d("netrc", None), help="Read credentials from a netrc file.")
+    parser.add_argument(
+        "-H",
+        "--header",
+        dest="header",
+        action="append",
+        default=_d("header", None),
+        help="Extra request header (repeatable).",
+    )
+    parser.add_argument("--user-agent", dest="user_agent", default=_d("user_agent", None), help="UA.")
+    parser.add_argument("--referer", dest="referer", default=_d("referer", None), help="Referer.")
+    parser.add_argument(
+        "--cookie", dest="cookie", action="append", default=_d("cookie", None), help="Cookie 'name=value' (repeatable)."
+    )
+    parser.add_argument(
+        "--cookie-jar", dest="cookie_jar", default=_d("cookie_jar", None), help="Load/save cookies from this file."
+    )
+    parser.add_argument("--method", dest="method", default=_d("method", None), help="HTTP method.")
+    parser.add_argument(
+        "--data", "--data-binary", dest="data", default=_d("data", None), help="Request body ('@file' allowed)."
+    )
+    parser.add_argument("--proxy", dest="proxy", default=_d("proxy", None), help="Proxy URL.")
+    parser.add_argument(
+        "--no-proxy", dest="no_proxy", action="store_true", default=_d("no_proxy", False), help="Ignore proxies."
+    )
+    parser.add_argument(
+        "--http1", dest="http1", action="store_true", default=_d("http1", False), help="Disable HTTP/2."
+    )
+    parser.add_argument(
+        "-O", "--output", dest="output", default=_d("output", None), help="Exact output path (single URL)."
+    )
+    parser.add_argument(
+        "--output-template",
+        dest="output_template",
+        default=_d("output_template", None),
+        help="Per-file path template, e.g. {host}/{filename}.",
+    )
+    parser.add_argument(
+        "-P", "--output-dir", dest="output_dir", default=_d("output_dir", "."), help="Destination directory."
+    )
+    parser.add_argument(
+        "-nc",
+        "--no-clobber",
+        dest="no_clobber",
+        action="store_true",
+        default=_d("no_clobber", False),
+        help="Skip existing files.",
+    )
+    parser.add_argument(
+        "--overwrite",
+        dest="overwrite",
+        action=argparse.BooleanOptionalAction,
+        default=_d("overwrite", True),
+        help="Replace existing files.",
+    )
+    parser.add_argument(
+        "-N",
+        "--timestamping",
+        dest="timestamping",
+        action="store_true",
+        default=_d("timestamping", False),
+        help="Skip up-to-date files.",
+    )
+    parser.add_argument(
+        "--unique",
+        dest="unique",
+        action="store_true",
+        default=_d("unique", False),
+        help="Never overwrite; add a numeric suffix.",
+    )
+    parser.add_argument(
+        "--content-disposition",
+        dest="content_disposition",
+        action=argparse.BooleanOptionalAction,
+        default=_d("content_disposition", True),
+        help="Honour Content-Disposition filenames.",
+    )
+    parser.add_argument(
+        "--manifest",
+        dest="manifest",
+        action="store_true",
+        default=_d("manifest", False),
+        help="Write a .wget2.json sidecar per file.",
+    )
+    parser.add_argument(
+        "--max-filesize",
+        dest="max_filesize",
+        default=_d("max_filesize", None),
+        help="Reject resources larger than this.",
+    )
+    parser.add_argument(
+        "--rate-limit", dest="rate_limit", default=_d("rate_limit", None), help="Global rate limit, e.g. 5M."
+    )
+    parser.add_argument(
+        "--rate-limit-per-connection",
+        dest="rate_limit_per_connection",
+        default=_d("rate_limit_per_connection", None),
+        help="Per-connection rate limit.",
+    )
+    parser.add_argument(
+        "--buffer-threshold",
+        dest="buffer_threshold",
+        default=_d("buffer_threshold", None),
+        help="Buffer files up to this size.",
+    )
+    parser.add_argument(
+        "--mirror-list",
+        dest="mirror_list",
+        action="append",
+        default=_d("mirror_list", None),
+        help="Fallback URL(s) tried in order on failure.",
+    )
+    parser.add_argument(
+        "-r",
+        "--recursive",
+        dest="recursive",
+        action="store_true",
+        default=_d("recursive", False),
+        help="Follow links on HTML pages.",
+    )
+    parser.add_argument(
+        "-m",
+        "--mirror",
+        dest="mirror",
+        action="store_true",
+        default=_d("mirror", False),
+        help="Recursive mirroring (implies -r -N).",
+    )
+    parser.add_argument("-l", "--level", dest="level", default=_d("level", 5), type=_min_int(0), help="Crawl depth.")
+    parser.add_argument(
+        "--spider",
+        dest="spider",
+        action="store_true",
+        default=_d("spider", False),
+        help="Only check URLs, write nothing.",
+    )
+    parser.add_argument(
+        "-A", "--accept", dest="accept", action="append", default=_d("accept", None), help="Filename globs to accept."
+    )
+    parser.add_argument(
+        "-R", "--reject", dest="reject", action="append", default=_d("reject", None), help="Filename globs to reject."
+    )
+    parser.add_argument(
+        "-I", "--include", dest="include", action="append", default=_d("include", None), help="URL globs to include."
+    )
+    parser.add_argument(
+        "-X", "--exclude", dest="exclude", action="append", default=_d("exclude", None), help="URL globs to exclude."
+    )
+    parser.add_argument(
+        "--dry-run",
+        dest="dry_run",
+        action="store_true",
+        default=_d("dry_run", False),
+        help="Probe only (HEAD), download nothing.",
+    )
+    parser.add_argument(
+        "--json",
+        dest="json_report",
+        action="store_true",
+        default=_d("json", False),
+        help="Emit a JSON report on stdout.",
+    )
+    parser.add_argument(
+        "-q", "--quiet", dest="quiet", action="store_true", default=_d("quiet", False), help="Only errors."
+    )
+    parser.add_argument(
+        "-v", "--verbose", dest="verbose", action="store_true", default=_d("verbose", False), help="Debug logging."
+    )
+    parser.add_argument("--progress", dest="progress", default=_d("progress", "rich"), help="rich|plain|none")
+    parser.add_argument(
+        "--no-progress",
+        dest="no_progress",
+        action="store_true",
+        default=_d("no_progress", False),
+        help="Disable the progress display.",
+    )
+    parser.add_argument("--log-file", dest="log_file", default=_d("log_file", None), help="Log file.")
+    parser.add_argument(
+        "--log-level", dest="log_level", default=_d("log_level", "info"), help="debug|info|warning|error"
+    )
+    parser.add_argument(
+        "--json-logs",
+        dest="json_logs",
+        action="store_true",
+        default=_d("json_logs", False),
+        help="Emit log lines as JSON.",
+    )
+    parser.add_argument(
+        "--allow-unsafe-schemes",
+        dest="allow_unsafe_schemes",
+        action="store_true",
+        default=_d("allow_unsafe_schemes", False),
+        help="Permit file://, ftp:// and ftps://.",
+    )
+    parser.add_argument(
+        "--config", dest="config", default=None, help="TOML config file (defaults are auto-discovered)."
+    )
+    parser.add_argument(
+        "--no-config", dest="no_config", action="store_true", default=False, help="Ignore config files and WGET2_*."
+    )
+    parser.add_argument(
+        "--check", dest="check", action="store_true", default=False, help="Verify the environment and exit."
+    )
+    parser.add_argument(
+        "--version", dest="version", action="store_true", default=False, help="Print the version and exit."
+    )
     return parser
 
 
 def main(
     urls: list[str] | None = None,
     input_file: list[str] | None = None,
-    input_format: str = _d('input_format', 'auto'),
-    base_url: str | None = _d('base_url', None),
-    connections: int = _d('connections', 8),
-    jobs: int = _d('jobs', 1),
-    max_active: int = _d('max_active', 1),
-    max_per_host: int = _d('max_per_host', 6),
-    retry: int = _d('retry', 5),
-    retry_delay: float = _d('retry_delay', 1.0),
-    retry_backoff: float = _d('retry_backoff', 2.0),
-    retry_max_delay: float = _d('retry_max_delay', 60.0),
-    retry_jitter: float = _d('retry_jitter', 0.25),
-    retry_http: str | None = _d('retry_http', None),
-    timeout: float = _d('timeout', 30.0),
-    connect_timeout: float = _d('connect_timeout', 10.0),
-    max_redirects: int = _d('max_redirects', 10),
-    continue_: bool = _d('continue', False),
-    allow_unvalidated_resume: bool = _d('allow_unvalidated_resume', False),
-    keep_partial: bool = _d('keep_partial', True),
-    remove_on_error: bool = _d('remove_on_error', False),
-    check_disk: bool = _d('check_disk', True),
-    checksum: list[str] | None = _d('checksum', None),
-    checksum_file: str | None = _d('checksum_file', None),
-    insecure: bool = _d('insecure', False),
-    ca_cert: str | None = _d('ca_cert', None),
-    client_cert: str | None = _d('client_cert', None),
-    client_key: str | None = _d('client_key', None),
-    user: str | None = _d('user', None),
-    password: str | None = _d('password', None),
-    bearer_token: str | None = _d('bearer_token', None),
-    netrc: str | None = _d('netrc', None),
-    header: list[str] | None = _d('header', None),
-    user_agent: str | None = _d('user_agent', None),
-    referer: str | None = _d('referer', None),
-    cookie: list[str] | None = _d('cookie', None),
-    cookie_jar: str | None = _d('cookie_jar', None),
-    method: str | None = _d('method', None),
-    data: str | None = _d('data', None),
-    proxy: str | None = _d('proxy', None),
-    no_proxy: bool = _d('no_proxy', False),
-    http1: bool = _d('http1', False),
-    output: str | None = _d('output', None),
-    output_template: str | None = _d('output_template', None),
-    output_dir: str = _d('output_dir', '.'),
-    no_clobber: bool = _d('no_clobber', False),
-    overwrite: bool = _d('overwrite', True),
-    timestamping: bool = _d('timestamping', False),
-    unique: bool = _d('unique', False),
-    content_disposition: bool = _d('content_disposition', True),
-    manifest: bool = _d('manifest', False),
-    max_filesize: str | None = _d('max_filesize', None),
-    rate_limit: str | None = _d('rate_limit', None),
-    rate_limit_per_connection: str | None = _d('rate_limit_per_connection', None),
-    buffer_threshold: str | None = _d('buffer_threshold', None),
-    mirror_list: list[str] | None = _d('mirror_list', None),
-    recursive: bool = _d('recursive', False),
-    mirror: bool = _d('mirror', False),
-    level: int = _d('level', 5),
-    spider: bool = _d('spider', False),
-    accept: list[str] | None = _d('accept', None),
-    reject: list[str] | None = _d('reject', None),
-    include: list[str] | None = _d('include', None),
-    exclude: list[str] | None = _d('exclude', None),
-    dry_run: bool = _d('dry_run', False),
-    json_report: bool = _d('json', False),
-    quiet: bool = _d('quiet', False),
-    verbose: bool = _d('verbose', False),
-    progress: str = _d('progress', 'rich'),
-    no_progress: bool = _d('no_progress', False),
-    log_file: str | None = _d('log_file', None),
-    log_level: str = _d('log_level', 'info'),
-    json_logs: bool = _d('json_logs', False),
-    allow_unsafe_schemes: bool = _d('allow_unsafe_schemes', False),
+    input_format: str = _d("input_format", "auto"),
+    base_url: str | None = _d("base_url", None),
+    connections: int = _d("connections", 8),
+    jobs: int = _d("jobs", 1),
+    max_active: int = _d("max_active", 1),
+    max_per_host: int = _d("max_per_host", 6),
+    retry: int = _d("retry", 5),
+    retry_delay: float = _d("retry_delay", 1.0),
+    retry_backoff: float = _d("retry_backoff", 2.0),
+    retry_max_delay: float = _d("retry_max_delay", 60.0),
+    retry_jitter: float = _d("retry_jitter", 0.25),
+    retry_http: str | None = _d("retry_http", None),
+    timeout: float = _d("timeout", 30.0),
+    connect_timeout: float = _d("connect_timeout", 10.0),
+    max_redirects: int = _d("max_redirects", 10),
+    continue_: bool = _d("continue", False),
+    allow_unvalidated_resume: bool = _d("allow_unvalidated_resume", False),
+    keep_partial: bool = _d("keep_partial", True),
+    remove_on_error: bool = _d("remove_on_error", False),
+    check_disk: bool = _d("check_disk", True),
+    checksum: list[str] | None = _d("checksum", None),
+    checksum_file: str | None = _d("checksum_file", None),
+    insecure: bool = _d("insecure", False),
+    ca_cert: str | None = _d("ca_cert", None),
+    client_cert: str | None = _d("client_cert", None),
+    client_key: str | None = _d("client_key", None),
+    user: str | None = _d("user", None),
+    password: str | None = _d("password", None),
+    bearer_token: str | None = _d("bearer_token", None),
+    netrc: str | None = _d("netrc", None),
+    header: list[str] | None = _d("header", None),
+    user_agent: str | None = _d("user_agent", None),
+    referer: str | None = _d("referer", None),
+    cookie: list[str] | None = _d("cookie", None),
+    cookie_jar: str | None = _d("cookie_jar", None),
+    method: str | None = _d("method", None),
+    data: str | None = _d("data", None),
+    proxy: str | None = _d("proxy", None),
+    no_proxy: bool = _d("no_proxy", False),
+    http1: bool = _d("http1", False),
+    output: str | None = _d("output", None),
+    output_template: str | None = _d("output_template", None),
+    output_dir: str = _d("output_dir", "."),
+    no_clobber: bool = _d("no_clobber", False),
+    overwrite: bool = _d("overwrite", True),
+    timestamping: bool = _d("timestamping", False),
+    unique: bool = _d("unique", False),
+    content_disposition: bool = _d("content_disposition", True),
+    manifest: bool = _d("manifest", False),
+    max_filesize: str | None = _d("max_filesize", None),
+    rate_limit: str | None = _d("rate_limit", None),
+    rate_limit_per_connection: str | None = _d("rate_limit_per_connection", None),
+    buffer_threshold: str | None = _d("buffer_threshold", None),
+    mirror_list: list[str] | None = _d("mirror_list", None),
+    recursive: bool = _d("recursive", False),
+    mirror: bool = _d("mirror", False),
+    level: int = _d("level", 5),
+    spider: bool = _d("spider", False),
+    accept: list[str] | None = _d("accept", None),
+    reject: list[str] | None = _d("reject", None),
+    include: list[str] | None = _d("include", None),
+    exclude: list[str] | None = _d("exclude", None),
+    dry_run: bool = _d("dry_run", False),
+    json_report: bool = _d("json", False),
+    quiet: bool = _d("quiet", False),
+    verbose: bool = _d("verbose", False),
+    progress: str = _d("progress", "rich"),
+    no_progress: bool = _d("no_progress", False),
+    log_file: str | None = _d("log_file", None),
+    log_level: str = _d("log_level", "info"),
+    json_logs: bool = _d("json_logs", False),
+    allow_unsafe_schemes: bool = _d("allow_unsafe_schemes", False),
     config: str | None = None,
     no_config: bool = False,
     check: bool = False,
@@ -3324,7 +3611,7 @@ def main(
 ) -> None:
     "Run the command-line interface."
     if version:
-        print(f'wget2-single {__version__}')
+        print(f"wget2-single {__version__}")
         raise SystemExit(EXIT_OK)
     del config, no_config
     effective_level = "debug" if verbose else log_level

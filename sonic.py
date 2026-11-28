@@ -1363,79 +1363,202 @@ class FileAnalyzer(LineProcessor):
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description='Sort and deduplicate lines in a file with sort(1)/uniq(1) semantics; uses mmap and external merge sort for large files.')
-    parser.add_argument('filenames', nargs="+", metavar='FILE', help="Input file(s); use '-' for stdin")
-    parser.add_argument('-o', '--output', default=None, metavar='FILE', help="Output filename (default: overwrite each input; '-' for stdout)")
-    parser.add_argument('--output-dir', default=None, metavar='DIR', help='Write one output file per input inside DIR')
-    parser.add_argument('--encoding', '-e', default='utf-8', help='File encoding (default: utf-8)')
-    parser.add_argument('--from-line', type=int, default=None, metavar='X', help='Start processing at line X (1-based)')
-    parser.add_argument('--to-line', type=int, default=None, metavar='Y', help='Stop processing at line Y (1-based, inclusive)')
-    parser.add_argument('-s', '--sort', action=argparse.BooleanOptionalAction, default=True, help='Sort lines (default: enabled)')
-    parser.add_argument('-u', '--unique', action=argparse.BooleanOptionalAction, default=True, help='Coalesce duplicate lines (default: enabled)')
-    parser.add_argument('-r', '--reverse', action="store_true", default=False, help='Reverse the sort order')
-    parser.add_argument('-i', '--case-insensitive', action="store_true", default=False, help='Case-insensitive sort (legacy alias for -f)')
-    parser.add_argument('-n', '--numeric', action="store_true", default=False, help='Compare lines as numbers')
-    parser.add_argument('-V', '--version-sort', action="store_true", default=False, help='Natural/version-aware sort (v2.9 < v2.10)')
-    parser.add_argument('-R', '--random', action="store_true", default=False, help='Shuffle lines instead of sorting')
-    parser.add_argument('-f', '--ignore-case-sort', action="store_true", default=False, help='Ignore case for sorting (does not affect dedupe)')
-    parser.add_argument('-b', '--ignore-leading-blanks', action="store_true", default=False, help='Trim leading whitespace before comparing')
-    parser.add_argument('-d', '--dictionary-order', action="store_true", default=False, help='Compare only [A-Za-z0-9 ]')
-    parser.add_argument('--human-numeric', action="store_true", default=False, help='Sort 1K < 2M < 1G < 2.5G etc.')
-    parser.add_argument('-M', '--month-sort', action="store_true", default=False, help='Sort by month abbreviation Jan..Dec')
-    parser.add_argument('-K', '--key', type=int, default=None, metavar='N', help='Sort by the Nth field (see -t)')
-    parser.add_argument('-t', '--field-separator', default=None, metavar='SEP', help='Field separator for -K (default: whitespace)')
-    parser.add_argument('--locale', default=None, metavar='NAME', help='Locale-aware collation (locale.strxfrm)')
-    parser.add_argument('--sort-by-length', action="store_true", default=False, help='Sort by line length (shortest first)')
-    parser.add_argument('-c', '--count', action="store_true", default=False, help='Prefix each line with its occurrence count')
-    parser.add_argument('-D', '--repeated', action="store_true", default=False, help='Show only duplicated lines (all copies)')
-    parser.add_argument('--repeated-once', action="store_true", default=False, help='Show only duplicated lines (one copy each)')
-    parser.add_argument('-U', '--unique-only', action="store_true", default=False, help='Show only lines that appear exactly once')
-    parser.add_argument('--dedupe-ignore-case', action="store_true", default=False, help='Case-insensitive dedupe (ABC == abc)')
-    parser.add_argument('--keep', choices=['first', 'last'], default='first', help='Keep first or last occurrence of each line')
-    parser.add_argument('--dedupe-by-key', type=int, default=None, metavar='N', help='Dedupe by the Nth field (needs -t)')
-    parser.add_argument('-m', '--match', default=None, metavar='REGEX', help='Keep only lines matching REGEX')
-    parser.add_argument('-v', '--invert-match', action="store_true", default=False, help='Invert --match (drop matching lines)')
-    parser.add_argument('--min-length', type=int, default=None, metavar='N', help='Discard lines shorter than N')
-    parser.add_argument('--max-length', type=int, default=None, metavar='N', help='Discard lines longer than N')
-    parser.add_argument('--strip', action="store_true", default=False, help='str.strip() each line')
-    parser.add_argument('--ignore-comments', action="store_true", default=False, help='Drop comment lines')
-    parser.add_argument('--comment-prefix', default='#', metavar='S', help="Comment prefix used by --ignore-comments (default '#')")
-    parser.add_argument('--normalize-whitespace', action="store_true", default=False, help='Collapse runs of whitespace to one space')
-    parser.add_argument('--skip-empty', action="store_true", default=False, help='Skip blank lines')
-    parser.add_argument('--lower', action="store_true", default=False, help='Lowercase output')
-    parser.add_argument('--upper', action="store_true", default=False, help='Uppercase output')
-    parser.add_argument('--prefix', default='', metavar='S', help='Prepend S to every output line')
-    parser.add_argument('--suffix', default='', metavar='S', help='Append S to every output line')
-    parser.add_argument('--reverse-lines', action="store_true", default=False, help='Reverse line order without sorting')
-    parser.add_argument('--limit', type=int, default=None, metavar='N', help='Emit at most N output lines')
-    parser.add_argument('--head', type=int, default=None, metavar='N', help='Alias for --limit')
-    parser.add_argument('--sample', type=int, default=None, metavar='N', help='Reservoir-sample N lines')
-    parser.add_argument('--sample-rate', type=float, default=None, metavar='P', help='Keep each line with probability P (0..1)')
-    parser.add_argument('-N', '--number', action="store_true", default=False, help='Prefix each line with its 1-based index')
-    parser.add_argument('-z', '--null-terminated', action="store_true", default=False, help='Separate lines with NUL instead of newline')
-    parser.add_argument('--no-trailing-newline', action="store_true", default=False, help='Omit the final newline')
-    parser.add_argument('--crlf', action="store_true", default=False, help='Emit CRLF line endings')
-    parser.add_argument('--output-format', choices=['text', 'json', 'csv'], default='text', help='Structured output format (default: text)')
-    parser.add_argument('-q', '--quiet', action="store_true", default=False, help='Suppress the trailing summary')
-    parser.add_argument('--no-stats', action="store_true", default=False, help='Skip the trailing summary')
-    parser.add_argument('--stats-file', default=None, metavar='FILE', help='Write stats as JSON to FILE')
-    parser.add_argument('--check', action="store_true", default=False, help='Exit non-zero if input is not sorted/unique')
-    parser.add_argument('--check-only-duplicates', action="store_true", default=False, help='Report duplicates without writing output')
-    parser.add_argument('--backup', action="store_true", default=False, help='Write a backup copy before modifying a file in place')
-    parser.add_argument('--backup-suffix', default='.bak', metavar='SUFFIX', help='Suffix used for backup files (default: .bak)')
-    parser.add_argument('--dry-run', action="store_true", default=False, help='Process everything but do not write any output')
-    parser.add_argument('--fsync', action="store_true", default=False, help='fsync() the output file before the atomic rename')
-    parser.add_argument('--preserve-permissions', action="store_true", default=False, help='Copy the input file mode onto the output')
-    parser.add_argument('--preserve-mtime', action="store_true", default=False, help='Copy the input file mtime onto the output')
-    parser.add_argument('--analyze', action="store_true", default=False, help='Print a per-file analysis report and exit')
-    parser.add_argument('--report-file', default=None, metavar='FILE', help='Write a JSON summary report to FILE')
-    parser.add_argument('--no-mmap', action="store_true", default=False, help='Disable mmap; always use buffered reads')
-    parser.add_argument('--mmap-threshold', type=int, default=MMAP_THRESHOLD_BYTES, metavar='BYTES', help=f'Files larger than BYTES use mmap (default: {MMAP_THRESHOLD_BYTES})')
-    parser.add_argument('--buffer-size', type=int, default=DEFAULT_BUFFER_SIZE, metavar='BYTES', help=f'Read buffer size (default: {DEFAULT_BUFFER_SIZE})')
-    parser.add_argument('--in-memory-threshold', type=int, default=IN_MEMORY_THRESHOLD_BYTES, metavar='BYTES', help=f'Inputs larger than BYTES use external sort (default: {IN_MEMORY_THRESHOLD_BYTES})')
-    parser.add_argument('--chunk-lines', type=int, default=DEFAULT_CHUNK_LINES, metavar='N', help=f'Lines per external-sort chunk (default: {DEFAULT_CHUNK_LINES})')
-    parser.add_argument('--verbose', action="store_true", default=False, help='Emit progress diagnostics to stderr')
-    parser.add_argument('--version', action="version", version=f'%(prog)s {VERSION}', help="show program's version number and exit")
+    parser = argparse.ArgumentParser(
+        description="Sort and deduplicate lines in a file with sort(1)/uniq(1) semantics; uses mmap and external merge sort for large files."
+    )
+    parser.add_argument("filenames", nargs="+", metavar="FILE", help="Input file(s); use '-' for stdin")
+    parser.add_argument(
+        "-o",
+        "--output",
+        default=None,
+        metavar="FILE",
+        help="Output filename (default: overwrite each input; '-' for stdout)",
+    )
+    parser.add_argument("--output-dir", default=None, metavar="DIR", help="Write one output file per input inside DIR")
+    parser.add_argument("--encoding", "-e", default="utf-8", help="File encoding (default: utf-8)")
+    parser.add_argument("--from-line", type=int, default=None, metavar="X", help="Start processing at line X (1-based)")
+    parser.add_argument(
+        "--to-line", type=int, default=None, metavar="Y", help="Stop processing at line Y (1-based, inclusive)"
+    )
+    parser.add_argument(
+        "-s", "--sort", action=argparse.BooleanOptionalAction, default=True, help="Sort lines (default: enabled)"
+    )
+    parser.add_argument(
+        "-u",
+        "--unique",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Coalesce duplicate lines (default: enabled)",
+    )
+    parser.add_argument("-r", "--reverse", action="store_true", default=False, help="Reverse the sort order")
+    parser.add_argument(
+        "-i",
+        "--case-insensitive",
+        action="store_true",
+        default=False,
+        help="Case-insensitive sort (legacy alias for -f)",
+    )
+    parser.add_argument("-n", "--numeric", action="store_true", default=False, help="Compare lines as numbers")
+    parser.add_argument(
+        "-V", "--version-sort", action="store_true", default=False, help="Natural/version-aware sort (v2.9 < v2.10)"
+    )
+    parser.add_argument("-R", "--random", action="store_true", default=False, help="Shuffle lines instead of sorting")
+    parser.add_argument(
+        "-f",
+        "--ignore-case-sort",
+        action="store_true",
+        default=False,
+        help="Ignore case for sorting (does not affect dedupe)",
+    )
+    parser.add_argument(
+        "-b",
+        "--ignore-leading-blanks",
+        action="store_true",
+        default=False,
+        help="Trim leading whitespace before comparing",
+    )
+    parser.add_argument(
+        "-d", "--dictionary-order", action="store_true", default=False, help="Compare only [A-Za-z0-9 ]"
+    )
+    parser.add_argument("--human-numeric", action="store_true", default=False, help="Sort 1K < 2M < 1G < 2.5G etc.")
+    parser.add_argument(
+        "-M", "--month-sort", action="store_true", default=False, help="Sort by month abbreviation Jan..Dec"
+    )
+    parser.add_argument("-K", "--key", type=int, default=None, metavar="N", help="Sort by the Nth field (see -t)")
+    parser.add_argument(
+        "-t", "--field-separator", default=None, metavar="SEP", help="Field separator for -K (default: whitespace)"
+    )
+    parser.add_argument("--locale", default=None, metavar="NAME", help="Locale-aware collation (locale.strxfrm)")
+    parser.add_argument(
+        "--sort-by-length", action="store_true", default=False, help="Sort by line length (shortest first)"
+    )
+    parser.add_argument(
+        "-c", "--count", action="store_true", default=False, help="Prefix each line with its occurrence count"
+    )
+    parser.add_argument(
+        "-D", "--repeated", action="store_true", default=False, help="Show only duplicated lines (all copies)"
+    )
+    parser.add_argument(
+        "--repeated-once", action="store_true", default=False, help="Show only duplicated lines (one copy each)"
+    )
+    parser.add_argument(
+        "-U", "--unique-only", action="store_true", default=False, help="Show only lines that appear exactly once"
+    )
+    parser.add_argument(
+        "--dedupe-ignore-case", action="store_true", default=False, help="Case-insensitive dedupe (ABC == abc)"
+    )
+    parser.add_argument(
+        "--keep", choices=["first", "last"], default="first", help="Keep first or last occurrence of each line"
+    )
+    parser.add_argument(
+        "--dedupe-by-key", type=int, default=None, metavar="N", help="Dedupe by the Nth field (needs -t)"
+    )
+    parser.add_argument("-m", "--match", default=None, metavar="REGEX", help="Keep only lines matching REGEX")
+    parser.add_argument(
+        "-v", "--invert-match", action="store_true", default=False, help="Invert --match (drop matching lines)"
+    )
+    parser.add_argument("--min-length", type=int, default=None, metavar="N", help="Discard lines shorter than N")
+    parser.add_argument("--max-length", type=int, default=None, metavar="N", help="Discard lines longer than N")
+    parser.add_argument("--strip", action="store_true", default=False, help="str.strip() each line")
+    parser.add_argument("--ignore-comments", action="store_true", default=False, help="Drop comment lines")
+    parser.add_argument(
+        "--comment-prefix", default="#", metavar="S", help="Comment prefix used by --ignore-comments (default '#')"
+    )
+    parser.add_argument(
+        "--normalize-whitespace", action="store_true", default=False, help="Collapse runs of whitespace to one space"
+    )
+    parser.add_argument("--skip-empty", action="store_true", default=False, help="Skip blank lines")
+    parser.add_argument("--lower", action="store_true", default=False, help="Lowercase output")
+    parser.add_argument("--upper", action="store_true", default=False, help="Uppercase output")
+    parser.add_argument("--prefix", default="", metavar="S", help="Prepend S to every output line")
+    parser.add_argument("--suffix", default="", metavar="S", help="Append S to every output line")
+    parser.add_argument(
+        "--reverse-lines", action="store_true", default=False, help="Reverse line order without sorting"
+    )
+    parser.add_argument("--limit", type=int, default=None, metavar="N", help="Emit at most N output lines")
+    parser.add_argument("--head", type=int, default=None, metavar="N", help="Alias for --limit")
+    parser.add_argument("--sample", type=int, default=None, metavar="N", help="Reservoir-sample N lines")
+    parser.add_argument(
+        "--sample-rate", type=float, default=None, metavar="P", help="Keep each line with probability P (0..1)"
+    )
+    parser.add_argument(
+        "-N", "--number", action="store_true", default=False, help="Prefix each line with its 1-based index"
+    )
+    parser.add_argument(
+        "-z", "--null-terminated", action="store_true", default=False, help="Separate lines with NUL instead of newline"
+    )
+    parser.add_argument("--no-trailing-newline", action="store_true", default=False, help="Omit the final newline")
+    parser.add_argument("--crlf", action="store_true", default=False, help="Emit CRLF line endings")
+    parser.add_argument(
+        "--output-format",
+        choices=["text", "json", "csv"],
+        default="text",
+        help="Structured output format (default: text)",
+    )
+    parser.add_argument("-q", "--quiet", action="store_true", default=False, help="Suppress the trailing summary")
+    parser.add_argument("--no-stats", action="store_true", default=False, help="Skip the trailing summary")
+    parser.add_argument("--stats-file", default=None, metavar="FILE", help="Write stats as JSON to FILE")
+    parser.add_argument(
+        "--check", action="store_true", default=False, help="Exit non-zero if input is not sorted/unique"
+    )
+    parser.add_argument(
+        "--check-only-duplicates", action="store_true", default=False, help="Report duplicates without writing output"
+    )
+    parser.add_argument(
+        "--backup", action="store_true", default=False, help="Write a backup copy before modifying a file in place"
+    )
+    parser.add_argument(
+        "--backup-suffix", default=".bak", metavar="SUFFIX", help="Suffix used for backup files (default: .bak)"
+    )
+    parser.add_argument(
+        "--dry-run", action="store_true", default=False, help="Process everything but do not write any output"
+    )
+    parser.add_argument(
+        "--fsync", action="store_true", default=False, help="fsync() the output file before the atomic rename"
+    )
+    parser.add_argument(
+        "--preserve-permissions", action="store_true", default=False, help="Copy the input file mode onto the output"
+    )
+    parser.add_argument(
+        "--preserve-mtime", action="store_true", default=False, help="Copy the input file mtime onto the output"
+    )
+    parser.add_argument(
+        "--analyze", action="store_true", default=False, help="Print a per-file analysis report and exit"
+    )
+    parser.add_argument("--report-file", default=None, metavar="FILE", help="Write a JSON summary report to FILE")
+    parser.add_argument("--no-mmap", action="store_true", default=False, help="Disable mmap; always use buffered reads")
+    parser.add_argument(
+        "--mmap-threshold",
+        type=int,
+        default=MMAP_THRESHOLD_BYTES,
+        metavar="BYTES",
+        help=f"Files larger than BYTES use mmap (default: {MMAP_THRESHOLD_BYTES})",
+    )
+    parser.add_argument(
+        "--buffer-size",
+        type=int,
+        default=DEFAULT_BUFFER_SIZE,
+        metavar="BYTES",
+        help=f"Read buffer size (default: {DEFAULT_BUFFER_SIZE})",
+    )
+    parser.add_argument(
+        "--in-memory-threshold",
+        type=int,
+        default=IN_MEMORY_THRESHOLD_BYTES,
+        metavar="BYTES",
+        help=f"Inputs larger than BYTES use external sort (default: {IN_MEMORY_THRESHOLD_BYTES})",
+    )
+    parser.add_argument(
+        "--chunk-lines",
+        type=int,
+        default=DEFAULT_CHUNK_LINES,
+        metavar="N",
+        help=f"Lines per external-sort chunk (default: {DEFAULT_CHUNK_LINES})",
+    )
+    parser.add_argument("--verbose", action="store_true", default=False, help="Emit progress diagnostics to stderr")
+    parser.add_argument(
+        "--version", action="version", version=f"%(prog)s {VERSION}", help="show program's version number and exit"
+    )
     return parser
 
 
@@ -1522,6 +1645,7 @@ def main(argv: list[str] | None = None) -> int:
         payload = all_stats[0] if len(all_stats) == 1 else {"files": all_stats}
         sorter.save_report(payload, args.report_file)
     return exit_code
+
 
 if __name__ == "__main__":
     raise SystemExit(main())

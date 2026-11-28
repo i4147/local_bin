@@ -342,7 +342,9 @@ def _positive_int(value: str) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     """Build the command-line argument parser."""
-    parser = argparse.ArgumentParser(description="Detect non-English lines under the given paths and save a JSON report.")
+    parser = argparse.ArgumentParser(
+        description="Detect non-English lines under the given paths and save a JSON report."
+    )
     parser.add_argument(
         "paths",
         nargs="*",
