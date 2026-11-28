@@ -20,7 +20,6 @@ import argparse
 import ast
 from pathlib import Path
 
-
 LOGURU_CONFIG_BLOCK = (
     "logger.remove()\n"
     "logger.add(\n"

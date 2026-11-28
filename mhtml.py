@@ -77,10 +77,24 @@ License: MIT (as both sources).
 """
 
 from __future__ import annotations
+
 import argparse
 import base64
 import binascii
 import codecs
+import hashlib
+import html as html_stdlib
+import ipaddress
+import json
+import mimetypes
+import quopri
+import re
+import socket
+import sys
+import threading
+import urllib.error
+import urllib.parse
+import urllib.request
 from collections import OrderedDict
 from collections.abc import Callable, Iterable, Iterator, Sequence
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -89,44 +103,29 @@ from email import policy
 from email.header import decode_header
 from email.message import Message
 from email.parser import BytesParser
-from enum import Enum, StrEnum
-import hashlib
-import html as html_stdlib
+from enum import Enum
 from http.client import HTTPMessage
-import ipaddress
-import json
-import mimetypes
 from pathlib import Path
-import quopri
-import re
-import socket
-import sys
-import threading
-from types import SimpleNamespace
 from typing import (
     IO,
-    Annotated,
     Any,
     BinaryIO,
     ClassVar,
-    NoReturn,
     Self,
     cast,
 )
-import urllib.error
-import urllib.parse
 from urllib.parse import urlsplit
-import urllib.request
 
+import tinycss2
 from loguru import logger
 from lxml import (
     etree,
+)
+from lxml import (
     html as lxml_html,
 )
 from lxml_html_clean import Cleaner
-import tinycss2
 from tinycss2.ast import StringToken
-
 
 # ---------------------------------------------------------------------------
 # Version, shared CLI plumbing, exceptions and shared constants

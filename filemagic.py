@@ -29,12 +29,12 @@ import codecs
 import json
 import os
 import re
-import shlex
 import stat
 import sys
+from collections.abc import Iterable
 from dataclasses import asdict, dataclass, field
-from pathlib import Path
-from typing import Iterable, Literal
+from typing import Literal
+
 from loguru import logger
 
 logger.remove()
@@ -354,6 +354,7 @@ _SCRIPT_TYPES = {
 
 
 def _text_result(data: bytes) -> Result | None:
+    import shlex
     # Incremental decoders tolerate a bounded sample ending within a character.
     encoding = "utf-8-sig"
     for bom, name in (

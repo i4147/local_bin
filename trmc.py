@@ -2,23 +2,20 @@
 "Strip comments (and optionally docstrings/blank lines) from Python sources."
 
 from __future__ import annotations
+
+import argparse
 import ast
-from dataclasses import dataclass
 import io
 import multiprocessing as mp
 import os
-from pathlib import Path
 import re
 import sys
 import tokenize
-from types import SimpleNamespace
-import math
-from typing import IO, TYPE_CHECKING, Annotated, Any, NoReturn
+from dataclasses import dataclass
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 from dh import MAX_WORKERS, SKIP_DIRS, atomic_write
-
-
-import argparse
 from loguru import logger
 
 logger.remove()
@@ -387,6 +384,7 @@ def _format_result(r: _Result, color: bool, verbose: int) -> str | None:
 
 def main(argv: Sequence[str] | None = None) -> int:
     "Run the command-line interface."
+    import math
     parser = _build_parser()
     args = parser.parse_args(argv)
 

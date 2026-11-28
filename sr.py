@@ -13,24 +13,25 @@ Examples:
 """
 
 from __future__ import annotations
+
 import argparse
-from collections import deque
-from collections.abc import Iterator
-from dataclasses import dataclass, field
 import fnmatch
 import json
 import os
-from pathlib import Path
 import re
 import shutil
 import sys
 import tempfile
+from collections import deque
+from collections.abc import Iterator
+from dataclasses import dataclass, field
+from pathlib import Path
 
+from loguru import logger
 from rich.console import Console
 from rich.prompt import Confirm
 from rich.table import Table
 from rich.text import Text
-from loguru import logger
 
 logger.remove()
 logger.add(

@@ -3,15 +3,16 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
 import glob
 import os
-from pathlib import Path
 import re
 import shutil
 import subprocess
+import sys
+from pathlib import Path
 from typing import Any
 
+from loguru import logger
 from rich.console import Console
 from rich.panel import Panel
 from rich.progress import (
@@ -22,8 +23,6 @@ from rich.progress import (
     TextColumn,
 )
 from rich.table import Table
-import sys
-from loguru import logger
 
 logger.remove()
 logger.add(

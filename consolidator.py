@@ -2,27 +2,26 @@
 "Consolidate a pure-Python package or script into a single self-contained file."
 
 from __future__ import annotations
+
 import argparse
 import ast
 import base64
-from collections import deque
-from collections.abc import Callable, Iterable, Iterator, Sequence
-from dataclasses import dataclass, field
 import fnmatch
 import io
 import os
-from pathlib import Path
 import platform
 import re
 import sys
 import time
 import tokenize
-from types import SimpleNamespace
-from typing import IO, Annotated, Any, NoReturn
 import zipfile
+from collections import deque
+from collections.abc import Callable, Iterable, Iterator, Sequence
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
 
 from loguru import logger
-
 
 __version__: str = "1.4.7"
 __all__: list[str] = [

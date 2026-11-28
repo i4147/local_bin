@@ -4,19 +4,19 @@
 from __future__ import annotations
 
 import argparse
-from dataclasses import dataclass
-from pathlib import Path
+import os
 import re
 import shutil
 import subprocess
 import sys
+from dataclasses import dataclass
+from pathlib import Path
 
-from dh import atomic_write
 import libcst as cst
+from dh import atomic_write
+from loguru import logger
 from pygments.lexers import guess_lexer
 from pygments.util import ClassNotFound
-import os
-from loguru import logger
 
 logger.remove()
 logger.add(

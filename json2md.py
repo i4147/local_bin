@@ -2,19 +2,17 @@
 """Convert JSON from a file or stdin into a Markdown table or list."""
 
 from __future__ import annotations
+
 import argparse
-from collections.abc import Sequence
-from enum import StrEnum
 import fnmatch
-from itertools import product
 import json
-from pathlib import Path
+import os
 import sys
-from types import SimpleNamespace
-from typing import IO, Annotated, Any, NoReturn, TextIO
+from collections.abc import Sequence
+from pathlib import Path
+from typing import Any, TextIO
 
 from dh import atomic_write
-import os
 from loguru import logger
 
 logger.remove()
@@ -44,6 +42,7 @@ def read_json(source: str) -> Any:
 
 def expand_arrays(value: Any, array_mode: str) -> list[Any]:
     """Expand arrays into multiple values, including arrays nested in objects."""
+    from itertools import product
     if isinstance(value, list):
         if array_mode != "expand":
             return [value]

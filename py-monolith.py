@@ -80,27 +80,25 @@ Design notes
 """
 
 from __future__ import annotations
+
+import argparse
 import base64
+import mimetypes
+import os
+import re
+import ssl
+import sys
+import urllib.error
+import urllib.request
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from html.parser import HTMLParser
-import mimetypes
 from pathlib import Path
-import re
-import ssl
-import sys
-from types import SimpleNamespace
-from typing import IO, TYPE_CHECKING, Annotated, Any, NoReturn
-import urllib.error
+from typing import Any
 from urllib.parse import urljoin
-import urllib.request
 
 from dh import atomic_write
-
-
-import argparse
-import os
 from loguru import logger
 
 logger.remove()

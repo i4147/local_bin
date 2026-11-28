@@ -2,19 +2,19 @@
 """Audit Python source files for comments, docstrings, and bare string expressions."""
 
 from __future__ import annotations
+
 import argparse
 import ast
-from collections.abc import Sequence
-from dataclasses import dataclass, field
-from enum import StrEnum
-from functools import partial
 import io
 import json
 import multiprocessing as mp
-from pathlib import Path
 import re
 import sys
 import tokenize
+from collections.abc import Sequence
+from dataclasses import dataclass, field
+from enum import StrEnum
+from pathlib import Path
 
 import libcst as cst
 from libcst.metadata import PositionProvider
@@ -30,7 +30,6 @@ from rich.progress import (
 )
 from rich.table import Table
 from rich.text import Text
-
 
 DEFAULT_WORKERS: int = 4
 
@@ -294,6 +293,7 @@ def scan_all(
     err_console: Console,
 ) -> dict[Path, FileReport]:
     """Scan all."""
+    from functools import partial
     results: dict[Path, FileReport] = {}
 
     if workers == 1 or len(files) == 1:

@@ -3,20 +3,19 @@
 "Scaffold a new Python project or rename an existing one. Dry-run by default; use --apply / -g for side effects."
 
 from __future__ import annotations
+
 import argparse
-from dataclasses import dataclass, field
-from enum import StrEnum
 import json
 import os
-from pathlib import Path
 import re
 import subprocess
 import sys
 import tomllib
-from types import SimpleNamespace
-from typing import IO, Annotated, Any, Final, NoReturn
 import urllib.error
 import urllib.request
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, Final
 
 from dh import atomic_write
 from dotenv import load_dotenv

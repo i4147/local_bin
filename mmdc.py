@@ -29,19 +29,19 @@ of the diagrams found in a Markdown file runs on a thread pool
 """
 
 from __future__ import annotations
+
 import argparse
 import ast
-from collections.abc import Callable, Iterable, Sequence
-from concurrent.futures import ThreadPoolExecutor
 import contextlib
-from dataclasses import dataclass, field, replace
-import itertools
 import json
 import math
 import os
-from pathlib import Path
 import re
 import sys
+from collections.abc import Callable, Iterable, Sequence
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass, field, replace
+from pathlib import Path
 from typing import Any, NoReturn, TypeAlias
 
 from dh import atomic_write
@@ -1721,6 +1721,7 @@ def _pil_color(color: str | None) -> Any:
 
 def _dashed_segments(pts: Sequence[Pt], dash: Sequence[float]) -> list[tuple[Pt, Pt]]:
     """Break a polyline into dashed sub-segments."""
+    import itertools
     on = True
     segs: list[tuple[Pt, Pt]] = []
     di = 0
@@ -5257,7 +5258,7 @@ def _pool_limiter(pool: ThreadPoolExecutor) -> Callable[..., Any]:
     def limiter(fn: Callable[..., Any], *args: Any) -> Any:
         return pool.submit(fn, *args)
 
-    setattr(limiter, "shutdown", pool.shutdown)
+    limiter.shutdown = pool.shutdown
     return limiter
 
 

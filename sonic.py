@@ -3,28 +3,27 @@
 "Sort and deduplicate lines in a file with sort(1)/uniq(1) semantics; uses mmap and external merge sort for large files."
 
 from __future__ import annotations
+
 import argparse
-from collections import Counter
-from collections.abc import Callable, Generator, Iterable, Iterator
 import contextlib
 import csv
-from datetime import UTC, datetime
-from enum import StrEnum
-import heapq
 import io
 import json
 import locale as _locale_module
 import mmap
 import os
-from pathlib import Path
 import random
 import re
 import shutil
 import sys
 import tempfile
 import time
-from types import SimpleNamespace
-from typing import IO, Annotated, Any, NoReturn, TextIO
+from collections import Counter
+from collections.abc import Callable, Generator, Iterable, Iterator
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any, TextIO
+
 from loguru import logger
 
 logger.remove()
@@ -471,6 +470,7 @@ class LineSorter(LineProcessor):
         encoding: str,
     ) -> Generator[str]:
         """Merge sorted files."""
+        import heapq
         handles: list[TextIO] = []
         try:
             for temp_file in temp_files:

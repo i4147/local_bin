@@ -26,15 +26,16 @@ section could not be applied, and 2 for usage/IO errors.
 """
 
 from __future__ import annotations
+
 import argparse
-from collections.abc import Iterable, Sequence
-from dataclasses import dataclass, field
 import os
-from pathlib import Path, PurePosixPath
 import re
 import shutil
 import stat
 import sys
+from collections.abc import Iterable, Sequence
+from dataclasses import dataclass, field
+from pathlib import Path, PurePosixPath
 
 from dh import atomic_write
 from loguru import logger

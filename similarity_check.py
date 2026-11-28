@@ -6,30 +6,27 @@ disabled."""
 
 from __future__ import annotations
 
+import argparse
 import ast
 import collections
-from collections.abc import Iterable, Sequence
-from concurrent.futures import ProcessPoolExecutor
 import datetime as dt
-import difflib
-import argparse
 import hashlib
 import html
 import io
-import itertools
 import json
 import keyword
 import math
 import os
-from pathlib import Path
 import re
+import sys
 import tokenize
-from types import SimpleNamespace
-from typing import Annotated, Any
 import zlib
+from collections.abc import Iterable, Sequence
+from concurrent.futures import ProcessPoolExecutor
+from pathlib import Path
+from typing import Any
 
 from dh import atomic_write, should_skip
-import sys
 from loguru import logger
 
 logger.remove()
@@ -893,6 +890,7 @@ def name_candidates(infos: list[dict[str, Any]]) -> set[tuple[int, int]]:
 
 
 def name_similarity(a: dict[str, Any], b: dict[str, Any]) -> float:
+    import difflib
     sa, sb = a["stem"], b["stem"]
     if not sa or not sb:
         return 0.0
@@ -1488,6 +1486,7 @@ def text(
 
 def score_color(s: float) -> str:
     """Score color."""
+    import itertools
     stops = [
         (0.0, (17, 30, 58)),
         (0.25, (30, 64, 120)),

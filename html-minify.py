@@ -2,19 +2,17 @@
 "Minify HTML files in the current directory in place."
 
 from __future__ import annotations
-from concurrent.futures import ProcessPoolExecutor
-import contextlib
-import os
-from pathlib import Path
-import sys
-import tempfile
-from types import SimpleNamespace
-from typing import IO, TYPE_CHECKING, Annotated, Any, NamedTuple, NoReturn
-
-from dh import get_files, runcmd
-
 
 import argparse
+import contextlib
+import os
+import sys
+import tempfile
+from concurrent.futures import ProcessPoolExecutor
+from pathlib import Path
+from typing import NamedTuple
+
+from dh import get_files, runcmd
 from loguru import logger
 
 logger.remove()

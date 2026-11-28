@@ -71,23 +71,24 @@ Requires Python 3.10+ and ``libcst``.
 """
 
 from __future__ import annotations
+
 import argparse
 import ast
 import builtins
-from collections import Counter
-from collections.abc import Iterator
 import contextlib
-from dataclasses import dataclass, field
-from itertools import count, product
 import keyword
-from pathlib import Path
+import os
 import string
 import sys
-from typing import Annotated, TypeVar
+from collections import Counter
+from collections.abc import Iterator
+from dataclasses import dataclass, field
+from itertools import count, product
+from pathlib import Path
+from typing import TypeVar
 
-from dh import atomic_write
 import libcst as cst
-import os
+from dh import atomic_write
 from loguru import logger
 
 logger.remove()
@@ -100,7 +101,6 @@ logger.add(
 _DeclT = TypeVar("_DeclT", cst.Global, cst.Nonlocal)
 from libcst.helpers import get_full_name_for_node
 from libcst.metadata import ClassScope, MetadataWrapper, ScopeProvider
-
 
 __all__: list[str] = ["shorten_names"]
 

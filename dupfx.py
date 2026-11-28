@@ -30,6 +30,8 @@ Command-line script: run ``python dupfx.py`` or the ``dupfx`` command. The modul
 from __future__ import annotations
 
 import argparse
+import os
+import sys
 from collections import defaultdict
 from enum import StrEnum
 from multiprocessing import Pool
@@ -38,8 +40,6 @@ from typing import Any
 
 from loguru import logger
 from xxhash import xxh64
-import os
-import sys
 
 logger.remove()
 logger.add(

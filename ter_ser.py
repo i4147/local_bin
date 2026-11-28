@@ -2,31 +2,33 @@
 """Recursively minify JavaScript files in place using Terser."""
 
 from __future__ import annotations
+
 import argparse
-from collections.abc import (
-    Iterator,
-    Sequence,
-    Set as AbstractSet,
-)
 import contextlib
-from dataclasses import dataclass
 import fnmatch
-from functools import partial
-from multiprocessing import Pool
 import os
-from pathlib import Path
 import shutil
 import stat
 import subprocess
+import sys
 import tempfile
+from collections.abc import (
+    Iterator,
+    Sequence,
+)
+from collections.abc import (
+    Set as AbstractSet,
+)
+from dataclasses import dataclass
+from multiprocessing import Pool
+from pathlib import Path
 from typing import Final, Literal, NamedTuple
 
 from dh import MAX_WORKERS, SKIP_DIRS
+from loguru import logger
 from rich.console import Console
 from rich.panel import Panel
 from rich.text import Text
-import sys
-from loguru import logger
 
 logger.remove()
 logger.add(
@@ -1164,6 +1166,7 @@ def _iter_results(
     options: MinifyOptions,
     jobs: int,
 ) -> Iterator[ProcessResult]:
+    from functools import partial
     if not files:
         return
 

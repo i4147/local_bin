@@ -22,19 +22,19 @@ Examples
 """
 
 from __future__ import annotations
+
 import argparse
-from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
-from datetime import date as date_cls
-import difflib
 import json as json_mod
 import os
-from pathlib import Path
 import re
 import shutil
 import stat
 import subprocess
 import sys
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass
+from datetime import date as date_cls
+from pathlib import Path
 from typing import Any
 
 from dh import atomic_write
@@ -1328,6 +1328,7 @@ def _resolve_target(args: argparse.Namespace, spec: TemplateSpec) -> Path:
 # Output handling
 # ===========================================================================
 def _print_diff(path: Path, old: str, new: str) -> None:
+    import difflib
     diff = difflib.unified_diff(
         old.splitlines(keepends=True),
         new.splitlines(keepends=True),

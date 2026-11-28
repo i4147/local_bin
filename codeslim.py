@@ -116,17 +116,11 @@ Deliberate behaviour changes
 """
 
 from __future__ import annotations
-from abc import ABCMeta, abstractmethod
+
 import argparse
 import builtins
-from collections import OrderedDict, defaultdict
-from collections.abc import Callable, Generator, Iterable, Iterator, Mapping, Sequence
-from contextlib import contextmanager
-from dataclasses import dataclass, field
-from enum import Enum
 import importlib
 import os
-from pathlib import Path
 import platform
 import re
 import shutil
@@ -134,6 +128,13 @@ import subprocess
 import sys
 import tempfile
 import textwrap
+from abc import ABCMeta, abstractmethod
+from collections import OrderedDict, defaultdict
+from collections.abc import Callable, Generator, Iterable, Iterator, Mapping, Sequence
+from contextlib import contextmanager
+from dataclasses import dataclass, field
+from enum import Enum
+from pathlib import Path
 from typing import (
     Any,
 )

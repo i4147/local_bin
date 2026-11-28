@@ -19,28 +19,30 @@ Examples::
 """
 
 from __future__ import annotations
+
 import argparse
-import bisect
-from collections import deque
-from collections.abc import Iterator
-from concurrent.futures import ProcessPoolExecutor, as_completed
-from dataclasses import dataclass, field, replace as dc_replace
 import fnmatch
 import functools
 import hashlib
 import json
 import os
-from pathlib import Path
 import re
-from re import Match, Pattern
 import shutil
 import sys
 import tempfile
 import time
+from collections import deque
+from collections.abc import Iterator
+from concurrent.futures import ProcessPoolExecutor, as_completed
+from dataclasses import dataclass, field
+from dataclasses import replace as dc_replace
+from pathlib import Path
+from re import Match, Pattern
 from typing import Any, TextIO
 
 from dh import atomic_write
 from loguru import logger
+
 # --------------------------------------------------------------------------- #
 # Constants
 # --------------------------------------------------------------------------- #
@@ -1300,6 +1302,7 @@ def _process_multiline(
             line_starts.append(i + 1)
 
     def to_line_idx(offset: int) -> int:
+        import bisect
         return max(0, bisect.bisect_right(line_starts, offset) - 1)
 
     hits: dict[int, list[tuple[int, int]]] = {}

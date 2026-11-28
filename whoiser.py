@@ -2,16 +2,13 @@
 "Command-line utility to query domains in the WhoisXML API WHOIS service similarly to the whois command."
 
 from __future__ import annotations
+
 import argparse
-from concurrent.futures import ThreadPoolExecutor, as_completed
 import csv
-from dataclasses import dataclass
 import datetime as dt
-from enum import StrEnum
 import hashlib
 import json
 import os
-from pathlib import Path
 import platform
 import re
 import subprocess
@@ -21,16 +18,18 @@ import threading
 import time
 import tomllib
 import traceback
-from types import SimpleNamespace
-from typing import IO, Annotated, Any, NoReturn
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
 from urllib.parse import urlencode
 
+import requests
 from dh import atomic_write
+from loguru import logger
 from pygments import highlight
 from pygments.formatters.terminal import TerminalFormatter
 from pygments.lexers.data import JsonLexer
-import requests
-from loguru import logger
 
 logger.remove()
 logger.add(

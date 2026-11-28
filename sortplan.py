@@ -48,17 +48,15 @@ CLI examples (state defaults to ~/.sortplan):
 """
 
 from __future__ import annotations
+
 import argparse
-from collections.abc import Callable, Generator, Iterator, Mapping, Sequence
 import contextlib
 import datetime as dt
-from enum import StrEnum
 import errno
 import fnmatch
 import hashlib
 import json
 import os
-from pathlib import Path
 import re
 import shutil
 import stat
@@ -66,11 +64,13 @@ import sys
 import tempfile
 import time
 import tomllib
-from types import SimpleNamespace
-from typing import IO, Annotated, Any, NoReturn
 import uuid
 import xml.etree.ElementTree as ET
 import zipfile
+from collections.abc import Callable, Generator, Iterator, Mapping, Sequence
+from pathlib import Path
+from typing import Any
+
 from loguru import logger
 
 logger.remove()

@@ -5,31 +5,33 @@ CLI entry point; writes archives plus a JSON report to the output directory, usi
 optional codecs (brotli, pyppmd, zstd, py7zr) alongside bz2/xz."""
 
 from __future__ import annotations
+
 import argparse
 import bz2
-from collections.abc import Callable, Sequence
-from concurrent.futures import Future, ProcessPoolExecutor, wait
-from contextlib import ExitStack
-from dataclasses import asdict, dataclass
 import hashlib
 import importlib.util
 import json
 import lzma
 import multiprocessing as mp
-from multiprocessing.queues import Queue as MPQueue
 import os
-from pathlib import Path
 import queue
 import shutil
 import struct
+import sys
 import tarfile
 import tempfile
 import time
 import traceback
-from types import SimpleNamespace
-from typing import IO, Annotated, Any, Final, NoReturn, TypeAlias
+from collections.abc import Callable, Sequence
+from concurrent.futures import Future, ProcessPoolExecutor, wait
+from contextlib import ExitStack
+from dataclasses import asdict, dataclass
+from multiprocessing.queues import Queue as MPQueue
+from pathlib import Path
+from typing import Final, TypeAlias
 
 from dh import MAX_WORKERS, atomic_write
+from loguru import logger
 from rich.console import Console
 from rich.panel import Panel
 from rich.progress import (
@@ -44,8 +46,6 @@ from rich.progress import (
 )
 from rich.table import Table
 from rich.text import Text
-import sys
-from loguru import logger
 
 logger.remove()
 logger.add(

@@ -28,21 +28,22 @@ Anything that cannot be converted faithfully is reported on stderr.
 """
 
 from __future__ import annotations
+
 import ast
-from collections.abc import Iterable
-from dataclasses import dataclass, field
 import io
 import json
 import keyword
-from pathlib import Path
+import os
 import re
 import shutil
 import sys
 import tokenize
+from collections.abc import Iterable
+from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Literal, TypeGuard
 
 from dh import atomic_write
-import os
 from loguru import logger
 
 logger.remove()

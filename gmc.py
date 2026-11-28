@@ -5,12 +5,10 @@ CLI entry point; opens a full-screen two-panel file manager over the local
 filesystem."""
 
 from __future__ import annotations
+
 import argparse
-from collections.abc import Callable
 import curses
-from dataclasses import dataclass, field
 import datetime
-from enum import StrEnum
 import fnmatch
 import functools
 import grp
@@ -18,10 +16,8 @@ import hashlib
 import json
 import locale
 import os
-from pathlib import Path
 import pwd
 import re
-import shlex
 import shutil
 import stat
 import subprocess
@@ -29,9 +25,13 @@ import sys
 import tarfile
 import termios
 import time
-from typing import Any, Literal
 import unicodedata
 import zipfile
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from enum import StrEnum
+from pathlib import Path
+from typing import Any, Literal
 
 from dh import atomic_write
 from loguru import logger
@@ -2434,6 +2434,7 @@ class MidnightCommander:
             self.status_message = f"Cannot enter directory: {exc}"
 
     def enter_item(self) -> None:
+        import shlex
         p = self.active
         entry = p.current_entry()
         if entry is None:

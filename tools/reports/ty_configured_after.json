@@ -1,0 +1,1902 @@
+[
+  {
+    "check_name": "missing-module-member",
+    "description": "missing-module-member: Module `typing` has no member `override`",
+    "severity": "major",
+    "fingerprint": "cc1ff58d24e13e4d",
+    "location": {
+      "path": "annot.py",
+      "positions": {
+        "begin": {
+          "line": 27,
+          "column": 65
+        },
+        "end": {
+          "line": 27,
+          "column": 73
+        }
+      }
+    }
+  },
+  {
+    "check_name": "missing-attribute",
+    "description": "missing-attribute: Module `tokenize` has no member `FSTRING_START`",
+    "severity": "major",
+    "fingerprint": "67a9049342f4bdce",
+    "location": {
+      "path": "argparse2typer.py",
+      "positions": {
+        "begin": {
+          "line": 230,
+          "column": 26
+        },
+        "end": {
+          "line": 230,
+          "column": 48
+        }
+      }
+    }
+  },
+  {
+    "check_name": "missing-attribute",
+    "description": "missing-attribute: Module `tokenize` has no member `FSTRING_END`",
+    "severity": "major",
+    "fingerprint": "7fcced836c00db9c",
+    "location": {
+      "path": "argparse2typer.py",
+      "positions": {
+        "begin": {
+          "line": 232,
+          "column": 26
+        },
+        "end": {
+          "line": 232,
+          "column": 46
+        }
+      }
+    }
+  },
+  {
+    "check_name": "import-not-found",
+    "description": "import-not-found: Cannot resolve imported module `diskcache`",
+    "severity": "major",
+    "fingerprint": "56ef039591d034be",
+    "location": {
+      "path": "ax.py",
+      "positions": {
+        "begin": {
+          "line": 21,
+          "column": 8
+        },
+        "end": {
+          "line": 21,
+          "column": 17
+        }
+      }
+    }
+  },
+  {
+    "check_name": "import-not-found",
+    "description": "import-not-found: Cannot resolve imported module `just`",
+    "severity": "major",
+    "fingerprint": "e0b26f295d458e3a",
+    "location": {
+      "path": "ax.py",
+      "positions": {
+        "begin": {
+          "line": 22,
+          "column": 8
+        },
+        "end": {
+          "line": 22,
+          "column": 12
+        }
+      }
+    }
+  },
+  {
+    "check_name": "import-not-found",
+    "description": "import-not-found: Cannot resolve imported module `justext`",
+    "severity": "major",
+    "fingerprint": "9f6f30c61192ae8e",
+    "location": {
+      "path": "ax.py",
+      "positions": {
+        "begin": {
+          "line": 23,
+          "column": 8
+        },
+        "end": {
+          "line": 23,
+          "column": 15
+        }
+      }
+    }
+  },
+  {
+    "check_name": "import-not-found",
+    "description": "import-not-found: Cannot resolve imported module `ujson`",
+    "severity": "major",
+    "fingerprint": "22d7f36563f7da83",
+    "location": {
+      "path": "ax.py",
+      "positions": {
+        "begin": {
+          "line": 27,
+          "column": 8
+        },
+        "end": {
+          "line": 27,
+          "column": 21
+        }
+      }
+    }
+  },
+  {
+    "check_name": "import-not-found",
+    "description": "import-not-found: Cannot resolve imported module `metadate`",
+    "severity": "major",
+    "fingerprint": "bc49ac0823257b3e",
+    "location": {
+      "path": "ax.py",
+      "positions": {
+        "begin": {
+          "line": 30,
+          "column": 6
+        },
+        "end": {
+          "line": 30,
+          "column": 14
+        }
+      }
+    }
+  },
+  {
+    "check_name": "import-not-found",
+    "description": "import-not-found: Cannot resolve imported module `tldextract`",
+    "severity": "major",
+    "fingerprint": "14555cdab2eec052",
+    "location": {
+      "path": "ax.py",
+      "positions": {
+        "begin": {
+          "line": 31,
+          "column": 6
+        },
+        "end": {
+          "line": 31,
+          "column": 16
+        }
+      }
+    }
+  },
+  {
+    "check_name": "import-not-found",
+    "description": "import-not-found: Cannot resolve imported module `pyxdameraulevenshtein`",
+    "severity": "major",
+    "fingerprint": "6ce956b815ebadee",
+    "location": {
+      "path": "ax.py",
+      "positions": {
+        "begin": {
+          "line": 367,
+          "column": 14
+        },
+        "end": {
+          "line": 367,
+          "column": 35
+        }
+      }
+    }
+  },
+  {
+    "check_name": "import-not-found",
+    "description": "import-not-found: Cannot resolve imported module `extruct`",
+    "severity": "major",
+    "fingerprint": "427225263528a861",
+    "location": {
+      "path": "ax.py",
+      "positions": {
+        "begin": {
+          "line": 488,
+          "column": 16
+        },
+        "end": {
+          "line": 488,
+          "column": 23
+        }
+      }
+    }
+  },
+  {
+    "check_name": "import-not-found",
+    "description": "import-not-found: Cannot resolve imported module `extruct.w3cmicrodata`",
+    "severity": "major",
+    "fingerprint": "85b98a43b182223a",
+    "location": {
+      "path": "ax.py",
+      "positions": {
+        "begin": {
+          "line": 509,
+          "column": 14
+        },
+        "end": {
+          "line": 509,
+          "column": 34
+        }
+      }
+    }
+  },
+  {
+    "check_name": "import-not-found",
+    "description": "import-not-found: Cannot resolve imported module `requests_viewer`",
+    "severity": "major",
+    "fingerprint": "8121a103491af25d",
+    "location": {
+      "path": "ax.py",
+      "positions": {
+        "begin": {
+          "line": 547,
+          "column": 14
+        },
+        "end": {
+          "line": 547,
+          "column": 29
+        }
+      }
+    }
+  },
+  {
+    "check_name": "import-not-found",
+    "description": "import-not-found: Cannot resolve imported module `requests_viewer`",
+    "severity": "major",
+    "fingerprint": "b1d303883980384d",
+    "location": {
+      "path": "ax.py",
+      "positions": {
+        "begin": {
+          "line": 877,
+          "column": 14
+        },
+        "end": {
+          "line": 877,
+          "column": 29
+        }
+      }
+    }
+  },
+  {
+    "check_name": "import-not-found",
+    "description": "import-not-found: Cannot resolve imported module `weasyprint`",
+    "severity": "major",
+    "fingerprint": "2e5cf443109c32dd",
+    "location": {
+      "path": "build_stdlib_docs.py",
+      "positions": {
+        "begin": {
+          "line": 121,
+          "column": 14
+        },
+        "end": {
+          "line": 121,
+          "column": 24
+        }
+      }
+    }
+  },
+  {
+    "check_name": "import-not-found",
+    "description": "import-not-found: Cannot resolve imported module `xhtml2pdf`",
+    "severity": "major",
+    "fingerprint": "7acea2a6365b9ceb",
+    "location": {
+      "path": "build_stdlib_docs.py",
+      "positions": {
+        "begin": {
+          "line": 128,
+          "column": 14
+        },
+        "end": {
+          "line": 128,
+          "column": 23
+        }
+      }
+    }
+  },
+  {
+    "check_name": "import-not-found",
+    "description": "import-not-found: Cannot resolve imported module `pdfkit`",
+    "severity": "major",
+    "fingerprint": "3fa34b9eeff8036e",
+    "location": {
+      "path": "build_stdlib_docs.py",
+      "positions": {
+        "begin": {
+          "line": 138,
+          "column": 16
+        },
+        "end": {
+          "line": 138,
+          "column": 22
+        }
+      }
+    }
+  },
+  {
+    "check_name": "import-not-found",
+    "description": "import-not-found: Cannot resolve imported module `tree_sitter_c`",
+    "severity": "major",
+    "fingerprint": "a912e6f80962192d",
+    "location": {
+      "path": "cccpp.py",
+      "positions": {
+        "begin": {
+          "line": 10,
+          "column": 8
+        },
+        "end": {
+          "line": 10,
+          "column": 21
+        }
+      }
+    }
+  },
+  {
+    "check_name": "import-not-found",
+    "description": "import-not-found: Cannot resolve imported module `tree_sitter_cpp`",
+    "severity": "major",
+    "fingerprint": "5e79edea28591d13",
+    "location": {
+      "path": "cccpp.py",
+      "positions": {
+        "begin": {
+          "line": 11,
+          "column": 8
+        },
+        "end": {
+          "line": 11,
+          "column": 23
+        }
+      }
+    }
+  },
+  {
+    "check_name": "deprecated",
+    "description": "deprecated: The overload of `__init__` is deprecated: int argument support is deprecated",
+    "severity": "minor",
+    "fingerprint": "aacfc93cc3c73589",
+    "location": {
+      "path": "cccpp.py",
+      "positions": {
+        "begin": {
+          "line": 43,
+          "column": 20
+        },
+        "end": {
+          "line": 43,
+          "column": 28
+        }
+      }
+    }
+  },
+  {
+    "check_name": "deprecated",
+    "description": "deprecated: The overload of `__init__` is deprecated: int argument support is deprecated",
+    "severity": "minor",
+    "fingerprint": "39b729bde6b87dcd",
+    "location": {
+      "path": "cccpp.py",
+      "positions": {
+        "begin": {
+          "line": 45,
+          "column": 20
+        },
+        "end": {
+          "line": 45,
+          "column": 28
+        }
+      }
+    }
+  },
+  {
+    "check_name": "import-not-found",
+    "description": "import-not-found: Cannot resolve imported module `numpy`",
+    "severity": "major",
+    "fingerprint": "4ea20130eed736bd",
+    "location": {
+      "path": "chafa.py",
+      "positions": {
+        "begin": {
+          "line": 20,
+          "column": 8
+        },
+        "end": {
+          "line": 20,
+          "column": 19
+        }
+      }
+    }
+  },
+  {
+    "check_name": "import-not-found",
+    "description": "import-not-found: Cannot resolve imported module `astor`",
+    "severity": "major",
+    "fingerprint": "a4a74019a866900f",
+    "location": {
+      "path": "dedupe-py.py",
+      "positions": {
+        "begin": {
+          "line": 15,
+          "column": 8
+        },
+        "end": {
+          "line": 15,
+          "column": 13
+        }
+      }
+    }
+  },
+  {
+    "check_name": "import-not-found",
+    "description": "import-not-found: Cannot resolve imported module `tqdm`",
+    "severity": "major",
+    "fingerprint": "aed080487b18526c",
+    "location": {
+      "path": "excss.py",
+      "positions": {
+        "begin": {
+          "line": 84,
+          "column": 10
+        },
+        "end": {
+          "line": 84,
+          "column": 14
+        }
+      }
+    }
+  },
+  {
+    "check_name": "import-not-found",
+    "description": "import-not-found: Cannot resolve imported module `cssbeautifier`",
+    "severity": "major",
+    "fingerprint": "9d66f059e1265794",
+    "location": {
+      "path": "excss.py",
+      "positions": {
+        "begin": {
+          "line": 101,
+          "column": 12
+        },
+        "end": {
+          "line": 101,
+          "column": 43
+        }
+      }
+    }
+  },
+  {
+    "check_name": "import-not-found",
+    "description": "import-not-found: Cannot resolve imported module `jsbeautifier`",
+    "severity": "major",
+    "fingerprint": "e3f908ec22b7e0a1",
+    "location": {
+      "path": "excss.py",
+      "positions": {
+        "begin": {
+          "line": 102,
+          "column": 12
+        },
+        "end": {
+          "line": 102,
+          "column": 41
+        }
+      }
+    }
+  },
+  {
+    "check_name": "import-not-found",
+    "description": "import-not-found: Cannot resolve imported module `argcomplete`",
+    "severity": "major",
+    "fingerprint": "38867f49a40a1222",
+    "location": {
+      "path": "fv.py",
+      "positions": {
+        "begin": {
+          "line": 20,
+          "column": 8
+        },
+        "end": {
+          "line": 20,
+          "column": 19
+        }
+      }
+    }
+  },
+  {
+    "check_name": "missing-module-member",
+    "description": "missing-module-member: Module `pygments.formatters` has no member `Terminal256Formatter`",
+    "severity": "major",
+    "fingerprint": "ffb8c5fa58576ac8",
+    "location": {
+      "path": "fv.py",
+      "positions": {
+        "begin": {
+          "line": 23,
+          "column": 33
+        },
+        "end": {
+          "line": 23,
+          "column": 53
+        }
+      }
+    }
+  },
+  {
+    "check_name": "missing-module-member",
+    "description": "missing-module-member: Module `pygments.lexers` has no member `TextLexer`",
+    "severity": "major",
+    "fingerprint": "1eb2e1cc92f79451",
+    "location": {
+      "path": "fv.py",
+      "positions": {
+        "begin": {
+          "line": 25,
+          "column": 29
+        },
+        "end": {
+          "line": 25,
+          "column": 38
+        }
+      }
+    }
+  },
+  {
+    "check_name": "import-not-found",
+    "description": "import-not-found: Cannot resolve imported module `rarfile`",
+    "severity": "major",
+    "fingerprint": "99e5305cfd5583ae",
+    "location": {
+      "path": "get_sub.py",
+      "positions": {
+        "begin": {
+          "line": 24,
+          "column": 8
+        },
+        "end": {
+          "line": 24,
+          "column": 15
+        }
+      }
+    }
+  },
+  {
+    "check_name": "import-not-found",
+    "description": "import-not-found: Cannot resolve imported module `guessit`",
+    "severity": "major",
+    "fingerprint": "d22c3d434494a7f8",
+    "location": {
+      "path": "get_sub.py",
+      "positions": {
+        "begin": {
+          "line": 27,
+          "column": 6
+        },
+        "end": {
+          "line": 27,
+          "column": 13
+        }
+      }
+    }
+  },
+  {
+    "check_name": "missing-union-attribute",
+    "description": "missing-union-attribute: Attribute `text` is not defined on `None` in union `Tag | None`",
+    "severity": "major",
+    "fingerprint": "4650303f2f36d799",
+    "location": {
+      "path": "get_sub.py",
+      "positions": {
+        "begin": {
+          "line": 501,
+          "column": 38
+        },
+        "end": {
+          "line": 501,
+          "column": 44
+        }
+      }
+    }
+  },
+  {
+    "check_name": "missing-union-attribute",
+    "description": "missing-union-attribute: Attribute `find_all` is not defined on `None` in union `Tag | None`",
+    "severity": "major",
+    "fingerprint": "346b804017137649",
+    "location": {
+      "path": "get_sub.py",
+      "positions": {
+        "begin": {
+          "line": 506,
+          "column": 24
+        },
+        "end": {
+          "line": 506,
+          "column": 66
+        }
+      }
+    }
+  },
+  {
+    "check_name": "invalid-argument-type",
+    "description": "invalid-argument-type: Argument to function `urljoin` is incorrect: Expected `AnyStr@urljoin | None`, found `str | AttributeValueList`: Inferred lower bound `str | AttributeValueList` does not satisfy constraints (`str`, `bytes`) of type variable `AnyStr`",
+    "severity": "major",
+    "fingerprint": "6f324c489816f464",
+    "location": {
+      "path": "get_sub.py",
+      "positions": {
+        "begin": {
+          "line": 515,
+          "column": 69
+        },
+        "end": {
+          "line": 515,
+          "column": 84
+        }
+      }
+    }
+  },
+  {
+    "check_name": "missing-union-attribute",
+    "description": "missing-union-attribute: Attribute `attrs` is not defined on `None` in union `Tag | None`",
+    "severity": "major",
+    "fingerprint": "5d4fffb7b4d0838e",
+    "location": {
+      "path": "get_sub.py",
+      "positions": {
+        "begin": {
+          "line": 515,
+          "column": 69
+        },
+        "end": {
+          "line": 515,
+          "column": 76
+        }
+      }
+    }
+  },
+  {
+    "check_name": "missing-union-attribute",
+    "description": "missing-union-attribute: Attribute `find` is not defined on `None` in union `Tag | None`",
+    "severity": "major",
+    "fingerprint": "209bcba09e7ac194",
+    "location": {
+      "path": "get_sub.py",
+      "positions": {
+        "begin": {
+          "line": 582,
+          "column": 31
+        },
+        "end": {
+          "line": 582,
+          "column": 72
+        }
+      }
+    }
+  },
+  {
+    "check_name": "missing-union-attribute",
+    "description": "missing-union-attribute: Attribute `text` is not defined on `None` in union `Tag | None`",
+    "severity": "major",
+    "fingerprint": "6f5b1b498b567027",
+    "location": {
+      "path": "get_sub.py",
+      "positions": {
+        "begin": {
+          "line": 584,
+          "column": 38
+        },
+        "end": {
+          "line": 584,
+          "column": 50
+        }
+      }
+    }
+  },
+  {
+    "check_name": "invalid-assignment",
+    "description": "invalid-assignment: Object of type `str | AttributeValueList | None` is not assignable to `str`",
+    "severity": "major",
+    "fingerprint": "e90cd903e9807d57",
+    "location": {
+      "path": "get_sub.py",
+      "positions": {
+        "begin": {
+          "line": 591,
+          "column": 49
+        },
+        "end": {
+          "line": 591,
+          "column": 103
+        }
+      }
+    }
+  },
+  {
+    "check_name": "missing-union-attribute",
+    "description": "missing-union-attribute: Attribute `find` is not defined on `None` in union `Tag | None`",
+    "severity": "major",
+    "fingerprint": "bd33da89b612254",
+    "location": {
+      "path": "get_sub.py",
+      "positions": {
+        "begin": {
+          "line": 591,
+          "column": 49
+        },
+        "end": {
+          "line": 591,
+          "column": 85
+        }
+      }
+    }
+  },
+  {
+    "check_name": "missing-union-attribute",
+    "description": "missing-union-attribute: Attribute `get` is not defined on `None` in union `Tag | None`",
+    "severity": "major",
+    "fingerprint": "580e7f85c7ed1033",
+    "location": {
+      "path": "get_sub.py",
+      "positions": {
+        "begin": {
+          "line": 591,
+          "column": 49
+        },
+        "end": {
+          "line": 591,
+          "column": 94
+        }
+      }
+    }
+  },
+  {
+    "check_name": "unsupported-operator",
+    "description": "unsupported-operator: Operator `+` is not supported between objects of type `str` and `str | AttributeValueList`",
+    "severity": "major",
+    "fingerprint": "c8aab55855463f36",
+    "location": {
+      "path": "get_sub.py",
+      "positions": {
+        "begin": {
+          "line": 597,
+          "column": 41
+        },
+        "end": {
+          "line": 597,
+          "column": 90
+        }
+      }
+    }
+  },
+  {
+    "check_name": "missing-union-attribute",
+    "description": "missing-union-attribute: Attribute `attrs` is not defined on `None` in union `Tag | None`",
+    "severity": "major",
+    "fingerprint": "7d1e7baa887051cf",
+    "location": {
+      "path": "get_sub.py",
+      "positions": {
+        "begin": {
+          "line": 597,
+          "column": 69
+        },
+        "end": {
+          "line": 597,
+          "column": 82
+        }
+      }
+    }
+  },
+  {
+    "check_name": "missing-union-attribute",
+    "description": "missing-union-attribute: Attribute `text` is not defined on `None` in union `Tag | None`",
+    "severity": "major",
+    "fingerprint": "41cebcc9a04aaa4d",
+    "location": {
+      "path": "get_sub.py",
+      "positions": {
+        "begin": {
+          "line": 604,
+          "column": 29
+        },
+        "end": {
+          "line": 604,
+          "column": 43
+        }
+      }
+    }
+  },
+  {
+    "check_name": "unsupported-operator",
+    "description": "unsupported-operator: Operator `+` is not supported between objects of type `str` and `str | AttributeValueList`",
+    "severity": "major",
+    "fingerprint": "f12b0cd5badd4723",
+    "location": {
+      "path": "get_sub.py",
+      "positions": {
+        "begin": {
+          "line": 608,
+          "column": 33
+        },
+        "end": {
+          "line": 608,
+          "column": 86
+        }
+      }
+    }
+  },
+  {
+    "check_name": "missing-union-attribute",
+    "description": "missing-union-attribute: Attribute `a` is not defined on `None` in union `Tag | None`",
+    "severity": "major",
+    "fingerprint": "abb7e16daa94a8d0",
+    "location": {
+      "path": "get_sub.py",
+      "positions": {
+        "begin": {
+          "line": 608,
+          "column": 61
+        },
+        "end": {
+          "line": 608,
+          "column": 72
+        }
+      }
+    }
+  },
+  {
+    "check_name": "missing-union-attribute",
+    "description": "missing-union-attribute: Attribute `attrs` is not defined on `None` in union `Tag | None`",
+    "severity": "major",
+    "fingerprint": "85f6c235887bda1c",
+    "location": {
+      "path": "get_sub.py",
+      "positions": {
+        "begin": {
+          "line": 608,
+          "column": 61
+        },
+        "end": {
+          "line": 608,
+          "column": 78
+        }
+      }
+    }
+  },
+  {
+    "check_name": "missing-union-attribute",
+    "description": "missing-union-attribute: Attribute `text` is not defined on `None` in union `Tag | None`",
+    "severity": "major",
+    "fingerprint": "50df47f8dabc212d",
+    "location": {
+      "path": "get_sub.py",
+      "positions": {
+        "begin": {
+          "line": 685,
+          "column": 58
+        },
+        "end": {
+          "line": 685,
+          "column": 110
+        }
+      }
+    }
+  },
+  {
+    "check_name": "missing-union-attribute",
+    "description": "missing-union-attribute: Attribute `text` is not defined on `None` in union `Tag | None`",
+    "severity": "major",
+    "fingerprint": "c80234bcc38720d3",
+    "location": {
+      "path": "get_sub.py",
+      "positions": {
+        "begin": {
+          "line": 690,
+          "column": 33
+        },
+        "end": {
+          "line": 690,
+          "column": 39
+        }
+      }
+    }
+  },
+  {
+    "check_name": "unsupported-operator",
+    "description": "unsupported-operator: Operator `+` is not supported between objects of type `str` and `str | AttributeValueList`",
+    "severity": "major",
+    "fingerprint": "9e1d9dff892a75a",
+    "location": {
+      "path": "get_sub.py",
+      "positions": {
+        "begin": {
+          "line": 691,
+          "column": 36
+        },
+        "end": {
+          "line": 691,
+          "column": 79
+        }
+      }
+    }
+  },
+  {
+    "check_name": "missing-union-attribute",
+    "description": "missing-union-attribute: Attribute `attrs` is not defined on `None` in union `Tag | None`",
+    "severity": "major",
+    "fingerprint": "fdbae028a00573d1",
+    "location": {
+      "path": "get_sub.py",
+      "positions": {
+        "begin": {
+          "line": 691,
+          "column": 64
+        },
+        "end": {
+          "line": 691,
+          "column": 71
+        }
+      }
+    }
+  },
+  {
+    "check_name": "import-not-found",
+    "description": "import-not-found: Cannot resolve imported module `markdownify`",
+    "severity": "major",
+    "fingerprint": "ecda06a61cb2310f",
+    "location": {
+      "path": "glow.py",
+      "positions": {
+        "begin": {
+          "line": 1647,
+          "column": 10
+        },
+        "end": {
+          "line": 1647,
+          "column": 21
+        }
+      }
+    }
+  },
+  {
+    "check_name": "import-not-found",
+    "description": "import-not-found: Cannot resolve imported module `compression`",
+    "severity": "major",
+    "fingerprint": "dafc0358ac58984c",
+    "location": {
+      "path": "gmc.py",
+      "positions": {
+        "begin": {
+          "line": 48,
+          "column": 10
+        },
+        "end": {
+          "line": 48,
+          "column": 21
+        }
+      }
+    }
+  },
+  {
+    "check_name": "import-not-found",
+    "description": "import-not-found: Cannot resolve imported module `tomlkit`",
+    "severity": "major",
+    "fingerprint": "86f1e59ebb2a9e95",
+    "location": {
+      "path": "hatch2setup.py",
+      "positions": {
+        "begin": {
+          "line": 47,
+          "column": 8
+        },
+        "end": {
+          "line": 47,
+          "column": 15
+        }
+      }
+    }
+  },
+  {
+    "check_name": "import-not-found",
+    "description": "import-not-found: Cannot resolve imported module `tomlkit.items`",
+    "severity": "major",
+    "fingerprint": "f3b2152ffe718844",
+    "location": {
+      "path": "hatch2setup.py",
+      "positions": {
+        "begin": {
+          "line": 49,
+          "column": 6
+        },
+        "end": {
+          "line": 49,
+          "column": 19
+        }
+      }
+    }
+  },
+  {
+    "check_name": "import-not-found",
+    "description": "import-not-found: Cannot resolve imported module `validate_pyproject.api`",
+    "severity": "major",
+    "fingerprint": "de6c21439ab9307f",
+    "location": {
+      "path": "hatch2setup.py",
+      "positions": {
+        "begin": {
+          "line": 819,
+          "column": 14
+        },
+        "end": {
+          "line": 819,
+          "column": 36
+        }
+      }
+    }
+  },
+  {
+    "check_name": "import-not-found",
+    "description": "import-not-found: Cannot resolve imported module `build`",
+    "severity": "major",
+    "fingerprint": "6cc3ca4207a56125",
+    "location": {
+      "path": "hatch2setup.py",
+      "positions": {
+        "begin": {
+          "line": 828,
+          "column": 16
+        },
+        "end": {
+          "line": 828,
+          "column": 31
+        }
+      }
+    }
+  },
+  {
+    "check_name": "import-not-found",
+    "description": "import-not-found: Cannot resolve imported module `tinycss2`",
+    "severity": "major",
+    "fingerprint": "bf875d02692eb843",
+    "location": {
+      "path": "mhtml.py",
+      "positions": {
+        "begin": {
+          "line": 119,
+          "column": 8
+        },
+        "end": {
+          "line": 119,
+          "column": 16
+        }
+      }
+    }
+  },
+  {
+    "check_name": "missing-module-member",
+    "description": "missing-module-member: Module `lxml` has no member `etree`",
+    "severity": "major",
+    "fingerprint": "481133826c14efc6",
+    "location": {
+      "path": "mhtml.py",
+      "positions": {
+        "begin": {
+          "line": 122,
+          "column": 5
+        },
+        "end": {
+          "line": 122,
+          "column": 10
+        }
+      }
+    }
+  },
+  {
+    "check_name": "import-not-found",
+    "description": "import-not-found: Cannot resolve imported module `lxml_html_clean`",
+    "severity": "major",
+    "fingerprint": "3ae5a218b9696c44",
+    "location": {
+      "path": "mhtml.py",
+      "positions": {
+        "begin": {
+          "line": 127,
+          "column": 6
+        },
+        "end": {
+          "line": 127,
+          "column": 21
+        }
+      }
+    }
+  },
+  {
+    "check_name": "import-not-found",
+    "description": "import-not-found: Cannot resolve imported module `tinycss2.ast`",
+    "severity": "major",
+    "fingerprint": "6ed231db0be5b4bc",
+    "location": {
+      "path": "mhtml.py",
+      "positions": {
+        "begin": {
+          "line": 128,
+          "column": 6
+        },
+        "end": {
+          "line": 128,
+          "column": 18
+        }
+      }
+    }
+  },
+  {
+    "check_name": "missing-attribute",
+    "description": "missing-attribute: Unresolved attribute `shutdown` on type `def limiter(fn: (...) -> Any, *args: Any) -> Any`",
+    "severity": "major",
+    "fingerprint": "fe8e40bf0ccdf5cd",
+    "location": {
+      "path": "mmdc.py",
+      "positions": {
+        "begin": {
+          "line": 5261,
+          "column": 5
+        },
+        "end": {
+          "line": 5261,
+          "column": 21
+        }
+      }
+    }
+  },
+  {
+    "check_name": "import-not-found",
+    "description": "import-not-found: Cannot resolve imported module `lingua`",
+    "severity": "major",
+    "fingerprint": "e028fb56b5608682",
+    "location": {
+      "path": "noneng.py",
+      "positions": {
+        "begin": {
+          "line": 78,
+          "column": 22
+        },
+        "end": {
+          "line": 78,
+          "column": 28
+        }
+      }
+    }
+  },
+  {
+    "check_name": "import-not-found",
+    "description": "import-not-found: Cannot resolve imported module `py3langid`",
+    "severity": "major",
+    "fingerprint": "8bf2b620e2d2b1ed",
+    "location": {
+      "path": "noneng.py",
+      "positions": {
+        "begin": {
+          "line": 99,
+          "column": 24
+        },
+        "end": {
+          "line": 99,
+          "column": 33
+        }
+      }
+    }
+  },
+  {
+    "check_name": "import-not-found",
+    "description": "import-not-found: Cannot resolve imported module `langid`",
+    "severity": "major",
+    "fingerprint": "f42a3d3f8c8b7e5a",
+    "location": {
+      "path": "noneng.py",
+      "positions": {
+        "begin": {
+          "line": 106,
+          "column": 24
+        },
+        "end": {
+          "line": 106,
+          "column": 30
+        }
+      }
+    }
+  },
+  {
+    "check_name": "missing-module-member",
+    "description": "missing-module-member: Module `concurrent.futures` has no member `InterpreterPoolExecutor`",
+    "severity": "major",
+    "fingerprint": "83167fbb22577de6",
+    "location": {
+      "path": "pydup.py",
+      "positions": {
+        "begin": {
+          "line": 58,
+          "column": 36
+        },
+        "end": {
+          "line": 58,
+          "column": 87
+        }
+      }
+    }
+  },
+  {
+    "check_name": "invalid-assignment",
+    "description": "invalid-assignment: Object of type `list[Unknown]` is not assignable to attribute `type_params` on type `AST & <Protocol with members 'type_params'>`",
+    "severity": "major",
+    "fingerprint": "24d617e1a6a0047",
+    "location": {
+      "path": "pydup.py",
+      "positions": {
+        "begin": {
+          "line": 329,
+          "column": 13
+        },
+        "end": {
+          "line": 329,
+          "column": 29
+        }
+      }
+    }
+  },
+  {
+    "check_name": "import-not-found",
+    "description": "import-not-found: Cannot resolve imported module `send2trash`",
+    "severity": "major",
+    "fingerprint": "2804f7e2f4bf1f6d",
+    "location": {
+      "path": "pydup.py",
+      "positions": {
+        "begin": {
+          "line": 2553,
+          "column": 18
+        },
+        "end": {
+          "line": 2553,
+          "column": 28
+        }
+      }
+    }
+  },
+  {
+    "check_name": "import-not-found",
+    "description": "import-not-found: Cannot resolve imported module `pyperclip`",
+    "severity": "major",
+    "fingerprint": "44d53cc6c3b8f5f6",
+    "location": {
+      "path": "qv.py",
+      "positions": {
+        "begin": {
+          "line": 75,
+          "column": 12
+        },
+        "end": {
+          "line": 75,
+          "column": 21
+        }
+      }
+    }
+  },
+  {
+    "check_name": "import-not-found",
+    "description": "import-not-found: Cannot resolve imported module `pikepdf`",
+    "severity": "major",
+    "fingerprint": "b0f1b02214bb4f77",
+    "location": {
+      "path": "remove_pages_of_pdf.py",
+      "positions": {
+        "begin": {
+          "line": 76,
+          "column": 16
+        },
+        "end": {
+          "line": 76,
+          "column": 23
+        }
+      }
+    }
+  },
+  {
+    "check_name": "import-not-found",
+    "description": "import-not-found: Cannot resolve imported module `fitz`",
+    "severity": "major",
+    "fingerprint": "677751f69db9a2c5",
+    "location": {
+      "path": "remove_pages_of_pdf.py",
+      "positions": {
+        "begin": {
+          "line": 92,
+          "column": 16
+        },
+        "end": {
+          "line": 92,
+          "column": 20
+        }
+      }
+    }
+  },
+  {
+    "check_name": "import-not-found",
+    "description": "import-not-found: Cannot resolve imported module `jinja2`",
+    "severity": "major",
+    "fingerprint": "3bda5704331795ed",
+    "location": {
+      "path": "resolve_reqs.py",
+      "positions": {
+        "begin": {
+          "line": 72,
+          "column": 10
+        },
+        "end": {
+          "line": 72,
+          "column": 16
+        }
+      }
+    }
+  },
+  {
+    "check_name": "missing-union-attribute",
+    "description": "missing-union-attribute: Attribute `lower` is not defined on `AttributeValueList` in union `str | AttributeValueList`",
+    "severity": "major",
+    "fingerprint": "93e6ac9162ea0f7f",
+    "location": {
+      "path": "scraper.py",
+      "positions": {
+        "begin": {
+          "line": 366,
+          "column": 38
+        },
+        "end": {
+          "line": 366,
+          "column": 48
+        }
+      }
+    }
+  },
+  {
+    "check_name": "invalid-argument-type",
+    "description": "invalid-argument-type: Argument to function `urljoin` is incorrect: Expected `AnyStr@urljoin | None`, found `str | AttributeValueList`: Inferred lower bound `str | AttributeValueList` does not satisfy constraints (`str`, `bytes`) of type variable `AnyStr`",
+    "severity": "major",
+    "fingerprint": "7443494662355f88",
+    "location": {
+      "path": "scraper.py",
+      "positions": {
+        "begin": {
+          "line": 367,
+          "column": 37
+        },
+        "end": {
+          "line": 367,
+          "column": 41
+        }
+      }
+    }
+  },
+  {
+    "check_name": "import-not-found",
+    "description": "import-not-found: Cannot resolve imported module `googleapiclient.discovery`",
+    "severity": "major",
+    "fingerprint": "e365b0aa593b9d8f",
+    "location": {
+      "path": "scraper.py",
+      "positions": {
+        "begin": {
+          "line": 517,
+          "column": 10
+        },
+        "end": {
+          "line": 517,
+          "column": 35
+        }
+      }
+    }
+  },
+  {
+    "check_name": "invalid-argument-type",
+    "description": "invalid-argument-type: Argument to function `urljoin` is incorrect: Expected `AnyStr@urljoin | None`, found `(str & ~AlwaysFalsy) | (AttributeValueList & ~AlwaysFalsy)`: Inferred lower bound `(str & ~AlwaysFalsy) | (AttributeValueList & ~AlwaysFalsy)` does not satisfy constraints (`str`, `bytes`) of type variable `AnyStr`",
+    "severity": "major",
+    "fingerprint": "8370efd0e2d28f60",
+    "location": {
+      "path": "scraper.py",
+      "positions": {
+        "begin": {
+          "line": 660,
+          "column": 33
+        },
+        "end": {
+          "line": 660,
+          "column": 37
+        }
+      }
+    }
+  },
+  {
+    "check_name": "missing-union-attribute",
+    "description": "missing-union-attribute: Attribute `endswith` is not defined on `AttributeValueList & ~AlwaysFalsy` in union `(str & ~AlwaysFalsy) | (AttributeValueList & ~AlwaysFalsy)`",
+    "severity": "major",
+    "fingerprint": "7a24cf9ce986ac3b",
+    "location": {
+      "path": "scraper.py",
+      "positions": {
+        "begin": {
+          "line": 661,
+          "column": 16
+        },
+        "end": {
+          "line": 661,
+          "column": 29
+        }
+      }
+    }
+  },
+  {
+    "check_name": "invalid-argument-type",
+    "description": "invalid-argument-type: Argument to function `urljoin` is incorrect: Expected `AnyStr@urljoin | None`, found `(str & ~AlwaysFalsy) | (AttributeValueList & ~AlwaysFalsy)`: Inferred lower bound `(str & ~AlwaysFalsy) | (AttributeValueList & ~AlwaysFalsy)` does not satisfy constraints (`str`, `bytes`) of type variable `AnyStr`",
+    "severity": "major",
+    "fingerprint": "3de84e9a3eb1c3ff",
+    "location": {
+      "path": "scraper.py",
+      "positions": {
+        "begin": {
+          "line": 701,
+          "column": 37
+        },
+        "end": {
+          "line": 701,
+          "column": 41
+        }
+      }
+    }
+  },
+  {
+    "check_name": "missing-union-attribute",
+    "description": "missing-union-attribute: Attribute `endswith` is not defined on `AttributeValueList & ~AlwaysFalsy` in union `(str & ~AlwaysFalsy) | (AttributeValueList & ~AlwaysFalsy)`",
+    "severity": "major",
+    "fingerprint": "1cf5b2e95ce0fc72",
+    "location": {
+      "path": "scraper.py",
+      "positions": {
+        "begin": {
+          "line": 702,
+          "column": 16
+        },
+        "end": {
+          "line": 702,
+          "column": 29
+        }
+      }
+    }
+  },
+  {
+    "check_name": "no-matching-overload",
+    "description": "no-matching-overload: No overload of bound method `Tag.find_all` matches arguments",
+    "severity": "major",
+    "fingerprint": "8c75dea032d72faf",
+    "location": {
+      "path": "scraper.py",
+      "positions": {
+        "begin": {
+          "line": 720,
+          "column": 18
+        },
+        "end": {
+          "line": 720,
+          "column": 85
+        }
+      }
+    }
+  },
+  {
+    "check_name": "invalid-argument-type",
+    "description": "invalid-argument-type: Argument to function `urljoin` is incorrect: Expected `AnyStr@urljoin | None`, found `(str & ~AlwaysFalsy) | (AttributeValueList & ~AlwaysFalsy)`: Inferred lower bound `(str & ~AlwaysFalsy) | (AttributeValueList & ~AlwaysFalsy)` does not satisfy constraints (`str`, `bytes`) of type variable `AnyStr`",
+    "severity": "major",
+    "fingerprint": "21ffcb3b7b7a419f",
+    "location": {
+      "path": "scraper.py",
+      "positions": {
+        "begin": {
+          "line": 785,
+          "column": 29
+        },
+        "end": {
+          "line": 785,
+          "column": 33
+        }
+      }
+    }
+  },
+  {
+    "check_name": "missing-union-attribute",
+    "description": "missing-union-attribute: Attribute `endswith` is not defined on `AttributeValueList & ~AlwaysFalsy` in union `(str & ~AlwaysFalsy) | (AttributeValueList & ~AlwaysFalsy)`",
+    "severity": "major",
+    "fingerprint": "e89364968da131f5",
+    "location": {
+      "path": "scraper.py",
+      "positions": {
+        "begin": {
+          "line": 786,
+          "column": 12
+        },
+        "end": {
+          "line": 786,
+          "column": 25
+        }
+      }
+    }
+  },
+  {
+    "check_name": "missing-union-attribute",
+    "description": "missing-union-attribute: Attribute `strip` is not defined on `AttributeValueList & ~AlwaysFalsy` in union `(str & ~AlwaysFalsy) | (AttributeValueList & ~AlwaysFalsy)`",
+    "severity": "major",
+    "fingerprint": "b70cef3e9304d85f",
+    "location": {
+      "path": "scraper.py",
+      "positions": {
+        "begin": {
+          "line": 897,
+          "column": 53
+        },
+        "end": {
+          "line": 897,
+          "column": 60
+        }
+      }
+    }
+  },
+  {
+    "check_name": "missing-union-attribute",
+    "description": "missing-union-attribute: Attribute `split` is not defined on `AttributeValueList & ~AlwaysFalsy` in union `(str & ~AlwaysFalsy) | (AttributeValueList & ~AlwaysFalsy)`",
+    "severity": "major",
+    "fingerprint": "6044d1158ae98dc5",
+    "location": {
+      "path": "scraper.py",
+      "positions": {
+        "begin": {
+          "line": 902,
+          "column": 25
+        },
+        "end": {
+          "line": 902,
+          "column": 37
+        }
+      }
+    }
+  },
+  {
+    "check_name": "invalid-argument-type",
+    "description": "invalid-argument-type: Argument to function `urljoin` is incorrect: Expected `AnyStr@urljoin | None`, found `str | AttributeValueList`: Inferred lower bound `str | AttributeValueList` does not satisfy constraints (`str`, `bytes`) of type variable `AnyStr`",
+    "severity": "major",
+    "fingerprint": "a2be96c3d724b5f5",
+    "location": {
+      "path": "scraper.py",
+      "positions": {
+        "begin": {
+          "line": 914,
+          "column": 45
+        },
+        "end": {
+          "line": 914,
+          "column": 54
+        }
+      }
+    }
+  },
+  {
+    "check_name": "invalid-argument-type",
+    "description": "invalid-argument-type: Argument to function `urljoin` is incorrect: Expected `AnyStr@urljoin | None`, found `(str & ~AlwaysFalsy) | (AttributeValueList & ~AlwaysFalsy)`: Inferred lower bound `(str & ~AlwaysFalsy) | (AttributeValueList & ~AlwaysFalsy)` does not satisfy constraints (`str`, `bytes`) of type variable `AnyStr`",
+    "severity": "major",
+    "fingerprint": "399939edbfbce547",
+    "location": {
+      "path": "scraper.py",
+      "positions": {
+        "begin": {
+          "line": 1043,
+          "column": 34
+        },
+        "end": {
+          "line": 1043,
+          "column": 37
+        }
+      }
+    }
+  },
+  {
+    "check_name": "missing-union-attribute",
+    "description": "missing-union-attribute: Attribute `strip` is not defined on `AttributeValueList` in union `str | AttributeValueList`",
+    "severity": "major",
+    "fingerprint": "458c9dbb8e2888f1",
+    "location": {
+      "path": "scraper.py",
+      "positions": {
+        "begin": {
+          "line": 1121,
+          "column": 20
+        },
+        "end": {
+          "line": 1121,
+          "column": 35
+        }
+      }
+    }
+  },
+  {
+    "check_name": "import-not-found",
+    "description": "import-not-found: Cannot resolve imported module `googlesearch`",
+    "severity": "major",
+    "fingerprint": "d8d6a6d2e04e144f",
+    "location": {
+      "path": "scraper.py",
+      "positions": {
+        "begin": {
+          "line": 1227,
+          "column": 10
+        },
+        "end": {
+          "line": 1227,
+          "column": 22
+        }
+      }
+    }
+  },
+  {
+    "check_name": "invalid-argument-type",
+    "description": "invalid-argument-type: Argument to function `_expand_srcset` is incorrect: Expected `str`, found `(str & ~AlwaysFalsy) | (AttributeValueList & ~AlwaysFalsy)`",
+    "severity": "major",
+    "fingerprint": "d34a0832c4573166",
+    "location": {
+      "path": "scraper.py",
+      "positions": {
+        "begin": {
+          "line": 1307,
+          "column": 49
+        },
+        "end": {
+          "line": 1307,
+          "column": 52
+        }
+      }
+    }
+  },
+  {
+    "check_name": "invalid-argument-type",
+    "description": "invalid-argument-type: Argument to function `urljoin` is incorrect: Expected `AnyStr@urljoin | None`, found `(str & ~AlwaysFalsy) | (AttributeValueList & ~AlwaysFalsy)`: Inferred lower bound `(str & ~AlwaysFalsy) | (AttributeValueList & ~AlwaysFalsy)` does not satisfy constraints (`str`, `bytes`) of type variable `AnyStr`",
+    "severity": "major",
+    "fingerprint": "9a12efb04cc3c642",
+    "location": {
+      "path": "scraper.py",
+      "positions": {
+        "begin": {
+          "line": 1307,
+          "column": 94
+        },
+        "end": {
+          "line": 1307,
+          "column": 97
+        }
+      }
+    }
+  },
+  {
+    "check_name": "invalid-argument-type",
+    "description": "invalid-argument-type: Argument to function `urljoin` is incorrect: Expected `AnyStr@urljoin | None`, found `str | AttributeValueList`: Inferred lower bound `str | AttributeValueList` does not satisfy constraints (`str`, `bytes`) of type variable `AnyStr`",
+    "severity": "major",
+    "fingerprint": "9a61cd598ab168c",
+    "location": {
+      "path": "scraper.py",
+      "positions": {
+        "begin": {
+          "line": 1321,
+          "column": 37
+        },
+        "end": {
+          "line": 1321,
+          "column": 46
+        }
+      }
+    }
+  },
+  {
+    "check_name": "import-not-found",
+    "description": "import-not-found: Cannot resolve imported module `magic`",
+    "severity": "major",
+    "fingerprint": "af018bde72a886aa",
+    "location": {
+      "path": "sortplan.py",
+      "positions": {
+        "begin": {
+          "line": 287,
+          "column": 16
+        },
+        "end": {
+          "line": 287,
+          "column": 21
+        }
+      }
+    }
+  },
+  {
+    "check_name": "import-not-found",
+    "description": "import-not-found: Cannot resolve imported module `pypdf`",
+    "severity": "major",
+    "fingerprint": "25b6e033389f219f",
+    "location": {
+      "path": "sortplan.py",
+      "positions": {
+        "begin": {
+          "line": 305,
+          "column": 22
+        },
+        "end": {
+          "line": 305,
+          "column": 27
+        }
+      }
+    }
+  },
+  {
+    "check_name": "missing-attribute",
+    "description": "missing-attribute: Unresolved attribute `_strip_python_cst_types_v1` on type `Thread`",
+    "severity": "major",
+    "fingerprint": "ebd41a9f24f2b10a",
+    "location": {
+      "path": "strip_python.py",
+      "positions": {
+        "begin": {
+          "line": 386,
+          "column": 9
+        },
+        "end": {
+          "line": 386,
+          "column": 42
+        }
+      }
+    }
+  },
+  {
+    "check_name": "missing-attribute",
+    "description": "missing-attribute: Unresolved attribute `_strip_python_worker_state_v1` on type `Thread`",
+    "severity": "major",
+    "fingerprint": "e0554f0c7851b2f5",
+    "location": {
+      "path": "strip_python.py",
+      "positions": {
+        "begin": {
+          "line": 570,
+          "column": 9
+        },
+        "end": {
+          "line": 570,
+          "column": 45
+        }
+      }
+    }
+  },
+  {
+    "check_name": "invalid-argument-type",
+    "description": "invalid-argument-type: Argument to bound method `set.add` is incorrect: Expected `str`, found `str | None`",
+    "severity": "major",
+    "fingerprint": "748298373d0b45b1",
+    "location": {
+      "path": "tcs.py",
+      "positions": {
+        "begin": {
+          "line": 154,
+          "column": 25
+        },
+        "end": {
+          "line": 154,
+          "column": 34
+        }
+      }
+    }
+  },
+  {
+    "check_name": "import-not-found",
+    "description": "import-not-found: Cannot resolve imported module `cairosvg`",
+    "severity": "major",
+    "fingerprint": "145ea930117900b6",
+    "location": {
+      "path": "vsvg.py",
+      "positions": {
+        "begin": {
+          "line": 2169,
+          "column": 16
+        },
+        "end": {
+          "line": 2169,
+          "column": 24
+        }
+      }
+    }
+  },
+  {
+    "check_name": "import-not-found",
+    "description": "import-not-found: Cannot resolve imported module `pycurl`",
+    "severity": "major",
+    "fingerprint": "a3e3ec83d341093d",
+    "location": {
+      "path": "wget2.py",
+      "positions": {
+        "begin": {
+          "line": 34,
+          "column": 8
+        },
+        "end": {
+          "line": 34,
+          "column": 14
+        }
+      }
+    }
+  },
+  {
+    "check_name": "import-not-found",
+    "description": "import-not-found: Cannot resolve imported module `jsonpath_ng.ext`",
+    "severity": "major",
+    "fingerprint": "7c5514cec5526b38",
+    "location": {
+      "path": "whoiser.py",
+      "positions": {
+        "begin": {
+          "line": 53,
+          "column": 10
+        },
+        "end": {
+          "line": 53,
+          "column": 25
+        }
+      }
+    }
+  },
+  {
+    "check_name": "import-not-found",
+    "description": "import-not-found: Cannot resolve imported module `snappy`",
+    "severity": "major",
+    "fingerprint": "8dcda4a7e90bdb6a",
+    "location": {
+      "path": "xreport.py",
+      "positions": {
+        "begin": {
+          "line": 49,
+          "column": 12
+        },
+        "end": {
+          "line": 49,
+          "column": 18
+        }
+      }
+    }
+  },
+  {
+    "check_name": "import-not-found",
+    "description": "import-not-found: Cannot resolve imported module `brotlicffi`",
+    "severity": "major",
+    "fingerprint": "1806ec61f32fed9d",
+    "location": {
+      "path": "xtar.py",
+      "positions": {
+        "begin": {
+          "line": 40,
+          "column": 12
+        },
+        "end": {
+          "line": 40,
+          "column": 32
+        }
+      }
+    }
+  }
+]

@@ -62,39 +62,33 @@ Typical usage::
 """
 
 from __future__ import annotations
-from collections.abc import Callable, Iterable, Iterator, Sequence
-from concurrent.futures import ProcessPoolExecutor
-from dataclasses import dataclass, replace
-from datetime import datetime
-from enum import StrEnum
+
 import importlib
 import io
 import lzma
 import os
-from pathlib import Path
 import shutil
 import sys
 import tarfile
 import time
-from types import ModuleType, SimpleNamespace
+from collections.abc import Callable, Iterable, Iterator, Sequence
+from concurrent.futures import ProcessPoolExecutor
+from dataclasses import dataclass, replace
+from datetime import datetime
+from pathlib import Path
+from types import ModuleType
 from typing import (
-    IO,
-    TYPE_CHECKING,
-    Annotated,
     Any,
-    NoReturn,
     TypeVar,
 )
 
 _T = TypeVar("_T")
 _R = TypeVar("_R")
 
-from dh import atomic_write
-from loguru import logger
-
-
 import argparse
 
+from dh import atomic_write
+from loguru import logger
 
 __version__: str = "1.0.0"
 

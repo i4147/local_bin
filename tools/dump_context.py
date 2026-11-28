@@ -4,9 +4,9 @@
 from __future__ import annotations
 
 import argparse
+import re
 from collections import defaultdict
 from pathlib import Path
-import re
 
 _DIAG_RE = re.compile(r"^(?P<file>[^:\s]+):(?P<line>\d+):\d+:\s+(?P<rest>.*)$")
 

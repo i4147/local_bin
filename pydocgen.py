@@ -2,22 +2,19 @@
 "Generate readable markdown documentation from Python sources (libcst, tree-sitter or ast backend)."
 
 from __future__ import annotations
-import ast
-from dataclasses import dataclass, field
-import importlib
-import inspect
-from itertools import count
-from multiprocessing import get_context
-from pathlib import Path
-from types import SimpleNamespace
-from typing import IO, TYPE_CHECKING, Annotated, Any, NoReturn
-
-from dh import atomic_write
-
 
 import argparse
+import ast
+import importlib
+import inspect
 import os
 import sys
+from dataclasses import dataclass, field
+from multiprocessing import get_context
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
+
+from dh import atomic_write
 from loguru import logger
 
 logger.remove()
@@ -287,8 +284,8 @@ _TS_PARSER: Any = None
 def _ts_parser() -> Any:
     global _TS_PARSER
     if _TS_PARSER is None:
-        from tree_sitter import Language, Parser
         import tree_sitter_python as tspy
+        from tree_sitter import Language, Parser
 
         language = Language(tspy.language())
         try:
@@ -491,6 +488,7 @@ def render_markdown(info: ModuleInfo) -> str:
 
 
 def unique_path(path: Path) -> Path:
+    from itertools import count
     if not path.exists():
         return path
     for index in count(1):

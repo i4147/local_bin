@@ -2,25 +2,24 @@
 "Show images in your terminal (single-file chafa clone)."
 
 from __future__ import annotations
+
 import argparse
 import base64
-from collections.abc import Iterable
-from dataclasses import dataclass
-from enum import Enum, StrEnum
 import io
-import math
 import os
 import re
 import shutil
 import sys
-from types import SimpleNamespace
-from typing import IO, Annotated, Any, NoReturn
 import unicodedata
 import zlib
+from collections.abc import Iterable
+from dataclasses import dataclass
+from enum import Enum
+from typing import Any
 
 import numpy as np
-from PIL import Image, ImageOps
 from loguru import logger
+from PIL import Image, ImageOps
 
 logger.remove()
 logger.add(
@@ -1052,6 +1051,7 @@ def tuck_and_align(
     stretch: bool,
     align: str = "start",
 ) -> tuple[int, int, int, int]:
+    import math
     if stretch:
         return 0, 0, dest_w, dest_h
     ratio = min(dest_w / src_w, dest_h / src_h)

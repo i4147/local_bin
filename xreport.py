@@ -5,19 +5,18 @@ from __future__ import annotations
 
 import argparse
 import bz2
-from collections.abc import Callable, Iterable
-import importlib
 import gzip
+import importlib
 import json
 import lzma
 import os
-from pathlib import Path
 import shutil
 import sys
 import tarfile
-from types import SimpleNamespace
-from typing import IO, Any, NoReturn
 import zipfile
+from collections.abc import Callable, Iterable
+from pathlib import Path
+from typing import Any
 
 from dh import SKIP_DIRS, atomic_write
 from loguru import logger

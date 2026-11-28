@@ -5,19 +5,13 @@ CLI entry point built on pycurl; reads URL lists (plain/JSON/CSV), resumes
 partial downloads and writes .wget2.json manifests."""
 
 from __future__ import annotations
+
 import argparse
-from collections.abc import Callable, Generator, Iterable, Iterator, Mapping, Sequence
-from contextlib import contextmanager, suppress
 import csv
-from dataclasses import dataclass, field, replace
-from email.utils import parsedate_to_datetime
-from fnmatch import fnmatch
 import hashlib
 import io
 import json
 import os
-from pathlib import Path
-from queue import Empty, Queue
 import random
 import re
 import shutil
@@ -26,12 +20,20 @@ import string
 import sys
 import threading
 import time
-from typing import Any
 import unicodedata
+from collections.abc import Callable, Generator, Iterable, Mapping, Sequence
+from contextlib import contextmanager, suppress
+from dataclasses import dataclass, field, replace
+from email.utils import parsedate_to_datetime
+from fnmatch import fnmatch
+from pathlib import Path
+from queue import Empty, Queue
+from typing import Any
 from urllib.parse import unquote, urljoin, urlparse
 
-from dh import atomic_write
 import pycurl
+from dh import atomic_write
+from loguru import logger
 from rich.console import Console
 from rich.progress import (
     BarColumn,
@@ -41,7 +43,6 @@ from rich.progress import (
     TimeElapsedColumn,
     TransferSpeedColumn,
 )
-from loguru import logger
 
 logger.remove()
 logger.add(

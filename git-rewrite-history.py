@@ -18,19 +18,19 @@ The script never performs tree surgery or rewrites objects itself.
 """
 
 from __future__ import annotations
+
 import argparse
-from collections.abc import Sequence
-from dataclasses import asdict, dataclass, field
-from datetime import UTC, datetime
 import json
-from pathlib import Path
+import os
 import shutil
 import subprocess
 import sys
-import textwrap
+from collections.abc import Sequence
+from dataclasses import asdict, dataclass, field
+from datetime import UTC, datetime
+from pathlib import Path
 
 from dh import atomic_write
-import os
 from loguru import logger
 
 logger.remove()
@@ -631,6 +631,7 @@ def positive_int(value: str) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     """Build the command-line parser."""
+    import textwrap
     parser = argparse.ArgumentParser(
         prog="rewrite-plan",
         description="Safe planner around git-filter-repo",

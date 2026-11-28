@@ -1,0 +1,48 @@
+{
+  "command": "ty check --output-format gitlab",
+  "errors_before": 532,
+  "errors_after": 529,
+  "errors_fixed_net": 3,
+  "configured_command": "ty check --extra-search-path /tmp/local-bin-refactor-deps --output-format gitlab",
+  "configured_before": 113,
+  "configured_after": 100,
+  "configured_diagnostics_fixed_net": 13,
+  "configured_iterations": [
+    113,
+    111,
+    110,
+    106,
+    100
+  ],
+  "remaining_by_rule": {
+    "deprecated": 2,
+    "import-not-found": 50,
+    "invalid-argument-type": 11,
+    "invalid-assignment": 2,
+    "missing-attribute": 5,
+    "missing-module-member": 5,
+    "missing-union-attribute": 21,
+    "no-matching-overload": 1,
+    "unsupported-operator": 3
+  },
+  "suppressions_added": [],
+  "public_signatures_changed": [],
+  "files_changed": [
+    "consolidate2.py",
+    "consolidaze.py",
+    "py_strip.py",
+    "tools/lazy_imports.py",
+    "tools/similarity_report.py",
+    "tools/tests/test_consolidator_scope.py",
+    "tools/tests/test_py_strip_walk.py"
+  ],
+  "tests": "16 passed",
+  "compileall": "all seven changed Python files passed",
+  "status": "incomplete",
+  "notes": [
+    "Default and configured results are not comparable: configured check uses extra temporary dependencies, including dh-slim from i4147/dh.",
+    "Some scripts explicitly target Python versions later than the 3.11 checker environment.",
+    "Remaining optional dependencies and source diagnostics need review; no ignore comments added.",
+    "Changes included in PR branch commit 72fa73b."
+  ]
+}

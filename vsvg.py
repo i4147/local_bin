@@ -32,30 +32,30 @@ Environment: Linux, Python 3.12+.  No hard dependencies.
 """
 
 from __future__ import annotations
-from array import array
+
+import argparse
 import base64
-from collections import Counter
-from collections.abc import Iterable, Sequence
 import contextlib
-from enum import StrEnum
 import fcntl
 import glob
 import math
 import os
-from pathlib import Path
 import re
 import select
 import signal
 import struct
-import argparse
 import sys
 import termios
 import time
 import tty
-from types import SimpleNamespace
-from typing import Any
 import xml.etree.ElementTree as ET
 import zlib
+from array import array
+from collections import Counter
+from collections.abc import Iterable, Sequence
+from enum import StrEnum
+from typing import Any
+
 from loguru import logger
 
 logger.remove()

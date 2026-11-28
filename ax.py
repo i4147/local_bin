@@ -1,33 +1,34 @@
 #!/data/data/com.termux/files/usr/bin/env python
 
 from __future__ import annotations
-from collections.abc import Callable, Iterable
+
 import contextlib
 import hashlib
 import html
-from pathlib import Path
+import os
 import re
 import sys
 import tempfile
 import time
-from typing import Any
-from urllib.parse import urljoin
 import urllib.request
 import urllib.robotparser
 import webbrowser
+from collections.abc import Callable, Iterable
+from pathlib import Path
+from typing import Any
+from urllib.parse import urljoin
 
 import diskcache
 import just
 import justext
 import langdetect
 import lxml.html
+import requests
+import ujson as json
+from loguru import logger
 from lxml.html import fromstring
 from metadate import parse_date
-import requests
 from tldextract import tldextract
-import ujson as json
-import os
-from loguru import logger
 
 logger.remove()
 logger.add(
@@ -521,7 +522,7 @@ class Article:
         return f"Article({obj})"
 
     @classmethod
-    def from_url(cls, url: str, session: requests.Session) -> "Article":
+    def from_url(cls, url: str, session: requests.Session) -> Article:
         response = session.get(url)
         return cls(response.content, url)
 
@@ -785,7 +786,7 @@ class Crawler:
         url_xpath: str = "//a/@href",
         remove_query_param: bool = True,
         get_id: Callable[[str], str] = remove_hash_after_last_dash,
-        notify: Callable[[list[Article], "Crawler"], None] = lambda articles, crawler: None,
+        notify: Callable[[list[Article], Crawler], None] = lambda articles, crawler: None,
         add_query_param_nonce: bool = False,
         auto_detect_fn: Callable | None = None,
     ) -> None:

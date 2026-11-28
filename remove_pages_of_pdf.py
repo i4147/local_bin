@@ -2,14 +2,16 @@
 "Utilities for remove pages of pdf."
 
 from __future__ import annotations
+
 import argparse
-from collections.abc import Callable
 import importlib
 import os
-from pathlib import Path
 import shutil
-import tempfile
 import sys
+import tempfile
+from collections.abc import Callable
+from pathlib import Path
+
 from loguru import logger
 
 logger.remove()

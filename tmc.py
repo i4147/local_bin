@@ -6,12 +6,8 @@ from __future__ import annotations
 
 import argparse
 import ast
-from collections.abc import Callable, Iterable, Iterator, Sequence
 import concurrent.futures as cf
-from contextlib import nullcontext, suppress
 import dataclasses
-from dataclasses import dataclass
-import difflib
 import fnmatch
 import importlib
 import importlib.util
@@ -19,24 +15,24 @@ import io
 import json
 import multiprocessing as mp
 import os
-from pathlib import Path
 import re
-import shlex
 import signal
 import stat
 import sys
 import tempfile
-import textwrap
-from time import perf_counter
 import tokenize
 import traceback
+from collections.abc import Callable, Iterable, Iterator, Sequence
+from contextlib import nullcontext, suppress
+from dataclasses import dataclass
+from pathlib import Path
+from time import perf_counter
 from typing import TYPE_CHECKING, Any, Final, Protocol, TypeVar, cast
 
-from dh import MAX_WORKERS, SKIP_DIRS, atomic_write
 import libcst as cst
+from dh import MAX_WORKERS, SKIP_DIRS, atomic_write
 from loguru import logger
 from rich.progress import Progress
-
 
 if TYPE_CHECKING:
     from rich.progress import TaskID
@@ -99,6 +95,7 @@ def _is_trivial(node: ast.stmt) -> bool:
 
 
 def _looks_like_code(values: Iterable[str]) -> bool:
+    import textwrap
     lines: list[str] = []
     for value in values:
         body = value[1:]
@@ -346,6 +343,7 @@ class Stripper(cst.CSTTransformer):
 
 def make_diff(before: str, after: str, name: str) -> str:
     "Create diff."
+    import difflib
     output: list[str] = []
     for line in difflib.unified_diff(
         before.splitlines(keepends=True),
@@ -490,6 +488,7 @@ def is_skip_dir(path: Path) -> bool:
 
 def is_python_file(path: Path, issues: list[DiscoveryIssue] | None = None) -> bool:
     "Return whether python file."
+    import shlex
     if path.suffix.lower() == ".py":
         return True
     if path.suffix:
@@ -701,10 +700,12 @@ def make_rich_ui(color_mode: str) -> tuple[Progress, Callable[[str], None]]:
     from rich.console import Console
     from rich.progress import (
         BarColumn,
-        Progress as RichProgress,
         TaskProgressColumn,
         TextColumn,
         TimeElapsedColumn,
+    )
+    from rich.progress import (
+        Progress as RichProgress,
     )
     from rich.text import Text
 

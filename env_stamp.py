@@ -134,17 +134,13 @@ Limitations
 """
 
 from __future__ import annotations
-from concurrent.futures import ThreadPoolExecutor
-from dataclasses import asdict, dataclass, replace
-from datetime import UTC, datetime
-from enum import StrEnum
+
+import argparse
 import hashlib
-from importlib.metadata import Distribution, distributions
 import json
 import locale
 import math
 import os
-from pathlib import Path
 import platform
 import re
 import shutil
@@ -154,14 +150,15 @@ import sysconfig
 import tempfile
 import threading
 import time
-from types import SimpleNamespace
-from typing import IO, TYPE_CHECKING, Annotated, Any, ClassVar, NoReturn, TypeVar
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import asdict, dataclass, replace
+from datetime import UTC, datetime
+from importlib.metadata import Distribution, distributions
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, ClassVar, TypeVar
 from venv import create as _venv_create
 
 from dh import atomic_write
-
-
-import argparse
 from loguru import logger
 
 logger.remove()

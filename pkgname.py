@@ -24,20 +24,21 @@ against the live PyPI API unless ``--source local`` was chosen.
 """
 
 from __future__ import annotations
+
 import argparse
 import asyncio
-from collections import OrderedDict
-from collections.abc import Iterator, Sequence
-from dataclasses import dataclass, field
-from enum import Enum
 import hashlib
 import json
 import keyword
 import os
-from pathlib import Path
 import re
 import sys
 import time
+from collections import OrderedDict
+from collections.abc import Iterator, Sequence
+from dataclasses import dataclass, field
+from enum import Enum
+from pathlib import Path
 from types import TracebackType
 from typing import Any, Self
 
@@ -51,7 +52,6 @@ from tenacity import (
     stop_after_attempt,
     wait_exponential,
 )
-
 
 _msgpack: Any
 try:

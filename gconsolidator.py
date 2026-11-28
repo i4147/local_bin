@@ -8,8 +8,18 @@ code generation.
 """
 
 from __future__ import annotations
+
 import argparse
 import base64
+import configparser
+import json
+import os
+import re
+import subprocess
+import sys
+import tempfile
+import time
+import tomllib
 from collections.abc import Callable, Sequence
 from concurrent.futures import (
     Executor,
@@ -17,17 +27,8 @@ from concurrent.futures import (
     ThreadPoolExecutor,
     as_completed,
 )
-import configparser
 from dataclasses import dataclass, field
-import json
-import os
 from pathlib import Path
-import re
-import subprocess
-import sys
-import tempfile
-import time
-import tomllib
 
 import libcst as cst
 import libcst.matchers as m

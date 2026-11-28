@@ -8,20 +8,18 @@
 # return full type annotated code
 
 from __future__ import annotations
+
 import argparse
-from collections import defaultdict
-from dataclasses import dataclass, field
-import difflib
-from functools import partial
 import io
-from itertools import chain
-from multiprocessing import Pool
 import os
-from pathlib import Path
 import stat
 import sys
 import tempfile
 import tokenize
+from collections import defaultdict
+from dataclasses import dataclass, field
+from multiprocessing import Pool
+from pathlib import Path
 from typing import Literal, TypeGuard, cast
 
 import libcst as cst
@@ -35,7 +33,6 @@ from libcst.metadata.scope_provider import (
     ImportAssignment,
 )
 from loguru import logger
-
 
 Owner = cst.FunctionDef | cst.ClassDef
 SmallImport = cst.Import | cst.ImportFrom
@@ -374,6 +371,7 @@ def move_imports(source, *, filename="<string>", encoding="utf-8"):
 
 
 def _make_diff(path, before, after):
+    import difflib
     return "".join(
         line + "\n"
         for line in difflib.unified_diff(
@@ -585,6 +583,8 @@ def build_parser():
 
 
 def main(argv=None):
+    from functools import partial
+    from itertools import chain
     _configure_logging("auto")
     args = build_parser().parse_intermixed_args(argv)
     paths = cast(list[Path], args.paths)

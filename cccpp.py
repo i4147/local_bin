@@ -1,15 +1,16 @@
 #!/data/data/com.termux/files/usr/bin/env python
 from __future__ import annotations
+
 import argparse
+import os
+import sys
 from multiprocessing import Pool
 from pathlib import Path
-import sys
 
-from loguru import logger
-from tree_sitter import Language, Parser
 import tree_sitter_c
 import tree_sitter_cpp
-import os
+from loguru import logger
+from tree_sitter import Language, Parser
 
 logger.remove()
 logger.add(

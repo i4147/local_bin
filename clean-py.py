@@ -5,37 +5,35 @@ CLI entry point; processes files or directory roots (default '.') and preserves
 shebangs, coding cookies and protected comments unless told otherwise."""
 
 from __future__ import annotations
+
 import argparse
 import ast
 import codecs
-from collections.abc import Generator, Iterator, Sequence
-from contextlib import closing, contextmanager, nullcontext
-from difflib import unified_diff
-from enum import Enum
 import errno
 import hashlib
 import io
-from itertools import islice
 import multiprocessing as mp
 import os
-from pathlib import Path
 import re
 import sqlite3
 import stat
 import sys
 import tempfile
-import textwrap
 import token
 import tokenize
+from collections.abc import Generator, Iterator, Sequence
+from contextlib import closing, contextmanager, nullcontext
+from enum import Enum
+from pathlib import Path
 from typing import Any, Literal, NamedTuple
 
 import libcst as cst
 from libcst.metadata import CodePosition, MetadataWrapper, PositionProvider
+from loguru import logger
 from rich.console import Console
 from rich.segment import Segment, Segments
 from rich.style import Style
 from rich.text import Text
-from loguru import logger
 
 logger.remove()
 logger.add(
@@ -149,6 +147,7 @@ def preserved(source: str) -> set[CodePosition]:
     block: list[tokenize.TokenInfo] = []
 
     def flush() -> None:
+        import textwrap
         if block:
             parts = [t.string[1:].removeprefix(" ").rstrip() for t in block]
             dedented = textwrap.dedent("\n".join(parts))
@@ -371,6 +370,7 @@ def _ast_equal(a: object, b: object) -> bool:
 
 def remove_blank_lines(source: str) -> str:
     """Drop only safe physical blank lines, without normalizing line endings."""
+    from itertools import islice
     lines = io.StringIO(source, newline="").readlines()
     drop = {i for i, line in enumerate(lines, 1) if not line.strip(" \t\f\r\n")}
     if not drop:
@@ -431,6 +431,7 @@ def error_text(exc: Exception) -> str:
 
 def patch(before: str, after: str, path: Path) -> Iterator[str]:
     """Yield patch from the supplied input."""
+    from difflib import unified_diff
     name = display(path)
     old, new = (io.StringIO(s, newline="").readlines() for s in (before, after))
     for line in unified_diff(old, new, fromfile=name, tofile=name):

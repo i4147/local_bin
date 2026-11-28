@@ -5,19 +5,17 @@ from __future__ import annotations
 
 import argparse
 import ast
-from collections.abc import Sequence
-from dataclasses import dataclass, field
-from pathlib import Path
 import re
 import sys
 import time
-from types import SimpleNamespace
-from typing import Annotated, NoReturn
 import warnings
+from collections.abc import Sequence
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import NoReturn
 
 from dh import MAX_WORKERS, atomic_write
 from loguru import logger
-
 
 LOGURU_LOGFORMAT: str = "{time:YYYY-MM-DD HH:mm:ss.SSS} {level} {file.name}:{line} {message}"
 MERGED_FILE_HEADER_RE: re.Pattern[str] = re.compile(r"^#\s*File:\s*(.+?)\s*$", re.MULTILINE)

@@ -6,17 +6,12 @@ recursively processes Python files under the current directory. Typer is used
 when available; otherwise the script falls back to argparse.
 """
 
-import sys
-
-if sys.version_info < (3, 10):
-    raise SystemExit("refactor-imports requires Python 3.10 or newer")
-
 import argparse
-import difflib
 import io
 import os
 import re
 import stat
+import sys
 import tempfile
 import tokenize
 from collections import Counter, defaultdict
@@ -25,10 +20,9 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from enum import Enum
 from fnmatch import fnmatchcase
-from functools import lru_cache
 from pathlib import Path
-from textwrap import dedent
-from typing import Annotated, Any, BinaryIO, Final, TypeAlias, cast
+from typing import Any, BinaryIO, Final, TypeAlias, cast
+
 from loguru import logger
 
 logger.remove()
@@ -663,6 +657,7 @@ def flush_stdout() -> None:
 
 
 def emit_diff(before: str, after: str, path: Path, context: int, color: Color) -> None:
+    import difflib
     enabled = color_enabled(color)
     diff: Iterable[str] = difflib.unified_diff(
         before.splitlines(True),
@@ -1005,6 +1000,7 @@ def positive_int(value: str) -> int:
 
 
 def build_argparse_parser() -> argparse.ArgumentParser:
+    from textwrap import dedent
     parser = argparse.ArgumentParser(
         prog=PROG,
         allow_abbrev=False,

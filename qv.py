@@ -22,25 +22,26 @@ separate files/scripts rather than bloating the main CLI.
 """
 
 from __future__ import annotations
+
 import argparse
 import base64
-from collections.abc import Generator, Iterator, Sequence
-from contextlib import contextmanager, nullcontext, suppress
-from dataclasses import dataclass
-from datetime import datetime
-import difflib
 import fnmatch
 import hashlib
 import json
 import os
-from pathlib import Path
 import pydoc
 import re
 import signal
 import subprocess
 import sys
 import time
+from collections.abc import Generator, Iterator, Sequence
+from contextlib import contextmanager, nullcontext, suppress
+from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
 from typing import Any, ContextManager
+
 from loguru import logger
 
 logger.remove()
@@ -943,6 +944,7 @@ def copy_paths(paths: Sequence[str]) -> bool:
 
 
 def show_diff(path_a: Path, path_b: Path) -> None:
+    import difflib
     try:
         a = path_a.read_text(encoding="utf-8", errors="replace").splitlines(keepends=True)
         b = path_b.read_text(encoding="utf-8", errors="replace").splitlines(keepends=True)

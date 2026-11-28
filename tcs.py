@@ -9,16 +9,17 @@ from __future__ import annotations
 
 import ast
 import builtins
-from collections import Counter
-from collections.abc import Iterator
-from itertools import count, product
 import keyword
-from pathlib import Path
+import os
 import string
 import subprocess
 import sys
+from collections import Counter
+from collections.abc import Iterator
+from itertools import count, product
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, NoReturn, TypeVar
-import os
+
 from loguru import logger
 
 logger.remove()
@@ -148,10 +149,7 @@ def _name_stats(tree: ast.AST) -> tuple[set[str], Counter]:
         elif isinstance(node, ast.arg):
             freq[node.arg] += 1
             defined.add(node.arg)
-        elif isinstance(node, SCOPE_NODES):
-            freq[node.name] += 1
-            defined.add(node.name)
-        elif isinstance(node, ast.ExceptHandler) and node.name:
+        elif isinstance(node, SCOPE_NODES) or isinstance(node, ast.ExceptHandler) and node.name:
             freq[node.name] += 1
             defined.add(node.name)
     return defined, freq

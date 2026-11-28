@@ -2,35 +2,33 @@
 "Utilities for scraper."
 
 from __future__ import annotations
+
 import argparse
-from collections import defaultdict, deque
-from collections.abc import Iterable
 import contextlib
-from datetime import UTC, datetime, timedelta
-from enum import StrEnum
 import hashlib
 import importlib.util
-from io import BytesIO
 import json
 import multiprocessing as mp
 import os
-from pathlib import Path
 import random
 import re
 import signal
 import string
 import sys
 import time
-from types import SimpleNamespace
-from typing import IO, Annotated, Any, NoReturn
+from collections import defaultdict, deque
+from collections.abc import Iterable
+from datetime import UTC, datetime, timedelta
+from io import BytesIO
+from pathlib import Path
+from typing import Any
 from urllib.parse import urldefrag, urljoin, urlparse
 from urllib.robotparser import RobotFileParser
 
+import requests
 from bs4 import BeautifulSoup, Tag
 from dh import MAX_WORKERS, atomic_write
 from loguru import logger
-import requests
-
 
 DEFAULT_UA: str = "Mozilla/5.0 (compatible; MergedTools/1.0)"
 _COLORS: dict[str, str] = {

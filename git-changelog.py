@@ -55,26 +55,27 @@ Requires Python 3.11+, git 2.21+, ``typer``, ``rich`` and ``loguru``.
 """
 
 from __future__ import annotations
+
 import argparse
 import ast
-from collections import Counter
-from collections.abc import Callable, Hashable, Iterable, Iterator, Sequence
-from concurrent.futures import ThreadPoolExecutor
 import dataclasses
-from dataclasses import dataclass, field
 import difflib
-from enum import StrEnum
 import hashlib
 import json
 import os
-from pathlib import Path, PurePosixPath
 import re
 import shutil
 import subprocess
 import sys
 import tarfile
 import tempfile
-from typing import Annotated, Any
+from collections import Counter
+from collections.abc import Callable, Hashable, Iterable, Iterator, Sequence
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass, field
+from enum import StrEnum
+from pathlib import Path, PurePosixPath
+from typing import Any
 
 from dh import atomic_write
 from loguru import logger
@@ -82,7 +83,6 @@ from rich.console import Console
 from rich.markdown import Markdown
 from rich.table import Table
 from rich.text import Text
-
 
 __all__: list[str] = [
     "ApiChange",

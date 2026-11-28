@@ -7,27 +7,26 @@ No pools, native parsers, Rust walker, Rich, Loguru, or third-party packages.
 """
 
 from __future__ import annotations
+
 import argparse
 import ast
-from collections.abc import Iterator
-from dataclasses import asdict, dataclass
-import difflib
 import fnmatch
 import io
 import json
 import os
-from pathlib import Path
 import re
 import shlex
 import stat
 import sys
 import tempfile
-from time import perf_counter
 import tokenize
 import traceback
+from collections.abc import Iterator
+from dataclasses import asdict, dataclass
+from pathlib import Path
+from time import perf_counter
 
 from loguru import logger
-
 
 log = logger
 LOGGER = logger
@@ -276,6 +275,7 @@ class ASTStripper:
 
 def make_diff(before: str, after: str, name: str) -> str:
     """Unified diff with explicit markers for missing final newlines."""
+    import difflib
     output: list[str] = []
     for line in difflib.unified_diff(
         before.splitlines(keepends=True),

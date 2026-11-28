@@ -52,8 +52,6 @@ import argparse
 import ast as _pyast
 import base64
 import dataclasses
-import io
-import json
 import keyword
 import os
 import re
@@ -63,11 +61,13 @@ import subprocess
 import sys
 import tempfile
 import textwrap
-import tokenize
-import types
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Set, Tuple, Union
+from typing import (
+    Any,
+)
+
 from loguru import logger
 
 logger.remove()
@@ -79,19 +79,20 @@ logger.add(
 
 try:
     import libcst as cst
-    from libcst import RemovalSentinel, RemovalSentinel as _RS
+    from libcst import RemovalSentinel
+    from libcst import RemovalSentinel as _RS
     from libcst.metadata import (
-        MetadataWrapper,
-        ScopeProvider,
         ExpressionContextProvider,
+        MetadataWrapper,
         ParentNodeProvider,
+        ScopeProvider,
     )
     from libcst.metadata.scope_provider import (
-        GlobalScope,
-        FunctionScope,
+        BuiltinScope,
         ClassScope,
         ComprehensionScope,
-        BuiltinScope,
+        FunctionScope,
+        GlobalScope,
         Scope,
     )
 except ImportError:  # pragma: no cover
@@ -188,7 +189,7 @@ SECTION_TITLES = {
 }
 
 
-def rel_posix(path: Union[str, Path]) -> str:
+def rel_posix(path: str | Path) -> str:
     return Path(path).as_posix()
 
 
@@ -246,7 +247,7 @@ def wrap_base64(b64: str, width: int = 76) -> str:
     return "\n".join(b64[i : i + width] for i in range(0, len(b64), width))
 
 
-def parse_literal_list(node) -> Optional[List[str]]:
+def parse_literal_list(node) -> list[str] | None:
     """If a libcst expression is a list/tuple of string literals, return them."""
     if isinstance(node, (cst.List, cst.Tuple)):
         out = []
@@ -276,7 +277,7 @@ def parse_literal_list(node) -> Optional[List[str]]:
     return None
 
 
-def static_string_value(node) -> Optional[str]:
+def static_string_value(node) -> str | None:
     """Best-effort static evaluation of a SimpleString / concatenation."""
     if isinstance(node, cst.SimpleString):
         try:
@@ -342,9 +343,9 @@ class ModuleInfo:
     rel_posix_path: str  # "utils/text.py" relative to package dir
     tree: cst.Module = field(default_factory=lambda: cst.Module(body=[]))
     wrapper: MetadataWrapper = field(default_factory=lambda: MetadataWrapper(cst.Module(body=[])))
-    scope: Mapping[cst.CSTNode, Optional[Scope]] = field(default_factory=dict)
+    scope: Mapping[cst.CSTNode, Scope | None] = field(default_factory=dict)
     # names bound by module-level imports that resolve to stdlib/3rd-party
-    ext_imports: List[dict] = field(default_factory=list)
+    ext_imports: list[dict] = field(default_factory=list)
     has_main_guard: bool = False
 
     @property
@@ -362,8 +363,8 @@ class DataFile:
     rel_posix_path: str  # "fonts/F.ttf" relative to package dir
     abs_path: Path
     kind: str = "binary"  # "binary" | "text"
-    text: Optional[str] = None  # decoded text when kind == "text"
-    b64: Optional[str] = None  # base64 payload when kind == "binary"
+    text: str | None = None  # decoded text when kind == "text"
+    b64: str | None = None  # base64 payload when kind == "binary"
 
 
 @dataclass
@@ -376,9 +377,9 @@ class EntryPoints:
     func_name: str
 
 
-def read_entry_points(pkg_root: Path, pkg_name: str) -> List[EntryPoints]:
+def read_entry_points(pkg_root: Path, pkg_name: str) -> list[EntryPoints]:
     """Read console_scripts from pyproject.toml / setup.py / setup.cfg, best-effort."""
-    out: List[EntryPoints] = []
+    out: list[EntryPoints] = []
     toml = pkg_root / "pyproject.toml"
     try:
         import tomllib
@@ -399,13 +400,13 @@ def read_entry_points(pkg_root: Path, pkg_name: str) -> List[EntryPoints]:
         try:
             data = tomllib.loads(toml.read_text("utf-8", errors="replace"))
             for sect in ("scripts", "gui-scripts"):
-                for name, ref in (data.get("project", {}).get(sect) or {}).items():
+                for ref in (data.get("project", {}).get(sect) or {}).values():
                     add(str(ref))
             cs = (data.get("tool", {}).get("poetry", {}).get("scripts")) or {}
-            for name, ref in cs.items():
+            for ref in cs.values():
                 add(str(ref))
             cs = (data.get("project", {}).get("entry-points", {}) or {}).get("console-scripts") or {}
-            for name, ref in cs.items():
+            for ref in cs.values():
                 add(str(ref))
         except Exception:
             pass
@@ -426,11 +427,11 @@ def read_entry_points(pkg_root: Path, pkg_name: str) -> List[EntryPoints]:
     if setup_py.is_file():
         try:
             src = setup_py.read_text("utf-8", errors="replace")
-            for m in re.finditer(r"['\"]console_scripts['\"]\s*:\s*{([^}]*)}", src, re.S):
+            for m in re.finditer(r"['\"]console_scripts['\"]\s*:\s*{([^}]*)}", src, re.DOTALL):
                 body = m.group(1)
                 for pair in re.finditer(r"['\"]([^'\"]+)['\"]\s*:\s*['\"]([^'\"]+)['\"]", body):
                     add(pair.group(2))
-            for m in re.finditer(r"entry_points\s*=\s*{[^}]*['\"]console_scripts['\"]\s*:\s*\[([^\]]*)\]", src, re.S):
+            for m in re.finditer(r"entry_points\s*=\s*{[^}]*['\"]console_scripts['\"]\s*:\s*\[([^\]]*)\]", src, re.DOTALL):
                 for pair in re.finditer(r"['\"]([^'\"]=]+)=([^'\"]+)['\"]", m.group(1)):
                     add(pair.group(2))
         except Exception:
@@ -445,10 +446,10 @@ def read_entry_points(pkg_root: Path, pkg_name: str) -> List[EntryPoints]:
     return uniq
 
 
-def discover(pkg_root: Path, pkg_name: str) -> Tuple[List[ModuleInfo], List[DataFile]]:
+def discover(pkg_root: Path, pkg_name: str) -> tuple[list[ModuleInfo], list[DataFile]]:
     """Collect .py modules (as ModuleInfo) and data files of the package."""
-    modules: List[ModuleInfo] = []
-    data_files: List[DataFile] = []
+    modules: list[ModuleInfo] = []
+    data_files: list[DataFile] = []
     pkg_root = pkg_root.resolve()
     init = pkg_root / "__init__.py"
     if not init.is_file():
@@ -462,7 +463,7 @@ def discover(pkg_root: Path, pkg_name: str) -> Tuple[List[ModuleInfo], List[Data
         for fn in sorted(filenames):
             p = Path(dirpath) / fn
             rel = p.relative_to(pkg_root).as_posix()
-            if fn.endswith(".py") or fn.endswith(".pyi"):
+            if fn.endswith((".py", ".pyi")):
                 if fn.endswith(".pyi") and (p.with_suffix(".py")).is_file():
                     continue  # prefer the .py when both exist
                 if fn == "setup.py" and rel == "setup.py":
@@ -505,14 +506,14 @@ def discover(pkg_root: Path, pkg_name: str) -> Tuple[List[ModuleInfo], List[Data
     return modules, data_files
 
 
-def topo_sort_modules(modules: List[ModuleInfo], warnings_out: List[str]) -> List[ModuleInfo]:
+def topo_sort_modules(modules: list[ModuleInfo], warnings_out: list[str]) -> list[ModuleInfo]:
     """Order modules so intra-package importers run after imported modules.
 
     Handles cycles by dropping the back-edge of a cycle (with a warning).
     """
     by_dotted = {m.dotted: m for m in modules}
-    deps: Dict[str, Set[str]] = {m.dotted: set() for m in modules}
-    incoming: Dict[str, Set[str]] = {m.dotted: set() for m in modules}
+    deps: dict[str, set[str]] = {m.dotted: set() for m in modules}
+    incoming: dict[str, set[str]] = {m.dotted: set() for m in modules}
 
     for m in modules:
         # cheap AST scan for imported dotted names
@@ -542,7 +543,7 @@ def topo_sort_modules(modules: List[ModuleInfo], warnings_out: List[str]) -> Lis
                         deps[m.dotted].add(cand)
                         incoming[cand].add(m.dotted)
 
-    result: List[ModuleInfo] = []
+    result: list[ModuleInfo] = []
     ready = [m.dotted for m in modules if not deps[m.dotted]]
     # keep deterministic order
     order_index = {m.dotted: i for i, m in enumerate(modules)}
@@ -580,13 +581,13 @@ class StmtInfo:
     """A top-level (or flattened-out) statement of one module."""
 
     module: ModuleInfo
-    node: Union[cst.CSTNode, _StmtBundle]  # the statement (SimpleStatementLine / BaseCompoundStatement)
+    node: cst.CSTNode | _StmtBundle  # the statement (SimpleStatementLine / BaseCompoundStatement)
     order: int  # original index within the flattened stream
-    stores: Set[str] = field(default_factory=set)  # global names it binds
-    loads: Set[str] = field(default_factory=set)  # global names it reads
+    stores: set[str] = field(default_factory=set)  # global names it binds
+    loads: set[str] = field(default_factory=set)  # global names it reads
     deferred: bool = False  # def/class/assign-to-callable → body not executed now
-    loads_at_exec: Set[str] = field(default_factory=set)  # names read at module-exec time
-    star_export: Optional[str] = None  # "mod.dotted" for `from .x import *`
+    loads_at_exec: set[str] = field(default_factory=set)  # names read at module-exec time
+    star_export: str | None = None  # "mod.dotted" for `from .x import *`
     is_del: bool = False
 
     @property
@@ -594,7 +595,7 @@ class StmtInfo:
         return f"{self.module.dotted}#{self.order}"
 
 
-def _iter_flat(stmts: Sequence[cst.CSTNode], out: List[Any], counter: List[int]):
+def _iter_flat(stmts: Sequence[cst.CSTNode], out: list[Any], counter: list[int]):
     """Flatten if/try/for/while bodies at module level into the main stream.
 
     ``if`` statements whose branches are both live become sequential code
@@ -618,7 +619,7 @@ def _iter_flat(stmts: Sequence[cst.CSTNode], out: List[Any], counter: List[int])
             # hoist try body; keep except handlers as separate try statements
             _iter_flat(stmt.body.body, out, counter)
             for handler in stmt.handlers:
-                h = cst.Try(
+                cst.Try(
                     body=cst.IndentedBlock(body=[(cst.Raise() if False else _hoisted_handler_body(handler))]),
                     handlers=[],
                 )
@@ -627,13 +628,12 @@ def _iter_flat(stmts: Sequence[cst.CSTNode], out: List[Any], counter: List[int])
                 # statement is safer for import fallbacks; but import fallbacks
                 # across intra-package modules must collapse. Handle below via
                 # import rewriting instead.
-                pass
             out.append((stmt, counter[0]))
             continue
         out.append((stmt, counter[0]))
 
 
-def _as_body(orelse) -> List[cst.CSTNode]:
+def _as_body(orelse) -> list[cst.CSTNode]:
     if isinstance(orelse, cst.Else):
         return list(orelse.body.body)
     if isinstance(orelse, cst.If):
@@ -645,13 +645,12 @@ def _hoisted_handler_body(handler):  # pragma: no cover - unused, kept for clari
     raise NotImplementedError
 
 
-def iter_module_statements(mod: ModuleInfo, warnings: List[str]) -> Tuple[List[StmtInfo], Optional[cst.If]]:
+def iter_module_statements(mod: ModuleInfo, warnings: list[str]) -> tuple[list[StmtInfo], cst.If | None]:
     """Return the flattened top-level statement stream of a module + main guard."""
-    out: List[Tuple[str, cst.CSTNode, int]] = []
     counter = [0]
 
-    stream: List[Tuple[cst.CSTNode, int]] = []
-    main_guard: Optional[cst.If] = None
+    stream: list[tuple[cst.CSTNode, int]] = []
+    main_guard: cst.If | None = None
     for stmt in mod.tree.body:
         if isinstance(stmt, cst.SimpleStatementLine):
             if len(stmt.body) > 1:
@@ -687,7 +686,7 @@ def iter_module_statements(mod: ModuleInfo, warnings: List[str]) -> Tuple[List[S
     return infos, main_guard
 
 
-def _names_of_target(target) -> List[str]:
+def _names_of_target(target) -> list[str]:
     """All names bound by an assignment target (Name / Tuple / List / Starred / Subscript / Attribute)."""
     if isinstance(target, cst.Name):
         return [target.value]
@@ -698,7 +697,7 @@ def _names_of_target(target) -> List[str]:
         return out
     if isinstance(target, cst.StarredElement):
         return _names_of_target(target.value)
-    if isinstance(target, cst.StarredElement) or isinstance(target, cst.Attribute):
+    if isinstance(target, (cst.StarredElement, cst.Attribute)):
         # attribute target binds nothing new; subscript target binds nothing new
         return []
     if isinstance(target, cst.Subscript):
@@ -706,7 +705,7 @@ def _names_of_target(target) -> List[str]:
     return []
 
 
-def _classify_statement(info: StmtInfo, warnings: List[str]) -> None:
+def _classify_statement(info: StmtInfo, warnings: list[str]) -> None:
     """Fill stores/loads/deferred/star_export for one top-level statement."""
     node = info.node
 
@@ -737,7 +736,7 @@ def _classify_statement(info: StmtInfo, warnings: List[str]) -> None:
             # If RHS is a lambda/def-reference it's deferred-safe; a call is not
             if _is_runtime_call(small.value):
                 info.deferred = False
-            info.deferred = True if _is_deferred_value(small.value) else False
+            info.deferred = bool(_is_deferred_value(small.value))
         elif isinstance(small, cst.AnnAssign):
             if small.value is not None:
                 info.stores.update(_names_of_target(small.target))
@@ -858,7 +857,7 @@ def _body_of(node):
     return []
 
 
-def _classify_import(info: StmtInfo, imp, warnings: List[str]) -> None:
+def _classify_import(info: StmtInfo, imp, warnings: list[str]) -> None:
     """Mark stores for an import statement; intra-pkg rewrites happen later."""
     if isinstance(imp, cst.Import):
         for alias in imp.names:
@@ -898,9 +897,9 @@ def _is_deferred_value(expr) -> bool:
     return False
 
 
-def _loads_of_annotation(node) -> Set[str]:
+def _loads_of_annotation(node) -> set[str]:
     """Names referenced by a type annotation (string or expression)."""
-    out: Set[str] = set()
+    out: set[str] = set()
     if isinstance(node, cst.SimpleString):
         try:
             src = _pyast.literal_eval(node.value)
@@ -913,14 +912,13 @@ def _loads_of_annotation(node) -> Set[str]:
     return _loads_of_expression(node)
 
 
-def _loads_of_expression(node) -> Set[str]:
+def _loads_of_expression(node) -> set[str]:
     """Names an expression *reads* (LOAD contexts) -- conservative, includes names
     that resolve to builtins; refined later against module globals."""
-    out: Set[str] = set()
+    out: set[str] = set()
 
     def rec(n):
         if isinstance(n, cst.Name):
-            p = n  # context checked by caller-side filters later
             out.add(n.value)
         elif isinstance(n, cst.Lambda):
             return  # body is deferred (but defaults were collected elsewhere)
@@ -933,8 +931,8 @@ def _loads_of_expression(node) -> Set[str]:
     return out
 
 
-def _loads_inside_class_body(cls: cst.ClassDef) -> Set[str]:
-    out: Set[str] = set()
+def _loads_inside_class_body(cls: cst.ClassDef) -> set[str]:
+    out: set[str] = set()
 
     def rec(n, in_func=False):
         if isinstance(n, (cst.FunctionDef, cst.Lambda)):
@@ -959,8 +957,8 @@ def _loads_inside_class_body(cls: cst.ClassDef) -> Set[str]:
     return out
 
 
-def _loads_inside_if(node: cst.If) -> Set[str]:
-    out: Set[str] = set()
+def _loads_inside_if(node: cst.If) -> set[str]:
+    out: set[str] = set()
 
     def rec_stmt(s):
         if isinstance(s, cst.SimpleStatementLine):
@@ -987,8 +985,8 @@ def _loads_inside_if(node: cst.If) -> Set[str]:
     return out
 
 
-def _loads_inside_try(node) -> Set[str]:
-    out: Set[str] = set()
+def _loads_inside_try(node) -> set[str]:
+    out: set[str] = set()
     for s in node.body.body:
         if isinstance(s, cst.SimpleStatementLine):
             for small in s.body:
@@ -997,8 +995,8 @@ def _loads_inside_try(node) -> Set[str]:
     return out
 
 
-def _stores_inside_body(body: Sequence[cst.CSTNode]) -> Set[str]:
-    out: Set[str] = set()
+def _stores_inside_body(body: Sequence[cst.CSTNode]) -> set[str]:
+    out: set[str] = set()
     for stmt in body:
         if isinstance(stmt, cst.SimpleStatementLine):
             for small in stmt.body:
@@ -1026,10 +1024,10 @@ def _stores_inside_body(body: Sequence[cst.CSTNode]) -> Set[str]:
     return out
 
 
-def _loads_inside_body(body: Sequence[cst.CSTNode], include_comprehension: bool = True) -> Set[str]:
+def _loads_inside_body(body: Sequence[cst.CSTNode], include_comprehension: bool = True) -> set[str]:
     """All names read anywhere inside a statement's body (used for top-level
     compound statements whose bodies execute at module time)."""
-    out: Set[str] = set()
+    out: set[str] = set()
 
     def rec(n, depth=0):
         if isinstance(n, (cst.FunctionDef, cst.ClassDef)):
@@ -1061,8 +1059,8 @@ def _all_params(fdef: cst.FunctionDef):
     return list(p.params) + list(p.posonly_params) + list(p.kwonly_params)
 
 
-def _collect_all_names(node, only_load=True) -> Set[str]:
-    out: Set[str] = set()
+def _collect_all_names(node, only_load=True) -> set[str]:
+    out: set[str] = set()
 
     def rec(n):
         if isinstance(n, cst.Name):
@@ -1084,7 +1082,7 @@ class RenamePlan:
     """per-module: old global name -> new global name"""
 
     module: str
-    mapping: Dict[str, str] = field(default_factory=dict)
+    mapping: dict[str, str] = field(default_factory=dict)
 
 
 class _SkipFieldsOfName:
@@ -1116,14 +1114,12 @@ def _name_is_reference(parent, field: str) -> bool:
     ptype = type(parent).__name__
     if (ptype, field) in _SkipFieldsOfName.SKIP:
         return False
-    if ptype in ("Arg",) and field == "keyword":
-        return False
-    return True
+    return not (ptype in ("Arg",) and field == "keyword")
 
 
-def _build_parent_field_map(tree: cst.Module) -> Dict[int, Tuple[cst.CSTNode, str]]:
+def _build_parent_field_map(tree: cst.Module) -> dict[int, tuple[cst.CSTNode, str]]:
     """id(node) -> (parent, field name)."""
-    out: Dict[int, Tuple[cst.CSTNode, str]] = {}
+    out: dict[int, tuple[cst.CSTNode, str]] = {}
 
     class V(cst.CSTVisitor):
         def on_visit(self, node):
@@ -1141,14 +1137,14 @@ def _build_parent_field_map(tree: cst.Module) -> Dict[int, Tuple[cst.CSTNode, st
     return out
 
 
-def _scope_of_node(scopes: Dict[cst.CSTNode, object], node: cst.CSTNode):
+def _scope_of_node(scopes: dict[cst.CSTNode, object], node: cst.CSTNode):
     return scopes.get(node)
 
 
 def rename_in_module(
     mod: ModuleInfo,
-    mapping: Dict[str, str],
-    extra_module_names: Set[str],
+    mapping: dict[str, str],
+    extra_module_names: set[str],
 ) -> None:
     """Apply a global-name renaming *mapping* to a module **in place**, scope-aware.
 
@@ -1162,11 +1158,11 @@ def rename_in_module(
     # NOTE: MetadataWrapper deep-copies the tree during resolve(); always work
     # with the wrapper's own module afterwards so node ids line up.
     tree = wrapper.module
-    scopes = wrapper.resolve(ScopeProvider)
-    parents = wrapper.resolve(ParentNodeProvider)
+    wrapper.resolve(ScopeProvider)
+    wrapper.resolve(ParentNodeProvider)
 
     # ---- pass 1: collect Name nodes to rename ----
-    targets: List[Tuple[cst.Name, str, bool]] = []  # (node, new_name, is_store)
+    targets: list[tuple[cst.Name, str, bool]] = []  # (node, new_name, is_store)
 
     class Collector(cst.CSTVisitor):
         METADATA_DEPENDENCIES = [ScopeProvider, ExpressionContextProvider, ParentNodeProvider]
@@ -1207,7 +1203,7 @@ def rename_in_module(
             if isinstance(scope, (FunctionScope, ComprehensionScope)):
                 # name may be local to that scope -- only rename if it
                 # actually resolves to the module global
-                assign = scope.assignments[node.value] if node.value in scope.assignments else []
+                assign = scope.assignments[node.value]
                 if assign:
                     return  # truly local binding, skip
                 # check enclosing scopes for a local binding
@@ -1225,7 +1221,7 @@ def rename_in_module(
     # ---- pass 2: rebuild tree with renamed nodes ----
     rename_ids = {id(n) for n, _, _ in targets}
     new_names = {id(n): new for n, new, _ in targets}
-    store_ids = {id(n) for n, _, s in targets if s}
+    {id(n) for n, _, s in targets if s}
 
     class Renamer(cst.CSTTransformer):
         def leave_Name(self, original_node: cst.Name, updated_node: cst.Name) -> cst.Name:
@@ -1266,7 +1262,7 @@ class ExtImport:
     kind: str  # "module" | "from"
     module: str  # "os" / "os.path" / "" for relative-unresolvable
     target: str  # bound name ("sep", "path", "osp")
-    asname: Optional[str]
+    asname: str | None
     is_relative: bool
     source_module: str  # dotted module doing the import
     is_future: bool = False
@@ -1279,14 +1275,14 @@ class ExtImport:
 def classify_imports(
     mod: ModuleInfo,
     pkg_name: str,
-    module_dotteds: Set[str],
-    warnings: List[str],
-) -> List[ExtImport]:
+    module_dotteds: set[str],
+    warnings: list[str],
+) -> list[ExtImport]:
     """Walk module-level (and nested) imports; produce ExtImport records."""
-    out: List[ExtImport] = []
+    out: list[ExtImport] = []
     tree = mod.tree
 
-    def resolve_relative(level: int, module: Optional[str], from_init: bool) -> Optional[str]:
+    def resolve_relative(level: int, module: str | None, from_init: bool) -> str | None:
         base = mod.dotted.split(".")
         # level 1 from __init__ of pkg refers to pkg itself
         up = level - (1 if from_init else 0)
@@ -1367,7 +1363,7 @@ def classify_imports(
     return out
 
 
-def _dotted_name(node) -> Optional[str]:
+def _dotted_name(node) -> str | None:
     if isinstance(node, cst.Name):
         return node.value
     if isinstance(node, cst.Attribute):
@@ -1392,10 +1388,10 @@ def _stdlib_or_thirdparty(dotted: str) -> str:
 
 @dataclass
 class MergedImports:
-    future: List[str] = field(default_factory=list)  # raw lines
-    stdlib: Dict[str, List[ExtImport]] = field(default_factory=dict)
-    thirdparty: Dict[str, List[ExtImport]] = field(default_factory=dict)
-    warnings: List[str] = field(default_factory=list)
+    future: list[str] = field(default_factory=list)  # raw lines
+    stdlib: dict[str, list[ExtImport]] = field(default_factory=dict)
+    thirdparty: dict[str, list[ExtImport]] = field(default_factory=dict)
+    warnings: list[str] = field(default_factory=list)
 
     def add(self, imp: ExtImport) -> None:
         if imp.is_future:
@@ -1411,7 +1407,7 @@ class MergedImports:
             bucket.setdefault(imp.module, []).append(imp)
 
     def render(self, header: bool = True) -> str:
-        lines: List[str] = []
+        lines: list[str] = []
         if self.future:
             lines.append("# __future__ imports (merged)")
             for f in sorted(set(self.future)):
@@ -1432,11 +1428,11 @@ class MergedImports:
         return "\n".join(lines).rstrip("\n")
 
 
-def _render_module_imports(module: str, imports: List[ExtImport]) -> List[str]:
+def _render_module_imports(module: str, imports: list[ExtImport]) -> list[str]:
     """Render one external module's imports, merging aliases."""
-    plain: List[ExtImport] = [i for i in imports if i.kind == "module" and not i.is_relative]
-    froms: List[ExtImport] = [i for i in imports if i.kind == "from"]
-    lines: List[str] = []
+    plain: list[ExtImport] = [i for i in imports if i.kind == "module" and not i.is_relative]
+    froms: list[ExtImport] = [i for i in imports if i.kind == "from"]
+    lines: list[str] = []
     if plain:
         # `import os`, `import os.path` -- render as import lines keyed by top module
         for i in sorted(plain, key=lambda x: (x.module, x.asname or "")):
@@ -1460,7 +1456,7 @@ def _render_module_imports(module: str, imports: List[ExtImport]) -> List[str]:
 
 @dataclass
 class RewriteResult:
-    stmt: Optional[Union[cst.CSTNode, _StmtBundle]]  # rewritten statement (None if dropped)
+    stmt: cst.CSTNode | _StmtBundle | None  # rewritten statement (None if dropped)
     note: str = ""  # "dropped" | "kept" | "replaced-with-assign"
 
 
@@ -1473,18 +1469,18 @@ class IntraPkgImportRewriter(cst.CSTTransformer):
     ``from pkg import mod``            ->  ``mod = _proxy_pkg_mod``
     """
 
-    def __init__(self, ctx: "Consolidator"):
+    def __init__(self, ctx: Consolidator):
         self.ctx = ctx
-        self.replacements: Dict[int, Union[cst.CSTNode, None]] = {}
-        self.drop_ids: Set[int] = set()
-        self.replace_ids: Dict[int, cst.CSTNode] = {}
+        self.replacements: dict[int, cst.CSTNode | None] = {}
+        self.drop_ids: set[int] = set()
+        self.replace_ids: dict[int, cst.CSTNode] = {}
 
     # ---- helpers ----
 
-    def _final_global(self, module_dotted: str, orig_name: str) -> Optional[str]:
+    def _final_global(self, module_dotted: str, orig_name: str) -> str | None:
         return self.ctx.final_name_of(module_dotted, orig_name)
 
-    def _resolve_from_target(self, source_module: str, target: str) -> Tuple[Optional[str], bool]:
+    def _resolve_from_target(self, source_module: str, target: str) -> tuple[str | None, bool]:
         """Return (final_name, is_module_object).
 
         is_module_object=True when the target refers to the consolidated
@@ -1533,8 +1529,8 @@ class IntraPkgImportRewriter(cst.CSTTransformer):
             # handled per-alias below
             pass
 
-        assigns: List[cst.BaseStatement] = []
-        unresolved: List[cst.ImportAlias] = []
+        assigns: list[cst.BaseStatement] = []
+        unresolved: list[cst.ImportAlias] = []
 
         for alias in node.names:
             target = _dotted_name(alias.name)
@@ -1547,7 +1543,7 @@ class IntraPkgImportRewriter(cst.CSTTransformer):
             # itself must carry the renamed (final) name
             local_name = self.ctx.final_name_of(source_mod.dotted, local_name) or local_name
 
-            fin, is_module_obj = self._resolve_from_target(resolved, target)
+            fin, _is_module_obj = self._resolve_from_target(resolved, target)
             if fin is not None:
                 if fin == target and not asname:
                     # no-op re-export: the target's definer kept the original
@@ -1572,7 +1568,7 @@ class IntraPkgImportRewriter(cst.CSTTransformer):
             # dotted: from pkg.mod import sub.attr -- rewrite prefix
             if "." in target:
                 head, rest = target.split(".", 1)
-                fin_head, ismod = self._resolve_from_target(resolved, head)
+                fin_head, _ismod = self._resolve_from_target(resolved, head)
                 if fin_head is not None:
                     line = cst.parse_statement(f"{local_name} = {fin_head}.{rest}")
                     assigns.append(line)
@@ -1620,8 +1616,8 @@ class IntraPkgImportRewriter(cst.CSTTransformer):
 
     def _rewrite_plain_import(self, node: cst.Import, source_mod: ModuleInfo) -> RewriteResult:
         ctx = self.ctx
-        keep: List[cst.ImportAlias] = []
-        assign_lines: List[cst.CSTNode] = []
+        keep: list[cst.ImportAlias] = []
+        assign_lines: list[cst.CSTNode] = []
         for alias in node.names:
             dotted = _dotted_name(alias.name)
             if dotted is None:
@@ -1677,21 +1673,21 @@ class Consolidator:
         self.pkg_name = pkg_name
         self.keep_data = keep_data
         self.quiet = quiet
-        self.warnings: List[str] = []
-        self.module_by_dotted: Dict[str, ModuleInfo] = {}
-        self.stmts: List[StmtInfo] = []
+        self.warnings: list[str] = []
+        self.module_by_dotted: dict[str, ModuleInfo] = {}
+        self.stmts: list[StmtInfo] = []
         self.merged = MergedImports()
-        self.renames: Dict[str, Dict[str, str]] = {}  # module -> {old: new}
-        self.final_names: Dict[str, Dict[str, str]] = {}  # module -> {orig: final}
-        self.public_api: Dict[str, str] = {}  # pkg-visible name -> final
-        self.proxy_vars: Dict[str, str] = {}  # submodule dotted -> var
-        self.data_files: List[DataFile] = []
-        self.entry_points: List[EntryPoints] = []
+        self.renames: dict[str, dict[str, str]] = {}  # module -> {old: new}
+        self.final_names: dict[str, dict[str, str]] = {}  # module -> {orig: final}
+        self.public_api: dict[str, str] = {}  # pkg-visible name -> final
+        self.proxy_vars: dict[str, str] = {}  # submodule dotted -> var
+        self.data_files: list[DataFile] = []
+        self.entry_points: list[EntryPoints] = []
         self.has_cli = False
-        self.explicit_all: Dict[str, List[str]] = {}  # module -> __all__ entries
-        self.main_stmts: List[StmtInfo] = []
-        self.dunder_file_map: Dict[str, str] = {}  # orig __file__ dir -> var
-        self._module_order: List[str] = []
+        self.explicit_all: dict[str, list[str]] = {}  # module -> __all__ entries
+        self.main_stmts: list[StmtInfo] = []
+        self.dunder_file_map: dict[str, str] = {}  # orig __file__ dir -> var
+        self._module_order: list[str] = []
 
     def log(self, msg: str) -> None:
         if not self.quiet:
@@ -1702,7 +1698,7 @@ class Consolidator:
     def is_module(self, dotted: str) -> bool:
         return dotted in self.module_by_dotted
 
-    def final_name_of(self, module_dotted: str, orig_name: str) -> Optional[str]:
+    def final_name_of(self, module_dotted: str, orig_name: str) -> str | None:
         return self.final_names.get(module_dotted, {}).get(orig_name)
 
     def proxy_var_for(self, submodule_dotted: str) -> str:
@@ -1711,7 +1707,7 @@ class Consolidator:
             self.proxy_vars[submodule_dotted] = f"_mod_{suffix}"
         return self.proxy_vars[submodule_dotted]
 
-    def public_names_of(self, module_dotted: str) -> List[str]:
+    def public_names_of(self, module_dotted: str) -> list[str]:
         mod = self.module_by_dotted.get(module_dotted)
         if mod is None:
             return []
@@ -1728,7 +1724,7 @@ class Consolidator:
             names = {n for n in names if n in set(all_list)} | {n for n in all_list if n in names}
         return sorted(names)
 
-    def explicit_all_of(self, module_dotted: str) -> Set[str]:
+    def explicit_all_of(self, module_dotted: str) -> set[str]:
         return set(self.explicit_all.get(module_dotted, ()))
 
     # -- main pipeline ----------------------------------------------------
@@ -1755,7 +1751,7 @@ class Consolidator:
         self._module_order = [m.dotted for m in ordered]
 
         # collect statements, find __all__, detect main guards
-        all_stmt_infos: List[StmtInfo] = []
+        all_stmt_infos: list[StmtInfo] = []
         for m in ordered:
             infos, main_guard = iter_module_statements(m, self.warnings)
             self._record_explicit_all(m, infos)
@@ -1819,16 +1815,15 @@ class Consolidator:
 
     # ------------------------------------------------------------------
 
-    def _recollect_statements(self, ordered: List[ModuleInfo], old_infos: List[StmtInfo]) -> List[StmtInfo]:
+    def _recollect_statements(self, ordered: list[ModuleInfo], old_infos: list[StmtInfo]) -> list[StmtInfo]:
         """Re-derive StmtInfo.node from each module's current tree, preserving
         classification and order fields (which don't change on rename)."""
-        per_module_count: Dict[str, int] = {}
+        per_module_count: dict[str, int] = {}
         for info in old_infos:
             per_module_count[info.module.dotted] = per_module_count.get(info.module.dotted, 0) + 1
         # statements were appended per module in `ordered` order; re-walk the
         # current trees with the same flattening rules and rebind nodes.
-        new_infos: List[StmtInfo] = []
-        cursor: Dict[str, int] = {}
+        new_infos: list[StmtInfo] = []
         for m in ordered:
             infos, _main = iter_module_statements(m, self.warnings)
             new_infos.extend(infos)
@@ -1849,9 +1844,9 @@ class Consolidator:
                 info.is_del = prev.is_del
         return new_infos
 
-    def _compute_reachable_submodules(self) -> Set[str]:
+    def _compute_reachable_submodules(self) -> set[str]:
         """Submodules imported (transitively) by the original top __init__."""
-        reach: Set[str] = set()
+        reach: set[str] = set()
         frontier = [self.pkg_name]
         while frontier:
             cur = frontier.pop()
@@ -1862,7 +1857,7 @@ class Consolidator:
                 if info.module.dotted != cur:
                     continue
                 for imp in _find_import_nodes(info.node):
-                    cands: List[str] = []
+                    cands: list[str] = []
                     if isinstance(imp, cst.Import):
                         cands = [_dotted_name(a.name) or "" for a in imp.names]
                     elif isinstance(imp, cst.ImportFrom):
@@ -1891,7 +1886,7 @@ class Consolidator:
                             frontier.append(t)
         return reach
 
-    def _record_explicit_all(self, mod: ModuleInfo, infos: List[StmtInfo]) -> None:
+    def _record_explicit_all(self, mod: ModuleInfo, infos: list[StmtInfo]) -> None:
         for info in infos:
             node = info.node
             if isinstance(node, cst.SimpleStatementLine) and len(node.body) == 1:
@@ -1906,7 +1901,7 @@ class Consolidator:
                         self.explicit_all[mod.dotted] = vals
                         return
 
-    def _route_import(self, mod: ModuleInfo, imp, module_dotteds: Set[str]) -> None:
+    def _route_import(self, mod: ModuleInfo, imp, module_dotteds: set[str]) -> None:
         """Send an import to the merged external block, or leave it to the
         intra-package rewriter."""
         if isinstance(imp, cst.Import):
@@ -1960,7 +1955,7 @@ class Consolidator:
                 asname = alias.asname.name.value if alias.asname else None
                 self.merged.add(ExtImport("from", resolved or "", t, asname, relative, mod.dotted))
 
-    def _resolve_relative(self, mod: ModuleInfo, level: int, module: Optional[str]) -> Optional[str]:
+    def _resolve_relative(self, mod: ModuleInfo, level: int, module: str | None) -> str | None:
         base = mod.dotted.split(".")
         up = level - (1 if mod.is_pkg_init else 0)
         if up < 0 or up > len(base):
@@ -1973,7 +1968,7 @@ class Consolidator:
 
     # ------------------------------------------------------------------
 
-    def _resolve_collisions(self, all_stmt_infos: List[StmtInfo]) -> None:
+    def _resolve_collisions(self, all_stmt_infos: list[StmtInfo]) -> None:
         """Assign every module-global a unique final name; losers get renamed.
 
         Priority for keeping the original name:
@@ -1987,7 +1982,7 @@ class Consolidator:
         init_dotted = self.pkg_name
 
         # ---- names bound by external imports (shared via the header) ----
-        external_names: Dict[str, Set[str]] = {}  # bound name -> {module dotteds}
+        external_names: dict[str, set[str]] = {}  # bound name -> {module dotteds}
         for info in all_stmt_infos:
             for imp in _find_import_nodes(info.node):
                 if isinstance(imp, cst.Import):
@@ -2019,7 +2014,7 @@ class Consolidator:
                             external_names.setdefault(bound, set()).add(info.module.dotted)
 
         # ---- collect all (module, name) definitions with stream position ----
-        used: Set[str] = set()
+        used: set[str] = set()
         # reserved names for our runtime glue + shared external import names
         used.update({
             "_CONSOLIDATED_",
@@ -2058,8 +2053,8 @@ class Consolidator:
             for name in info.stores:
                 stream_pos.setdefault((info.module.dotted, name), i)
 
-        final: Dict[Tuple[str, str], str] = {}
-        conflicts: List[Tuple[str, str]] = []
+        final: dict[tuple[str, str], str] = {}
+        conflicts: list[tuple[str, str]] = []
 
         # pass 1: top __init__ names claim their original name first
         for (mod_dotted, name), pos in sorted(stream_pos.items(), key=lambda kv: kv[1]):
@@ -2125,7 +2120,7 @@ class Consolidator:
 
     # ------------------------------------------------------------------
 
-    def _rewrite_intra_imports(self, all_stmt_infos: List[StmtInfo]) -> None:
+    def _rewrite_intra_imports(self, all_stmt_infos: list[StmtInfo]) -> None:
         rewriter = IntraPkgImportRewriter(self)
         for info in all_stmt_infos:
             new_node, changed = self._rewrite_stmt_imports(info, rewriter)
@@ -2150,7 +2145,7 @@ class Consolidator:
             smalls = list(line.body)
             if not any(isinstance(s, (cst.Import, cst.ImportFrom)) for s in smalls):
                 return line
-            out_stmts: List[cst.CSTNode] = []
+            out_stmts: list[cst.CSTNode] = []
             for small in smalls:
                 if isinstance(small, cst.Import):
                     res = rewriter._rewrite_plain_import(small, module_of)
@@ -2173,7 +2168,7 @@ class Consolidator:
                 return RemovalSentinel.REMOVE
             # ensure every replacement line ends with a newline so rendered
             # statements never concatenate inside indented blocks
-            fixed: List[cst.CSTNode] = []
+            fixed: list[cst.CSTNode] = []
             for s in out_stmts:
                 if isinstance(s, cst.SimpleStatementLine):
                     tw = s.trailing_whitespace
@@ -2185,7 +2180,7 @@ class Consolidator:
             out_stmts = fixed
             # normalize: every element must be a SimpleStatementLine (the
             # rewriters may return bare small statements for "kept")
-            normalized: List[cst.CSTNode] = []
+            normalized: list[cst.CSTNode] = []
             for s in out_stmts:
                 if isinstance(s, cst.BaseSmallStatement):
                     s = cst.SimpleStatementLine(
@@ -2201,7 +2196,7 @@ class Consolidator:
                 )
                 return merged
             # first keeps original leading lines, last keeps trailing whitespace
-            rebuilt: List[cst.CSTNode] = []
+            rebuilt: list[cst.CSTNode] = []
             for i, s in enumerate(out_stmts):
                 rebuilt.append(
                     s.with_changes(
@@ -2249,14 +2244,14 @@ class _UnsupportedRewrite(Exception):
     pass
 
 
-def _find_import_nodes(node, _stmt=None) -> List[cst.CSTNode]:
+def _find_import_nodes(node, _stmt=None) -> list[cst.CSTNode]:
     """All Import/ImportFrom nodes anywhere inside a statement.
 
     If *node* is a bare Import/ImportFrom itself, returns [node].
     """
     if isinstance(node, (cst.Import, cst.ImportFrom)):
         return [node]
-    out: List[cst.CSTNode] = []
+    out: list[cst.CSTNode] = []
 
     class V(cst.CSTVisitor):
         def visit_Import(self, node):
@@ -2283,7 +2278,7 @@ def _inside_try_guard(stmt, target) -> bool:
     """True if *target* (an Import/ImportFrom node) sits inside the body of a
     Try/TryStar statement inside *stmt* -- i.e. it's an optional dependency
     guarded by an except fallback."""
-    try_import_ids: Set[int] = set()
+    try_import_ids: set[int] = set()
 
     def _walk(n):
         if isinstance(n, cst.FlattenSentinel):
@@ -2303,7 +2298,7 @@ def _inside_try_guard(stmt, target) -> bool:
     return id(target) in try_import_ids
 
 
-def render_stmt(node) -> List[str]:
+def render_stmt(node) -> list[str]:
     """Render a statement (or bundle/flatten-sentinel) to source lines."""
     if isinstance(node, _StmtBundle):
         lines = []
@@ -2351,10 +2346,10 @@ class Scheduler:
        remaining DATA items, then CLASS, then FUNC, then REEXPORT, then MAIN.
     """
 
-    def __init__(self, ctx: "Consolidator"):
+    def __init__(self, ctx: Consolidator):
         self.ctx = ctx
-        self.items: List[StmtInfo] = list(ctx.stmts)
-        self.by_key: Dict[Tuple[str, int], StmtInfo] = {}
+        self.items: list[StmtInfo] = list(ctx.stmts)
+        self.by_key: dict[tuple[str, int], StmtInfo] = {}
         for info in self.items:
             self.by_key[(info.module.dotted, info.order)] = info
 
@@ -2373,20 +2368,20 @@ class Scheduler:
             return SECTION_CLASS if isinstance(node, cst.ClassDef) else SECTION_FUNC
         return SECTION_CONST
 
-    def _defs_before(self) -> Dict[str, List[StmtInfo]]:
+    def _defs_before(self) -> dict[str, list[StmtInfo]]:
         """name -> statements that store it, in stream order."""
-        defs: Dict[str, List[StmtInfo]] = {}
+        defs: dict[str, list[StmtInfo]] = {}
         for info in self.items:
             for n in info.stores:
                 defs.setdefault(n, []).append(info)
         return defs
 
-    def schedule(self) -> Dict[str, List[StmtInfo]]:
+    def schedule(self) -> dict[str, list[StmtInfo]]:
         defs = self._defs_before()
         # global names available to each module (final names); stores may
         # already be final names (post-rewrite), so add both spellings
-        module_globals: Dict[str, Set[str]] = {}
-        all_final_names: Set[str] = set()
+        module_globals: dict[str, set[str]] = {}
+        all_final_names: set[str] = set()
         for fmap in self.ctx.final_names.values():
             all_final_names.update(fmap.values())
         for info in self.items:
@@ -2398,11 +2393,11 @@ class Scheduler:
                     g.add(fin)
 
         # exec-time dependency edges: item -> items it depends on
-        deps: Dict[Tuple[str, int], Set[Tuple[str, int]]] = {}
+        deps: dict[tuple[str, int], set[tuple[str, int]]] = {}
 
         for info in self.items:
             key = (info.module.dotted, info.order)
-            dset: Set[Tuple[str, int]] = set()
+            dset: set[tuple[str, int]] = set()
             needed = set(info.loads_at_exec)
             if info.is_del:
                 needed |= {n for n in info.stores}
@@ -2430,12 +2425,12 @@ class Scheduler:
             deps[key] = dset
 
         # ---- greedy emit with clamping ----
-        sections: Dict[str, List[StmtInfo]] = {s: [] for s in SECTION_ORDER}
-        emitted: Set[Tuple[str, int]] = set()
+        sections: dict[str, list[StmtInfo]] = {s: [] for s in SECTION_ORDER}
+        emitted: set[tuple[str, int]] = set()
 
         # order of emission: CONST first, but we must walk ALL items in stream
         # order and, for each, decide its final section.
-        assignment: Dict[Tuple[str, int], str] = {}
+        assignment: dict[tuple[str, int], str] = {}
 
         def target_section_for(info: StmtInfo) -> str:
             nat = self.natural_section(info)
@@ -2456,8 +2451,8 @@ class Scheduler:
             return self.natural_section(info)
 
         # compute clamping: which FUNC/CLASS defs are needed by CONST items?
-        needed_by_const: Set[Tuple[str, int]] = set()
-        worklist: List[Tuple[str, int]] = []
+        needed_by_const: set[tuple[str, int]] = set()
+        worklist: list[tuple[str, int]] = []
         for info in self.items:
             if natural_of(info) != SECTION_CONST:
                 continue
@@ -2492,8 +2487,8 @@ class Scheduler:
                 # emit deps first (they were assigned to same-or-earlier sections;
                 # if a dep got a later section, clamp it here)
                 stack = [key]
-                order: List[Tuple[str, int]] = []
-                visited: Set[Tuple[str, int]] = set()
+                order: list[tuple[str, int]] = []
+                visited: set[tuple[str, int]] = set()
                 while stack:
                     k = stack.pop()
                     if k in visited or k in emitted:
@@ -2595,33 +2590,33 @@ GLUE_DATA_TEMPLATE = """
 
 
 class Emitter:
-    def __init__(self, ctx: "Consolidator", scheduler: Scheduler, out_path: Path):
+    def __init__(self, ctx: Consolidator, scheduler: Scheduler, out_path: Path):
         self.ctx = ctx
         self.sched = scheduler
         self.out_path = out_path
 
     # ------------------------------------------------------------------
 
-    def build_header(self) -> List[str]:
+    def build_header(self) -> list[str]:
         pkg = self.ctx.pkg_name
         n_mods = len(self.ctx.module_by_dotted)
         n_data = len(self.ctx.data_files)
         lines = [
-            '"""%s -- consolidated single-file build.' % pkg,
+            f'"""{pkg} -- consolidated single-file build.',
             "",
-            "Generated by consolidate.py %s; DO NOT EDIT BY HAND." % __version__,
+            f"Generated by consolidate.py {__version__}; DO NOT EDIT BY HAND.",
             "",
             "This file was produced by collapsing %d Python module(s) and" % n_mods,
             "%d data file(s) of the ``%s`` package into one importable module." % (n_data, pkg),
-            "It exposes the same public API; ``import %s`` behaves like the" % pkg,
-            "installed package, and ``import %s.<submodule>`` still works via" % pkg,
+            f"It exposes the same public API; ``import {pkg}`` behaves like the",
+            f"installed package, and ``import {pkg}.<submodule>`` still works via",
             "sys.modules proxies.",
             '"""',
             "",
         ]
         return lines
 
-    def build_proxy_exports(self) -> List[str]:
+    def build_proxy_exports(self) -> list[str]:
         """_SUBMODULE_EXPORTS dict source."""
         ctx = self.ctx
         lines = ["_SUBMODULE_EXPORTS = {"]
@@ -2633,12 +2628,12 @@ class Emitter:
                 exports[orig] = fin
             if not exports:
                 continue
-            items = ", ".join("%r: %r" % (k, v) for k, v in sorted(exports.items()))
-            lines.append("    %r: {%s}," % (dotted, items))
+            items = ", ".join(f"{k!r}: {v!r}" for k, v in sorted(exports.items()))
+            lines.append(f"    {dotted!r}: {{{items}}},")
         lines.append("}")
         return lines
 
-    def build_data_section(self) -> List[str]:
+    def build_data_section(self) -> list[str]:
         ctx = self.ctx
         if not ctx.data_files:
             return ["# (no data files were inlined)"]
@@ -2649,16 +2644,16 @@ class Emitter:
                 text = df.text or ""
                 lit = repr(text.encode("utf-8"))
                 if len(lit) < 12000:
-                    lines.append("    %r: %s," % (key, lit))
+                    lines.append(f"    {key!r}: {lit},")
                 else:
-                    lines.append("    %r: _b64_to_bytes(" % key)
+                    lines.append(f"    {key!r}: _b64_to_bytes(")
                     b64 = base64.b64encode(text.encode("utf-8")).decode("ascii")
                     for i, l in enumerate(wrap_base64(b64).split("\n")):
                         q = '"' if i == 0 else '    "'
                         lines.append(f'{q}{l}"')
                     lines.append("    ),")
             else:
-                lines.append("    %r: _b64_to_bytes(" % key)
+                lines.append(f"    {key!r}: _b64_to_bytes(")
                 wrapped = wrap_base64(df.b64 or "").split("\n")
                 for i, l in enumerate(wrapped):
                     q = '"' if i == 0 else '    "'
@@ -2667,7 +2662,7 @@ class Emitter:
         lines.append("}")
         return lines
 
-    def build_shims(self) -> List[str]:
+    def build_shims(self) -> list[str]:
         pkg = self.ctx.pkg_name
         tpl = textwrap.dedent('''
 # --- runtime shims for inlined data files --------------------------------
@@ -2956,7 +2951,7 @@ def _install_data_shims():
 
     # ------------------------------------------------------------------
 
-    def build_reexport_section(self) -> List[str]:
+    def build_reexport_section(self) -> list[str]:
         ctx = self.ctx
         lines = []
         init_final = ctx.final_names.get(ctx.pkg_name, {})
@@ -2976,15 +2971,15 @@ def _install_data_shims():
                     entries.append(fin)
                 elif n in sub_top:
                     entries.append(n)
-            lines.append("__all__ = [%s]" % ", ".join(repr(e) for e in entries))
+            lines.append("__all__ = [{}]".format(", ".join(repr(e) for e in entries)))
         else:
             pub = sorted(set(ctx.public_api) | set(sub_top))
-            lines.append("__all__ = [%s]" % ", ".join(repr(n) for n in pub))
+            lines.append("__all__ = [{}]".format(", ".join(repr(n) for n in pub)))
         return lines
 
-    def build_main_section(self) -> List[str]:
+    def build_main_section(self) -> list[str]:
         ctx = self.ctx
-        lines: List[str] = []
+        lines: list[str] = []
         ep_lines = []
         for ep in ctx.entry_points:
             fin = ctx.final_name_of(ep.module_dotted, ep.func_name)
@@ -3003,15 +2998,15 @@ def _install_data_shims():
             lines.append("")
             lines.append('if __name__ == "__main__":')
             if len(ep_lines) == 1:
-                lines.append("    sys.exit(%s())" % ep_lines[0][1])
+                lines.append(f"    sys.exit({ep_lines[0][1]}())")
             else:
                 lines.append("    import argparse as _arg")
-                lines.append("    _ap = _arg.ArgumentParser(prog=%r)" % ctx.pkg_name)
+                lines.append(f"    _ap = _arg.ArgumentParser(prog={ctx.pkg_name!r})")
                 lines.append("    _ap.add_argument('command', choices=%r)" % [n for n, _ in ep_lines])
                 lines.append("    _args = _ap.parse_args()")
                 for name, fin in ep_lines:
-                    lines.append("    if _args.command == %r:" % name)
-                    lines.append("        sys.exit(%s())" % fin)
+                    lines.append(f"    if _args.command == {name!r}:")
+                    lines.append(f"        sys.exit({fin}())")
         return lines
 
     # ------------------------------------------------------------------
@@ -3020,7 +3015,7 @@ def _install_data_shims():
         ctx = self.ctx
         sched_sections = self.sched.schedule()
 
-        parts: List[str] = []
+        parts: list[str] = []
         parts.append("\n".join(self.build_header()))
 
         # 1) imports
@@ -3162,8 +3157,8 @@ def _install_data_shims():
 
 
 def run_probe(
-    code: str, env_pkg_dir: Optional[Path] = None, cwd: Optional[Path] = None, timeout: int = 120
-) -> Tuple[int, str]:
+    code: str, env_pkg_dir: Path | None = None, cwd: Path | None = None, timeout: int = 120
+) -> tuple[int, str]:
     """Run python code in an isolated subprocess; return (rc, combined output)."""
     with tempfile.TemporaryDirectory() as td:
         script = Path(td) / "probe.py"
@@ -3188,12 +3183,12 @@ def run_probe(
 class Verifier:
     """Behavioral differential tester: original package vs consolidated file."""
 
-    def __init__(self, pkg_root: Path, pkg_name: str, consolidated: Path, verify_script: Optional[Path] = None):
+    def __init__(self, pkg_root: Path, pkg_name: str, consolidated: Path, verify_script: Path | None = None):
         self.pkg_root = Path(pkg_root).resolve()
         self.pkg_name = pkg_name
         self.consolidated = Path(consolidated).resolve()
         self.verify_script = verify_script
-        self.failures: List[str] = []
+        self.failures: list[str] = []
         self.checks = 0
 
     def report(self, ok: bool, label: str, detail: str = "") -> bool:
@@ -3238,11 +3233,11 @@ class Verifier:
 
         # ---- 2. submodule import + attribute access ----
         submods = sorted(
-            set(
+            {
                 ".".join(p.relative_to(self.pkg_root).with_suffix("").parts)
                 for p in self.pkg_root.rglob("*.py")
                 if p.name not in ("__init__.py", "__main__.py", "setup.py", "conftest.py")
-            )
+            }
         )
         submods = [s for s in submods if s and "__init__" not in s]
         if submods:
@@ -3353,7 +3348,7 @@ class Verifier:
 # --------------------------------------------------------------------------- #
 
 
-def main(argv: Optional[Sequence[str]] = None) -> int:
+def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
         prog="consolidate.py",
         description="Consolidate a small-to-medium Python package into a single importable file (libcst-based).",
